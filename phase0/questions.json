@@ -1,0 +1,304 @@
+{
+  "questions": [
+    {
+      "id": "js01",
+      "category": "judgment_strategy",
+      "question": "A 5-person startup with a working monolith is getting pressure from investors to adopt microservices before their Series B. The monolith handles 10,000 requests per day and is growing 15% month-over-month. Should they migrate to microservices now, plan it for post-Series B, or push back on the investors entirely? What factors should drive this decision?",
+      "why": "Classic architecture trade-off where context matters enormously. Models will weigh investor relations, technical debt, team size, and growth trajectory differently."
+    },
+    {
+      "id": "js02",
+      "category": "judgment_strategy",
+      "question": "Your SaaS product has 2,000 paying customers and steady 8% monthly growth. A Fortune 500 company offers a $2M contract but requires 6 months of custom feature development that would diverge your product from its current roadmap. Should you take the deal? What conditions or safeguards would change your answer?",
+      "why": "Tests ability to reason about opportunity cost, product strategy, and the tension between revenue and vision. Multiple legitimate positions exist."
+    },
+    {
+      "id": "js03",
+      "category": "judgment_strategy",
+      "question": "You're the CTO of a 40-person company choosing between hiring 5 more engineers or investing the same budget in developer tooling, CI/CD infrastructure, and automated testing. Current deployment takes 4 hours of manual work and happens twice a week. Which investment yields better returns over 12 and 24 months?",
+      "why": "Requires weighing short-term capacity against long-term velocity. Different models will prioritize throughput vs. infrastructure differently."
+    },
+    {
+      "id": "js04",
+      "category": "judgment_strategy",
+      "question": "A mobile app team is debating whether to go fully native (separate iOS and Android codebases) or use a cross-platform framework like React Native or Flutter. The app requires complex animations, camera access, push notifications, and offline-first data sync. The team has 3 iOS developers and 2 Android developers. What should they do and why?",
+      "why": "Deep technical trade-off with strong opinions on all sides. Team composition, feature requirements, and maintenance costs all factor in differently."
+    },
+    {
+      "id": "js05",
+      "category": "judgment_strategy",
+      "question": "Your engineering team uses a monorepo with 50 services. Build times have grown to 25 minutes and developer satisfaction surveys show tooling frustration is the #1 complaint. You can invest in better build caching and tooling for the monorepo, or begin migrating to separate repositories. Both paths are estimated at 3 months of work. Which do you choose?",
+      "why": "Monorepo vs. polyrepo is a genuinely divisive topic with strong arguments on both sides that depend heavily on organizational context."
+    },
+    {
+      "id": "js06",
+      "category": "judgment_strategy",
+      "question": "A B2B software company discovers that 60% of its revenue comes from 3 customers. The sales team wants to double down on enterprise sales to land more large accounts. The product team argues they should diversify by building self-serve features for smaller customers. The company has runway for 18 months. What strategy should the CEO pursue?",
+      "why": "Concentration risk vs. growth efficiency is a fundamental business tension. Models must reason about survival, revenue diversification, and resource allocation."
+    },
+    {
+      "id": "js07",
+      "category": "judgment_strategy",
+      "question": "Your team maintains a legacy Java application that processes $50M in daily transactions. It works but is difficult to modify, poorly tested, and no one on the current team wrote it. A rewrite in a modern stack has been estimated at 9 months. A progressive refactoring approach would take 18 months but keeps the system running. A new team member advocates for a strangler fig pattern. Which approach do you recommend and how do you sequence the work?",
+      "why": "Legacy modernization is one of the highest-stakes architectural decisions. Risk tolerance, business continuity, and team morale all pull in different directions."
+    },
+    {
+      "id": "js08",
+      "category": "judgment_strategy",
+      "question": "A startup is choosing its primary database. Their application involves: user-generated content with complex relationships (social graph), full-text search across millions of documents, real-time analytics dashboards, and event sourcing for an audit trail. They have budget for managed services and a 4-person backend team. Should they use a single general-purpose database, or a polyglot persistence architecture? Which specific technologies would you recommend?",
+      "why": "Database selection involves multiple competing concerns. Models will differ on whether to optimize for simplicity or specialization, and will recommend different specific technologies."
+    },
+    {
+      "id": "js09",
+      "category": "judgment_strategy",
+      "question": "An open-source project with 5,000 GitHub stars and 20 regular contributors is struggling financially. The maintainer works on it full-time but is burning through savings. They're considering: (a) an open-core model with a paid enterprise version, (b) a managed SaaS offering, (c) dual licensing (AGPL + commercial), (d) a foundation model seeking corporate sponsorship. What are the trade-offs of each, and which would you recommend for long-term sustainability?",
+      "why": "Open-source business models involve deep trade-offs between community goodwill, revenue, and control. Each model has passionate advocates and real-world successes and failures."
+    },
+    {
+      "id": "js10",
+      "category": "judgment_strategy",
+      "question": "Your company is expanding from the US to Europe. Your application stores user data in AWS us-east-1. You need GDPR compliance, low latency for European users, and disaster recovery. Should you create a fully independent EU deployment, use a multi-region single deployment, or implement a data residency layer that routes and stores data based on user location? What are the implications of each for your development workflow and operational complexity?",
+      "why": "International expansion architecture involves legal, technical, and operational trade-offs that interact in complex ways. Models will weigh compliance risk, engineering cost, and user experience differently."
+    },
+    {
+      "id": "js11",
+      "category": "judgment_strategy",
+      "question": "A 200-person engineering organization is debating its team structure. Currently organized by technology layer (frontend team, backend team, data team, infra team), they're considering reorganizing into cross-functional product teams. About 30% of engineers are strongly opposed, citing loss of technical depth and mentorship. How should leadership approach this transition, and is it the right move?",
+      "why": "Org design is deeply contextual and affects every aspect of engineering output. Conway's Law, individual career growth, and delivery speed are all legitimate concerns that pull in different directions."
+    },
+    {
+      "id": "js12",
+      "category": "judgment_strategy",
+      "question": "You're designing an API for a developer platform that will be used by thousands of third-party developers. You need to choose between REST, GraphQL, and gRPC (or some combination). Your API involves complex nested resources, real-time subscriptions, both web and mobile clients, and you expect the API surface to evolve significantly over the next 2 years. What do you choose and how do you handle versioning?",
+      "why": "API design decisions are long-lived and affect an entire ecosystem. Each technology has genuine strengths, and versioning strategy is a separate axis of disagreement."
+    },
+    {
+      "id": "js13",
+      "category": "judgment_strategy",
+      "question": "A healthcare startup has built a working prototype and needs to decide between pursuing FDA clearance for their diagnostic tool (12-18 months, $500K-$2M) or pivoting to a wellness/lifestyle positioning that avoids FDA regulation but limits medical claims. They have $3M in funding and 18 months of runway. Their clinical advisors believe the diagnostic application is far more valuable. What should they do?",
+      "why": "Regulatory strategy in healthcare involves existential trade-offs between ambition, survival, and market positioning. Models must reason about regulatory risk, fundraising, and competitive dynamics."
+    },
+    {
+      "id": "js14",
+      "category": "judgment_strategy",
+      "question": "Your e-commerce platform processes 100,000 orders per day. The current synchronous checkout flow occasionally times out under peak load. You're considering moving to an event-driven architecture with eventual consistency for order processing. Your customer support team is concerned about the 'order placed but not yet visible' experience. How do you architect this transition and what guarantees do you provide to users and internal teams?",
+      "why": "Eventual consistency is a nuanced architectural choice where the technical benefits must be balanced against user experience and organizational change management."
+    },
+    {
+      "id": "js15",
+      "category": "judgment_strategy",
+      "question": "A company's engineering team has grown from 10 to 60 engineers in 18 months. Code quality is declining, onboarding takes 3 months, and there are no written architectural guidelines. The VP of Engineering proposes a 6-week 'quality sprint' where all feature development stops to write documentation, establish code review standards, create architectural decision records, and pay down tech debt. The CEO is resistant because of competitive pressure. Is the quality sprint the right approach, and if not, what alternative would you propose?",
+      "why": "The tension between velocity and quality is perennial. Models will differ on whether a full stop is necessary or if quality can be woven into ongoing work."
+    },
+    {
+      "id": "ra01",
+      "category": "risk_assessment",
+      "question": "A fintech startup is building a payment processing system and plans to store credit card numbers encrypted in their own database rather than using a third-party tokenization service like Stripe. They argue this gives them more flexibility and lower per-transaction costs. What are all the risks they should consider, and how would you assess the overall risk profile of this decision?",
+      "why": "PCI compliance, security breaches, and liability are obvious risks, but models should also surface operational, reputational, insurance, and talent-acquisition risks. Different models will find different risk categories."
+    },
+    {
+      "id": "ra02",
+      "category": "risk_assessment",
+      "question": "A software company is planning to migrate its entire infrastructure from AWS to GCP over 6 months to take advantage of a large committed-use discount. The system serves 50,000 active users and has 99.95% uptime SLA commitments. What could go wrong, and what risk mitigation strategies would you recommend?",
+      "why": "Cloud migration risks span technical (service parity, data transfer), operational (team skills, runbooks), contractual (SLAs during transition), and business (customer communication) dimensions."
+    },
+    {
+      "id": "ra03",
+      "category": "risk_assessment",
+      "question": "A mid-size company decides to adopt a 'zero-trust' security model. Their current setup relies on VPN access and network perimeter security. They plan to implement the transition over 3 months while maintaining normal operations. What are the risks of this transition, and which risks are most likely to be underestimated?",
+      "why": "Security transitions create temporary vulnerability windows. Models should identify risks in the transition itself, not just the end state, including employee friction, legacy system compatibility, and partial implementation dangers."
+    },
+    {
+      "id": "ra04",
+      "category": "risk_assessment",
+      "question": "A company is building a recommendation engine that uses customer purchase history, browsing behavior, and demographic data to personalize product suggestions. They plan to launch in the US, EU, and Brazil simultaneously. What are the comprehensive risks — technical, legal, ethical, and business — they should evaluate before launch?",
+      "why": "Cross-jurisdictional data use involves overlapping risk domains. Models should surface GDPR, LGPD, algorithmic bias, filter bubbles, data breach liability, and competitive risks."
+    },
+    {
+      "id": "ra05",
+      "category": "risk_assessment",
+      "question": "A SaaS company's entire CI/CD pipeline depends on GitHub Actions, GitHub-hosted runners, and GitHub Packages. Their artifact storage, secret management, and deployment automation all flow through GitHub. What are the risks of this single-vendor dependency, and at what scale or criticality level should they diversify?",
+      "why": "Vendor concentration risk is often underestimated. Models should consider outage impact, pricing changes, feature deprecation, acquisition risk, and the cost of mitigation vs. the probability of each risk."
+    },
+    {
+      "id": "ra06",
+      "category": "risk_assessment",
+      "question": "A hospital is deploying a machine learning model to help prioritize emergency room patients based on their symptoms, vitals, and medical history. The model was trained on 3 years of historical triage data from the same hospital. What are the risks of deploying this system, including risks that might not be immediately obvious?",
+      "why": "Healthcare ML risks span clinical safety, bias in historical data, liability, workflow disruption, clinician trust, and edge cases. Different models will emphasize different risk categories."
+    },
+    {
+      "id": "ra07",
+      "category": "risk_assessment",
+      "question": "A rapidly growing startup has 4 senior engineers who each hold critical knowledge about different parts of the system. None of this knowledge is documented, and each person is a single point of failure for their domain. The company cannot afford to hire redundant engineers. What are the risks, and what is the most pragmatic mitigation strategy given resource constraints?",
+      "why": "Bus factor risk requires balancing documentation cost, cross-training time, and business continuity against the reality of limited resources. Models will propose different mitigation strategies."
+    },
+    {
+      "id": "ra08",
+      "category": "risk_assessment",
+      "question": "An online marketplace is considering allowing sellers to accept cryptocurrency payments alongside traditional payment methods. They would convert crypto to fiat within 24 hours. What risks should they assess across technical, regulatory, financial, and user-experience dimensions?",
+      "why": "Cryptocurrency integration involves volatile risk across multiple domains. Models should surface exchange rate risk, regulatory uncertainty across jurisdictions, fraud patterns unique to crypto, and tax reporting complexity."
+    },
+    {
+      "id": "ra09",
+      "category": "risk_assessment",
+      "question": "A company is outsourcing the development of a core product feature to an offshore development team for cost savings. The feature involves user authentication and personal data processing. The offshore team will have access to the production codebase and a staging environment with anonymized data. What could go wrong?",
+      "why": "Outsourcing security-sensitive work involves IP risk, data governance, code quality, communication overhead, and long-term maintenance risks that compound in non-obvious ways."
+    },
+    {
+      "id": "ra10",
+      "category": "risk_assessment",
+      "question": "A consumer app with 2 million monthly active users is planning to redesign its entire UI in a single release rather than incremental rollout. The redesign changes navigation patterns, visual language, and information architecture. The team tested with 50 beta users who provided positive feedback. What risks should they consider?",
+      "why": "Big-bang redesigns have a long history of user backlash. Models should identify survivorship bias in beta testing, habit disruption, accessibility regression, performance impact, and rollback complexity."
+    },
+    {
+      "id": "fr01",
+      "category": "factual_reasoning",
+      "question": "A distributed system uses eventual consistency with a 5-second replication lag between its primary database in US-East and replicas in US-West and EU-West. A user in Europe makes a purchase, then immediately checks their order history from a different device. Trace through exactly what happens at each layer of the system, what the user sees, and explain three different architectural approaches to make this experience feel consistent to the user without switching to strong consistency.",
+      "why": "Requires precise reasoning about distributed systems, network latency, and consistency models, then creative problem-solving for UX mitigations."
+    },
+    {
+      "id": "fr02",
+      "category": "factual_reasoning",
+      "question": "A company has a REST API with 200 endpoints. Average response time is 150ms, but P99 is 4.2 seconds. The team has access to distributed tracing data showing that the slow requests correlate with: (a) database queries that occasionally trigger full table scans, (b) a downstream service that has variable latency, and (c) garbage collection pauses. Walk through a systematic approach to diagnosing which factor is the primary contributor and what specific data you would collect at each step.",
+      "why": "Requires methodical reasoning about performance analysis, statistical thinking about tail latency, and the ability to design a diagnostic process rather than jump to conclusions."
+    },
+    {
+      "id": "fr03",
+      "category": "factual_reasoning",
+      "question": "A hash table has a load factor of 0.75 and uses chaining for collision resolution. It currently holds 750,000 entries in 1,000,000 buckets. If the hash function produces a perfectly uniform distribution, what is the expected longest chain length? Now assume the hash function has a subtle bias causing 5% of keys to map to 1% of buckets. How does this change the longest chain length, and at what point does this bias make the hash table's worst-case lookup degrade from O(1) expected to effectively O(n)?",
+      "why": "Multi-step mathematical reasoning about data structures, requiring synthesis of probability theory, hash function properties, and practical performance implications."
+    },
+    {
+      "id": "fr04",
+      "category": "factual_reasoning",
+      "question": "Explain the chain of economic effects if a major country simultaneously imposed a 25% tariff on all semiconductor imports and provided $50 billion in subsidies for domestic chip manufacturing. Trace the effects through at least 4 levels: immediate price impacts, supply chain adjustments over 1-2 years, industry restructuring over 3-5 years, and geopolitical second-order effects. Where does the standard economic analysis break down or become uncertain?",
+      "why": "Requires multi-step causal reasoning across economics, technology, and geopolitics, with explicit uncertainty acknowledgment at each stage."
+    },
+    {
+      "id": "fr05",
+      "category": "factual_reasoning",
+      "question": "A web application uses JWTs for authentication with a 1-hour expiry and refresh tokens with a 30-day expiry stored in HTTP-only cookies. The access token is stored in memory (not localStorage). Walk through exactly what happens in each of these scenarios: (a) user opens two tabs, (b) user's access token is stolen via XSS, (c) user's refresh token is stolen, (d) the signing key is compromised. For each scenario, compare the security properties of this design vs. server-side sessions.",
+      "why": "Requires detailed reasoning about security properties across multiple attack vectors, comparing two different architectures systematically."
+    },
+    {
+      "id": "fr06",
+      "category": "factual_reasoning",
+      "question": "A city has 500,000 residents and is evaluating whether to build a new light rail line or expand its bus rapid transit (BRT) network. The light rail costs $2.4 billion and takes 7 years. The BRT expansion costs $400 million and takes 2 years. The light rail serves a corridor of 120,000 daily commuters; the BRT expansion would serve 300,000 daily commuters across multiple corridors but with slower speeds. Analyze this decision using at least three different frameworks (economic, equity, urban planning) and identify where the frameworks give conflicting recommendations.",
+      "why": "Requires applying multiple analytical frameworks to the same problem and explicitly identifying where they conflict, testing the ability to hold multiple valid perspectives simultaneously."
+    },
+    {
+      "id": "fr07",
+      "category": "factual_reasoning",
+      "question": "Two competing database designs are proposed for a multi-tenant SaaS application serving 5,000 tenants. Design A uses a single database with a tenant_id column on every table and row-level security. Design B uses a separate schema per tenant within the same database. Analyze the trade-offs across these dimensions: query performance at 100, 1000, and 10,000 tenants; schema migration complexity; backup and restore granularity; noisy neighbor isolation; and operational complexity. At what tenant count does each design start to show strain?",
+      "why": "Requires quantitative reasoning about database architecture trade-offs across multiple scaling dimensions, with specific inflection points rather than vague generalities."
+    },
+    {
+      "id": "fr08",
+      "category": "factual_reasoning",
+      "question": "A compiler optimization pass is deciding whether to inline a function that is called in 3 different hot loops. The function is 15 lines long, accesses 4 local variables and 2 global variables, and contains one branch that is taken 95% of the time. Walk through the analysis a modern optimizing compiler would perform: what are the costs of inlining (code size, instruction cache pressure), the benefits (eliminated call overhead, enabled further optimizations), and how would profile-guided optimization change the decision?",
+      "why": "Requires reasoning about compiler internals, hardware performance characteristics, and the interaction between multiple optimization passes."
+    },
+    {
+      "id": "fr09",
+      "category": "factual_reasoning",
+      "question": "A clinical trial for a new drug shows a statistically significant result (p=0.03) with a sample size of 200, showing a 15% improvement over placebo. However, the effect size is small (Cohen's d = 0.22), the trial was conducted at a single site, and 3 of the 12 pre-specified secondary endpoints also showed significance. Analyze the strength of this evidence. What specific additional information would you need to assess whether this drug is genuinely effective, and how would a Bayesian analysis differ from the frequentist result presented?",
+      "why": "Requires integrating statistical reasoning, clinical trial methodology, and philosophy of evidence. Tests understanding of p-values, multiple comparisons, effect sizes, and Bayesian vs. frequentist perspectives."
+    },
+    {
+      "id": "fr10",
+      "category": "factual_reasoning",
+      "question": "A Kubernetes cluster runs 200 pods across 20 nodes. The horizontal pod autoscaler is configured to scale based on CPU utilization with a target of 70%. During a traffic spike, new pods are created but take 45 seconds to become ready (pulling images, running init containers, warming caches). During those 45 seconds, existing pods are overwhelmed and response times spike to 10 seconds. Trace through the exact sequence of events in the Kubernetes control loop during this spike, identify all the points where the system's response is suboptimal, and propose at least three different mitigation strategies with their trade-offs.",
+      "why": "Requires precise understanding of Kubernetes internals, control theory (feedback loops with delays), and practical SRE problem-solving."
+    },
+    {
+      "id": "co01",
+      "category": "creative_open",
+      "question": "Design a notification system for a productivity app that helps users stay focused rather than creating more distractions. The app tracks tasks, calendar events, and messages from team members. How would you decide what to notify about, when, and how? Include the design principles you would follow and at least three specific interaction patterns.",
+      "why": "Notification design requires balancing competing needs (awareness vs. focus) with no single right answer. Models will propose different philosophical approaches and interaction patterns."
+    },
+    {
+      "id": "co02",
+      "category": "creative_open",
+      "question": "Design an onboarding experience for a complex B2B analytics platform that has over 50 features. New users typically need only 5-8 features for their specific role, but the platform doesn't know which role the user fills until they start using it. How do you get users to their first 'aha moment' quickly without overwhelming them or forcing them through a rigid tutorial?",
+      "why": "Onboarding design for complex products is a genuinely hard UX problem. Models will generate different strategies for progressive disclosure, personalization, and learning."
+    },
+    {
+      "id": "co03",
+      "category": "creative_open",
+      "question": "A neighborhood has a vacant lot that the community has decided to turn into a shared space. The neighborhood includes young families, elderly residents, teenagers, remote workers looking for outdoor workspace, and a small population of unhoused individuals. Design a space that serves all these groups. Address potential conflicts between uses and users.",
+      "why": "Community design requires empathy across diverse needs, creative spatial thinking, and honest engagement with social tensions. Rich problem with many valid approaches."
+    },
+    {
+      "id": "co04",
+      "category": "creative_open",
+      "question": "Invent a board game mechanic that has never existed before (to your knowledge) and design a complete game around it. The game should be playable with 2-5 players, take 30-60 minutes, use components that could be manufactured affordably, and create interesting strategic decisions. Describe the core mechanic, rules overview, win condition, and why it would be fun.",
+      "why": "Pure creative challenge requiring novelty, internal consistency, and understanding of what makes games engaging. Multiple models will generate very different ideas."
+    },
+    {
+      "id": "co05",
+      "category": "creative_open",
+      "question": "A public library wants to remain relevant in a world where most information is available online. Reimagine the library as a community institution for 2030. What services would it offer beyond book lending? How would the physical space be designed? What role would technology play? How would you measure its success?",
+      "why": "Institutional reimagination requires understanding societal trends, community needs, and creative thinking about physical and digital spaces."
+    },
+    {
+      "id": "co06",
+      "category": "creative_open",
+      "question": "Design a peer review system for a large open-source project that receives 100+ pull requests per week. The system must balance speed (contributors don't want to wait weeks), quality (bad merges are costly), inclusivity (new contributors shouldn't be discouraged), and reviewer burnout (the same 5 people review everything). Propose a complete system including incentives, automation, and social dynamics.",
+      "why": "Open-source governance is a sociotechnical design problem with real tensions between speed, quality, and community health. Creative solutions require understanding both technical tooling and human motivation."
+    },
+    {
+      "id": "co07",
+      "category": "creative_open",
+      "question": "You're designing the error messages for a developer CLI tool. The tool is used by developers ranging from beginners to experts. Design a philosophy and system for error messages that is genuinely helpful. Provide 5 example error messages for common scenarios (wrong command syntax, missing dependency, permission denied, network timeout, conflicting configuration) and explain your design choices.",
+      "why": "Error message design is underappreciated craft. Models will have different opinions on tone, verbosity, suggested fixes, and how much to assume about the user's knowledge level."
+    },
+    {
+      "id": "co08",
+      "category": "creative_open",
+      "question": "Design a hiring process for senior software engineers that accurately assesses their ability to do the actual job without relying on whiteboard algorithm puzzles, take-home projects that demand excessive time, or trivia questions. The process should take no more than 4 hours of the candidate's time total and give the hiring team high confidence in the decision. Describe each stage, what it tests, and how you mitigate bias.",
+      "why": "Engineering hiring is a deeply contested design problem where everyone has strong opinions and most current approaches have well-documented flaws."
+    },
+    {
+      "id": "co09",
+      "category": "creative_open",
+      "question": "Design a personal finance app for people who are bad with money and know it. They've tried budgeting apps before and abandoned them within a week. What would make this app different? Focus on the behavioral design — what psychological principles would you leverage, what would the first-week experience look like, and how would you keep users engaged without being manipulative?",
+      "why": "Behavioral design requires understanding psychology, the ethics of persuasive technology, and designing for users who have explicitly failed with existing solutions."
+    },
+    {
+      "id": "co10",
+      "category": "creative_open",
+      "question": "A mid-size city wants to reduce car traffic downtown by 40% over 5 years without banning cars outright. Design a comprehensive strategy that includes infrastructure changes, incentives, technology, and policy. The plan must be politically feasible (no measure can be so unpopular it gets reversed in the next election cycle) and equitable (it cannot disproportionately burden low-income residents or people with disabilities).",
+      "why": "Urban policy design requires balancing effectiveness with political and equity constraints. Multiple models will generate different strategy mixes and prioritize different trade-offs."
+    },
+    {
+      "id": "at01",
+      "category": "adversarial_tricky",
+      "question": "A team is debugging a production issue where their service returns correct results 99.7% of the time but gives wrong answers for certain inputs. They've added extensive logging, written unit tests for the failing cases (all pass), and reviewed the code line by line. They cannot reproduce the issue in any environment except production. A senior engineer suggests the issue might be in their dependencies. A junior engineer wonders if it's a race condition. The tech lead thinks the data is corrupt. Given these symptoms, which hypothesis is most likely and why? What specific diagnostic step would you perform next?",
+      "why": "The 'tests pass locally but fail in production' scenario has a non-obvious answer space. The key insight is that all three hypotheses could be correct simultaneously, and the most productive diagnostic approach is often not the most obvious one."
+    },
+    {
+      "id": "at02",
+      "category": "adversarial_tricky",
+      "question": "A startup claims their new database is '10x faster than PostgreSQL' based on a benchmark showing 10x higher throughput on their test workload. The benchmark used a single table with 1 million rows, all queries were simple key-value lookups, the data fit entirely in memory, and there were no concurrent writes during the read benchmark. Is this claim valid? What would a fair benchmark look like?",
+      "why": "The obvious answer ('the benchmark is unfair') is correct but incomplete. The tricky part is articulating exactly why each benchmark constraint invalidates the general claim, and what 'fair' means when comparing fundamentally different database architectures."
+    },
+    {
+      "id": "at03",
+      "category": "adversarial_tricky",
+      "question": "You're reviewing code and find a function that sorts an array before performing a binary search. A colleague argues the sort is unnecessary because 'the data is always sorted when it reaches this function.' The function is called from 14 different places in the codebase. Should you remove the sort? What if removing it improves the hot path performance by 30%?",
+      "why": "The obvious 'defensive programming' answer (keep the sort) conflicts with the CLAUDE.md instruction to fix root causes. But the tricky part is that removing it creates a subtle, hard-to-detect correctness risk. Tests the ability to reason about implicit invariants and Hyrum's Law."
+    },
+    {
+      "id": "at04",
+      "category": "adversarial_tricky",
+      "question": "A company's A/B test shows that adding a dark pattern (making the 'unsubscribe' button tiny and hard to find) increases subscription retention by 18%. The product manager argues this is 'just good UX — we're reducing accidental unsubscribes.' The data does show that 40% of users who unsubscribe resubscribe within a month, suggesting some unsubscribes are accidental. Is the product manager's argument valid? How would you design a test to distinguish between reducing accidental unsubscribes and trapping intentional ones?",
+      "why": "The tricky part is that the PM's argument contains a grain of truth (accidental unsubscribes are real) embedded in a fundamentally manipulative framing. Models must engage with the valid evidence while identifying the logical fallacy."
+    },
+    {
+      "id": "at05",
+      "category": "adversarial_tricky",
+      "question": "Two programmers disagree about error handling. Programmer A says: 'Functions should return error codes because exceptions create invisible control flow that makes programs hard to reason about.' Programmer B says: 'Exceptions are superior because error codes are easily ignored, leading to silent failures.' They each present compelling examples supporting their position. Who is right? Is there a way to reconcile these positions, or is this a fundamental, irreconcilable trade-off in language design?",
+      "why": "This appears to be a simple 'both have points' question, but the tricky insight is that this is actually a deep language design trade-off with specific contexts where each is demonstrably better. The challenge is going beyond 'it depends' to articulate exactly what it depends on and why."
+    }
+  ]
+}

@@ -1,0 +1,19 @@
+[project]
+name = "duh-phase0"
+version = "0.0.1"
+description = "Phase 0: Prove multi-model consensus beats single-model answers"
+requires-python = ">=3.11"
+dependencies = [
+    "anthropic>=0.40.0",
+    "openai>=1.50.0",
+    "pydantic>=2.0",
+    "pydantic-settings>=2.0",
+    "rich>=13.0",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["phase0"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
