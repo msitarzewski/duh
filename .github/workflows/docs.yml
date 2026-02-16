@@ -26,8 +26,8 @@ jobs:
       - uses: astral-sh/setup-uv@v4
         with:
           enable-cache: true
-      - run: uv pip install --system mkdocs mkdocs-material
-      - run: mkdocs build --strict
+      - run: uv venv /tmp/docs-env && uv pip install --python /tmp/docs-env/bin/python mkdocs mkdocs-material
+      - run: /tmp/docs-env/bin/mkdocs build --strict
       - uses: actions/upload-pages-artifact@v3
         with:
           path: site
