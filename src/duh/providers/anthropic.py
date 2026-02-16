@@ -21,6 +21,7 @@ from duh.providers.base import (
     ModelResponse,
     StreamChunk,
     TokenUsage,
+    ToolCallData,
 )
 
 if TYPE_CHECKING:
@@ -143,6 +144,8 @@ class AnthropicProvider:
         max_tokens: int = 4096,
         temperature: float = 0.7,
         stop_sequences: list[str] | None = None,
+        response_format: str | None = None,
+        tools: list[dict[str, object]] | None = None,
     ) -> ModelResponse:
         system, api_messages = _build_messages(messages)
 
@@ -155,6 +158,8 @@ class AnthropicProvider:
         }
         if stop_sequences:
             kwargs["stop_sequences"] = stop_sequences
+        if tools:
+            kwargs["tools"] = tools
 
         start = time.monotonic()
         try:
@@ -164,7 +169,23 @@ class AnthropicProvider:
 
         latency_ms = (time.monotonic() - start) * 1000
 
-        content = response.content[0].text if response.content else ""
+        # Extract text content and tool use blocks
+        content = ""
+        tool_calls_data: list[ToolCallData] = []
+        for block in response.content:
+            if hasattr(block, "text"):
+                content = block.text
+            elif hasattr(block, "type") and block.type == "tool_use":
+                import json
+
+                tool_calls_data.append(
+                    ToolCallData(
+                        id=block.id,
+                        name=block.name,
+                        arguments=json.dumps(block.input),
+                    )
+                )
+
         usage = TokenUsage(
             input_tokens=response.usage.input_tokens,
             output_tokens=response.usage.output_tokens,
@@ -184,6 +205,7 @@ class AnthropicProvider:
             finish_reason=response.stop_reason or "stop",
             latency_ms=latency_ms,
             raw_response=response,
+            tool_calls=tool_calls_data if tool_calls_data else None,
         )
 
     async def stream(

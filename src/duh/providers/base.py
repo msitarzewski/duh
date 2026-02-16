@@ -60,6 +60,15 @@ class TokenUsage:
         return self.input_tokens + self.output_tokens
 
 
+@dataclass(frozen=True, slots=True)
+class ToolCallData:
+    """A tool call from a model response."""
+
+    id: str
+    name: str
+    arguments: str  # JSON string of arguments
+
+
 @dataclass(slots=True)
 class ModelResponse:
     """Complete response from a model call."""
@@ -70,6 +79,7 @@ class ModelResponse:
     finish_reason: str  # "stop", "max_tokens", "tool_use"
     latency_ms: float  # Wall-clock time for the call
     raw_response: object = field(default=None, repr=False)
+    tool_calls: list[ToolCallData] | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -117,8 +127,19 @@ class ModelProvider(Protocol):
         max_tokens: int = 4096,
         temperature: float = 0.7,
         stop_sequences: list[str] | None = None,
+        response_format: str | None = None,
+        tools: list[dict[str, object]] | None = None,
     ) -> ModelResponse:
         """Send a prompt and wait for complete response.
+
+        Args:
+            messages: Prompt messages.
+            model_id: Model to use.
+            max_tokens: Max output tokens.
+            temperature: Sampling temperature.
+            stop_sequences: Sequences that stop generation.
+            response_format: If ``"json"``, request JSON output mode.
+            tools: Tool definitions for function calling.
 
         Raises ProviderError on failure.
         """

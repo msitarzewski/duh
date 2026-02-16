@@ -1,18 +1,27 @@
 # Active Context
 
 **Last Updated**: 2026-02-16
-**Current Phase**: v0.1 COMPLETE. Preparing v0.2.
-**Next Action**: Plan v0.2 task breakdown.
+**Current Phase**: v0.2 COMPLETE. Preparing v0.3.
+**Next Action**: Plan v0.3 task breakdown (REST API, MCP server, Python client).
 
 ---
 
 ## Current State
 
-- **v0.1 Tasks 1-25 COMPLETE.** All tasks including documentation.
-- **Google Gemini provider added** (post-v0.1) — 4 models: Gemini 3 Pro/Flash (preview), Gemini 2.5 Pro/Flash.
-- 703 tests passing, ruff clean, mypy strict clean (26 source files, 3 providers).
+- **v0.2 Tasks 1-22 COMPLETE.** All tasks including integration tests, docs, version bump.
+- **4 providers shipping**: Anthropic (3 models), OpenAI (3 models), Google (4 models) — 10 total.
+- 1093 tests passing, ruff clean, mypy strict clean (39 source files, 4 providers).
 - MkDocs docs site live at https://msitarzewski.github.io/duh/
 - GitHub repo: https://github.com/msitarzewski/duh
+
+### v0.2 Features
+
+- **Voting protocol** — `duh ask --protocol voting|consensus|auto`, parallel fan-out + majority/weighted aggregation
+- **Decomposition** — `duh ask --decompose`, DECOMPOSE state, topological scheduler, synthesis
+- **Tool-augmented reasoning** — `duh ask --tools`, web search, code execution, file read
+- **Decision taxonomy** — automatic classification at COMMIT time via lightweight model call
+- **Outcome tracking** — `duh feedback <thread_id> --result --notes`, outcome context in future rounds
+- **Feedback CLI** — record real-world outcomes for knowledge accumulation
 
 ## Phase 0 Benchmark Results (Summary)
 
@@ -23,18 +32,7 @@
 - **Auto-decision said ITERATE** (33% win rate on J/S, below 60% threshold) but that metric measures "ranked #1 out of 4 methods" — head-to-head clearly favors consensus
 - **Manual decision: PROCEED** — the method works, prompts will improve in v0.1
 
-## Ready for v0.1
-
-When Phase 0 exits with PROCEED, v0.1 implementation starts. Key references:
-
-- **v0.1 spec**: `roadmap.md:126-266` — full task list, acceptance criteria, dependency graph
-- **Project structure**: `roadmap.md:592-606` — `src/duh/` layout with cli/, consensus/, providers/, memory/, config/, core/
-- **Testing mandate**: `roadmap.md:486-535` — 95% coverage on core, test-alongside, every public function tested
-- **Provider interface**: `roadmap.md:612-621` — `typing.Protocol`, stateless adapters
-- **Tech stack**: `techContext.md` — Python, asyncio, SQLAlchemy, Rich, Click, Docker, uv
-- **Architecture decisions**: `decisions.md` — all 8 foundational decisions documented
-
-### v0.1 Task Order (revised — error hierarchy and config moved earlier)
+## v0.1 Task List (ALL DONE)
 
 1. ~~Project scaffolding~~ DONE
 2. ~~Core error hierarchy + base types~~ DONE
@@ -63,6 +61,42 @@ When Phase 0 exits with PROCEED, v0.1 implementation starts. Key references:
 25. ~~Documentation~~ DONE
 26. ~~Google Gemini adapter~~ DONE (added post-v0.1, 22 tests)
 
+## v0.2 Task List (ALL DONE)
+
+1. ~~Alembic migrations (001 baseline, 002 v0.2 schema)~~ DONE
+2. ~~Structured output (response_format, tools, tool_calls on providers)~~ DONE
+3. ~~JSON extract~~ DONE
+4. ~~Challenge framings (4 types, round-robin)~~ DONE
+5. ~~Tool framework (Tool protocol, ToolRegistry)~~ DONE
+6. ~~Tool-augmented send~~ DONE
+7. ~~Config schema (ToolsConfig, VotingConfig, DecomposeConfig, TaxonomyConfig)~~ DONE
+8. ~~Models + repo (Outcome, Subtask, Vote, taxonomy fields)~~ DONE
+9. ~~Taxonomy at COMMIT~~ DONE
+10. ~~Feedback CLI~~ DONE
+11. ~~Outcome context~~ DONE
+12. ~~Display (show_taxonomy, show_outcome)~~ DONE
+13. ~~DECOMPOSE state + handler~~ DONE
+14. ~~Scheduler (TopologicalSorter)~~ DONE
+15. ~~Synthesis~~ DONE
+16. ~~Decomposition CLI integration~~ DONE
+17. ~~Voting + classifier~~ DONE
+18. ~~Voting CLI + persistence + display~~ DONE
+19. ~~Tool implementations (web_search, code_exec, file_read)~~ DONE
+20. ~~Provider tool call parsing~~ DONE
+21. ~~Tool integration in handlers~~ DONE
+22. ~~Tool CLI setup~~ DONE
+23. ~~Integration tests (Phase 6)~~ DONE
+24. ~~README + docs update~~ DONE
+25. ~~Version bump to 0.2.0~~ DONE
+
+## Ready for v0.3
+
+Key references:
+- **v0.3 scope**: REST API, MCP server, Python client library
+- **Tech stack**: `techContext.md` — FastAPI (likely), MCP SDK
+- **Architecture**: `decisions.md` — all foundational decisions documented
+- **Patterns**: Handler pattern, Tool protocol, provider adapter pattern all established in v0.1/v0.2
+
 ### Phase 0 Artifacts That Feed v0.1
 
 - **Validated prompts** from `phase0/prompts.py` — especially the forced disagreement challenger prompt, will seed `src/duh/consensus/` challenge framings
@@ -76,4 +110,5 @@ When Phase 0 exits with PROCEED, v0.1 implementation starts. Key references:
 - Output licensing for multi-provider synthesized content
 - Vector search solution for SQLite (sqlite-vss vs ChromaDB vs FAISS) — v1.0 decision
 - Hosted demo economics — v0.4 decision
-- Whether DECOMPOSE (v0.2) should itself be a consensus operation
+- ~~Whether DECOMPOSE should itself be a consensus operation~~ RESOLVED: No, decomposition is single-model (simpler, sufficient)
+- ~~Testing framework~~ RESOLVED: pytest + pytest-asyncio, asyncio_mode=auto

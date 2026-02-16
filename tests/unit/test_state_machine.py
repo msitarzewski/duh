@@ -65,6 +65,7 @@ class TestConsensusState:
         names = {s.name for s in ConsensusState}
         assert names == {
             "IDLE",
+            "DECOMPOSE",
             "PROPOSE",
             "CHALLENGE",
             "REVISE",
@@ -280,6 +281,16 @@ class TestInvalidTransitions:
             (ConsensusState.COMMIT, ConsensusState.CHALLENGE),
             (ConsensusState.COMMIT, ConsensusState.REVISE),
             (ConsensusState.COMMIT, ConsensusState.COMMIT),
+            (ConsensusState.DECOMPOSE, ConsensusState.IDLE),
+            (ConsensusState.DECOMPOSE, ConsensusState.CHALLENGE),
+            (ConsensusState.DECOMPOSE, ConsensusState.REVISE),
+            (ConsensusState.DECOMPOSE, ConsensusState.COMMIT),
+            (ConsensusState.DECOMPOSE, ConsensusState.COMPLETE),
+            (ConsensusState.DECOMPOSE, ConsensusState.DECOMPOSE),
+            (ConsensusState.PROPOSE, ConsensusState.DECOMPOSE),
+            (ConsensusState.CHALLENGE, ConsensusState.DECOMPOSE),
+            (ConsensusState.REVISE, ConsensusState.DECOMPOSE),
+            (ConsensusState.COMMIT, ConsensusState.DECOMPOSE),
         ],
     )
     def test_invalid_transition_raises(
@@ -343,6 +354,7 @@ class TestFailedTransition:
         "from_state",
         [
             ConsensusState.IDLE,
+            ConsensusState.DECOMPOSE,
             ConsensusState.PROPOSE,
             ConsensusState.CHALLENGE,
             ConsensusState.REVISE,
@@ -522,6 +534,7 @@ class TestValidTransitionsList:
         sm = ConsensusStateMachine(_make_ctx())
         valid = sm.valid_transitions()
         assert ConsensusState.PROPOSE in valid
+        assert ConsensusState.DECOMPOSE in valid
         assert ConsensusState.FAILED in valid
 
     def test_commit_valid_transitions_not_converged(self) -> None:

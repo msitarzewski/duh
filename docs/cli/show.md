@@ -57,6 +57,7 @@ Created: 2026-02-16 14:30
   Decision (confidence 100%):
   The choice depends on your workload pattern...
   Dissent: [openai:gpt-5.2]: I disagree with...
+  Taxonomy: intent=evaluate category=technology genus=database
 ```
 
 Each round shows:
@@ -64,6 +65,28 @@ Each round shows:
 - **Contributions** by role (PROPOSER, CHALLENGER, REVISER) with model reference
 - **Decision** with confidence percentage
 - **Dissent** if any genuine challenges were preserved
+- **Taxonomy** (when present) with intent, category, and genus fields
+
+### Votes
+
+If the thread used the voting protocol, votes are displayed before the round history:
+
+```
+--- Votes ---
+  [anthropic:claude-opus-4-6]
+  PostgreSQL is the stronger choice...
+
+  [openai:gpt-5.2]
+  It depends on your workload...
+```
+
+### Outcomes
+
+If feedback has been recorded for the thread's decision, the outcome is displayed at the end:
+
+```
+  Outcome: success - Deployed to production, no issues
+```
 
 ## Error cases
 
@@ -74,3 +97,4 @@ Each round shows:
 
 - [`threads`](threads.md) -- Find thread IDs to inspect
 - [`recall`](recall.md) -- Search for threads by keyword
+- [`feedback`](feedback.md) -- Record an outcome for this thread

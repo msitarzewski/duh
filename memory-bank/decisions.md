@@ -1,6 +1,6 @@
 # Architectural Decisions
 
-**Last Updated**: 2026-02-15
+**Last Updated**: 2026-02-16
 
 ---
 
@@ -158,3 +158,57 @@
 - Include local models in Phase 0 (adds complexity, local quality would drag down results)
 **Consequences**: Simpler Phase 0. Clean thesis test with best models. Local model integration proven in v0.1 with Ollama adapter.
 **References**: `roadmap.md:138` (Ollama in v0.1)
+
+---
+
+## 2026-02-16: Voting as Parallel Fan-Out (Not State Machine)
+
+**Status**: Approved
+**Context**: v0.2 adds a voting protocol for tasks where consensus debate is overkill (factual questions, preference polls). Design choice: extend the state machine or build a separate parallel architecture.
+**Decision**: Voting is a simple parallel fan-out: send the same prompt to all models independently, collect responses, aggregate via majority or weighted voting. NOT a state machine — no PROPOSE/CHALLENGE/REVISE cycle.
+**Alternatives**:
+- Extend state machine with VOTE state (adds complexity to an already complex machine)
+- Sequential voting rounds (slower, no benefit for independent opinions)
+**Consequences**: Simpler architecture for factual/preference tasks. Auto-classification (`classify_task_type()`) selects consensus vs voting. Consistent with ACL 2025 findings that parallel independent reasoning outperforms sequential debate for factual tasks.
+**References**: `src/duh/consensus/voting.py`, `src/duh/consensus/classifier.py`
+
+---
+
+## 2026-02-16: Decomposition as Single-Model (Not Consensus)
+
+**Status**: Approved
+**Context**: v0.2 adds task decomposition. Open question: should DECOMPOSE itself be a consensus operation (multiple models debate how to break down the task)?
+**Decision**: DECOMPOSE is a single-model operation. One model decomposes the task into a subtask DAG. Each subtask then runs through consensus independently.
+**Alternatives**:
+- Multi-model decomposition (models debate the breakdown — adds a full consensus round before any work begins)
+- User-defined decomposition (manual, loses automation benefit)
+**Consequences**: Faster decomposition (one model call vs full consensus). Simpler implementation. Each subtask still gets full consensus treatment. Decomposition quality is "good enough" from a single strong model.
+**References**: `src/duh/consensus/decompose.py`, `src/duh/consensus/scheduler.py`
+
+---
+
+## 2026-02-16: Tool Protocol via Python Protocol (Structural Typing)
+
+**Status**: Approved
+**Context**: v0.2 adds tool-augmented reasoning. Tools need a common interface for the registry and augmented send loop.
+**Decision**: Use Python `Protocol` class for the Tool interface — consistent with the existing provider adapter pattern. Tools implement `name`, `description`, `parameters_schema`, and `execute()`.
+**Alternatives**:
+- ABC base class (requires explicit inheritance, less flexible)
+- Dict-based tools (no type safety)
+- Decorator-based registration (implicit, harder to test)
+**Consequences**: Structural typing means any object with the right methods is a tool — easy to extend. ToolRegistry handles lookup. tool_augmented_send handles the execute-and-resubmit loop.
+**References**: `src/duh/tools/base.py`, `src/duh/tools/registry.py`, `src/duh/tools/augmented_send.py`
+
+---
+
+## 2026-02-16: Taxonomy Classification at COMMIT Time
+
+**Status**: Approved
+**Context**: v0.2 adds decision taxonomy (domain, category, tags, complexity). When should classification happen?
+**Decision**: Classify at COMMIT time via a lightweight model call with structured output. The decision text is already finalized, so classification is accurate. Adds one cheap model call to the commit step.
+**Alternatives**:
+- Classify at query time (before consensus — less accurate, decision not yet formed)
+- User-provided taxonomy (manual burden, inconsistent)
+- Post-hoc batch classification (delayed, loses real-time value)
+**Consequences**: Taxonomy is automatic and accurate. One additional cheap model call per decision. Structured metadata enables filtering, analytics, and outcome correlation.
+**References**: `src/duh/consensus/handlers.py` (`handle_commit(classify=True)`, `_classify_decision()`)

@@ -336,6 +336,9 @@ class TestIndexes:
             "turn_summaries",
             "thread_summaries",
             "decisions",
+            "outcomes",
+            "subtasks",
+            "votes",
         }
         assert expected == set(Base.metadata.tables.keys())
 

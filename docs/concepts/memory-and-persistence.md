@@ -11,7 +11,10 @@ Every consensus run persists:
 | **Thread** | The question, status (active/complete/failed), timestamps |
 | **Turn** | One round of PROPOSE/CHALLENGE/REVISE/COMMIT |
 | **Contribution** | A single model's output (role, content, token counts, cost, latency) |
-| **Decision** | The committed decision text, confidence score, and dissent |
+| **Decision** | The committed decision text, confidence score, dissent, and taxonomy fields (intent, category, genus) |
+| **Vote** | A single model's independent answer in the voting protocol (model_ref, content, thread_id) |
+| **Outcome** | Tracked result of a decision: success, failure, or partial, with optional notes |
+| **Subtask** | A decomposed subtask linked to a parent thread (label, description, dependencies, sequence order) |
 | **TurnSummary** | LLM-generated summary of a single turn |
 | **ThreadSummary** | LLM-generated summary of an entire thread |
 
@@ -42,7 +45,11 @@ threads
 ├── turns
 │   ├── contributions    (model outputs with token/cost tracking)
 │   ├── decision         (committed decision per turn)
+│   │   ├── outcome      (tracked result: success/failure/partial)
+│   │   └── taxonomy     (intent, category, genus fields on decision)
 │   └── turn_summary     (LLM summary of the turn)
+├── votes                (independent model answers for voting protocol)
+├── subtasks             (decomposed subtasks with dependency DAG)
 └── thread_summary       (LLM summary of the thread)
 ```
 
@@ -51,6 +58,10 @@ Key relationships:
 - A **thread** has many **turns** (one per consensus round)
 - Each **turn** has multiple **contributions** (proposer + challengers + reviser)
 - Each **turn** has at most one **decision** (from COMMIT phase)
+- Each **decision** can have one **outcome** (recorded via `duh feedback`)
+- Each **decision** can have **taxonomy** fields (intent, category, genus) for structured classification
+- A **thread** can have **votes** (from the voting protocol, instead of turns)
+- A **thread** can have **subtasks** (from decomposition, each linking to a child thread)
 - Each **thread** and **turn** can have an LLM-generated **summary**
 
 ## Searching past decisions

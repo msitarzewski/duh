@@ -36,6 +36,8 @@ api_key_env = "OPENAI_API_KEY"
 [general]
 max_rounds = 3           # Maximum consensus rounds (1-10)
 stream_output = true     # Stream model responses
+protocol = "consensus"   # Default protocol: consensus, voting, or auto
+decompose = false        # Decompose questions into subtasks by default
 
 [database]
 url = "sqlite+aiosqlite:///~/.local/share/duh/duh.db"
@@ -55,10 +57,39 @@ enabled = true
 api_key_env = "OPENAI_API_KEY"
 # base_url = "http://localhost:11434/v1"  # For Ollama / local models
 
+[providers.google]
+enabled = true
+api_key_env = "GOOGLE_API_KEY"
+
 [consensus]
 min_challengers = 2
 proposer_strategy = "round_robin"
 challenge_types = ["flaw", "alternative", "risk", "devils_advocate"]
+
+[tools]
+enabled = false          # Enable tool-augmented reasoning
+max_rounds = 5           # Max tool call iterations per phase
+
+[tools.web_search]
+backend = "duckduckgo"   # Search backend
+max_results = 5          # Max results per search
+
+[tools.code_execution]
+enabled = false          # Code execution requires explicit opt-in
+timeout = 30             # Execution timeout in seconds
+max_output = 10000       # Max output characters
+
+[voting]
+enabled = false          # Enable voting protocol availability
+aggregation = "majority" # Aggregation strategy: majority or weighted
+
+[decompose]
+max_subtasks = 7         # Maximum subtasks per decomposition
+parallel = true          # Execute independent subtasks in parallel
+
+[taxonomy]
+enabled = false          # Auto-classify decisions by intent/category/genus
+model_ref = ""           # Model for classification (empty = cheapest)
 
 [logging]
 level = "INFO"
@@ -73,6 +104,7 @@ Provider API keys are resolved from environment variables when `api_key_env` is 
 |----------|---------|
 | `ANTHROPIC_API_KEY` | Anthropic (Claude) API key |
 | `OPENAI_API_KEY` | OpenAI API key |
+| `GOOGLE_API_KEY` | Google (Gemini) API key |
 | `DUH_CONFIG` | Path to config file (overrides discovery) |
 | `XDG_CONFIG_HOME` | Base directory for user config (default: `~/.config`) |
 
@@ -84,10 +116,14 @@ Every command accepts `--config` to use a specific config file:
 duh --config ./my-config.toml ask "question"
 ```
 
-The `ask` command also accepts `--rounds` to override `max_rounds`:
+The `ask` command accepts several overrides:
 
 ```bash
 duh ask --rounds 5 "question requiring deeper debate"
+duh ask --protocol voting "quick judgment call"
+duh ask --decompose "complex multi-part question"
+duh ask --tools "question needing web search"
+duh ask --no-tools "question that should not use tools"
 ```
 
 ## Next steps

@@ -50,6 +50,52 @@ class LoggingConfig(BaseModel):
     structured: bool = False
 
 
+class WebSearchConfig(BaseModel):
+    """Web search tool configuration."""
+
+    backend: str = "duckduckgo"
+    api_key: str | None = None
+    max_results: int = 5
+
+
+class CodeExecutionConfig(BaseModel):
+    """Code execution tool configuration."""
+
+    enabled: bool = False
+    timeout: int = 30
+    max_output: int = 10_000
+
+
+class ToolsConfig(BaseModel):
+    """Tool framework configuration."""
+
+    enabled: bool = False
+    max_rounds: int = 5
+    web_search: WebSearchConfig = Field(default_factory=WebSearchConfig)
+    code_execution: CodeExecutionConfig = Field(default_factory=CodeExecutionConfig)
+
+
+class VotingConfig(BaseModel):
+    """Voting protocol configuration."""
+
+    enabled: bool = False
+    aggregation: str = "majority"
+
+
+class DecomposeConfig(BaseModel):
+    """Query decomposition configuration."""
+
+    max_subtasks: int = 7
+    parallel: bool = True
+
+
+class TaxonomyConfig(BaseModel):
+    """Decision taxonomy classification configuration."""
+
+    enabled: bool = False
+    model_ref: str = ""
+
+
 class GeneralConfig(BaseModel):
     """General engine settings."""
 
@@ -57,6 +103,8 @@ class GeneralConfig(BaseModel):
     decomposer_model: str = ""
     summary_model: str = ""
     stream_output: bool = True
+    protocol: str = "consensus"
+    decompose: bool = False
 
 
 class DuhConfig(BaseModel):
@@ -74,3 +122,7 @@ class DuhConfig(BaseModel):
     )
     consensus: ConsensusConfig = Field(default_factory=ConsensusConfig)
     logging: LoggingConfig = Field(default_factory=LoggingConfig)
+    tools: ToolsConfig = Field(default_factory=ToolsConfig)
+    voting: VotingConfig = Field(default_factory=VotingConfig)
+    decompose: DecomposeConfig = Field(default_factory=DecomposeConfig)
+    taxonomy: TaxonomyConfig = Field(default_factory=TaxonomyConfig)

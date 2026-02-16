@@ -16,10 +16,13 @@ from duh.core.errors import StorageError
 from duh.memory.models import (
     Contribution,
     Decision,
+    Outcome,
+    Subtask,
     Thread,
     ThreadSummary,
     Turn,
     TurnSummary,
+    Vote,
 )
 
 if TYPE_CHECKING:
@@ -145,6 +148,9 @@ class MemoryRepository:
         confidence: float,
         *,
         dissent: str | None = None,
+        intent: str | None = None,
+        category: str | None = None,
+        genus: str | None = None,
     ) -> Decision:
         """Record the committed decision for a turn."""
         decision = Decision(
@@ -153,6 +159,9 @@ class MemoryRepository:
             content=content,
             confidence=confidence,
             dissent=dissent,
+            intent=intent,
+            category=category,
+            genus=genus,
         )
         self._session.add(decision)
         await self._session.flush()
@@ -225,5 +234,120 @@ class MemoryRepository:
             .order_by(Thread.created_at.desc())
             .limit(limit)
         )
+        result = await self._session.execute(stmt)
+        return list(result.scalars().all())
+
+    # ── Outcome ──────────────────────────────────────────────────
+
+    async def save_outcome(
+        self,
+        decision_id: str,
+        thread_id: str,
+        result_str: str,
+        *,
+        notes: str | None = None,
+    ) -> Outcome:
+        """Record an outcome for a decision."""
+        outcome = Outcome(
+            decision_id=decision_id,
+            thread_id=thread_id,
+            result=result_str,
+            notes=notes,
+        )
+        self._session.add(outcome)
+        await self._session.flush()
+        return outcome
+
+    async def get_outcome(self, decision_id: str) -> Outcome | None:
+        """Get the outcome for a decision."""
+        stmt = select(Outcome).where(Outcome.decision_id == decision_id)
+        result = await self._session.execute(stmt)
+        return result.scalar_one_or_none()
+
+    async def get_outcomes_for_thread(self, thread_id: str) -> list[Outcome]:
+        """Get all outcomes for a thread."""
+        stmt = (
+            select(Outcome)
+            .where(Outcome.thread_id == thread_id)
+            .order_by(Outcome.created_at)
+        )
+        result = await self._session.execute(stmt)
+        return list(result.scalars().all())
+
+    async def get_decisions_with_outcomes(self, thread_id: str) -> list[Decision]:
+        """Get decisions with eagerly loaded outcomes for a thread."""
+        stmt = (
+            select(Decision)
+            .where(Decision.thread_id == thread_id)
+            .options(selectinload(Decision.outcome))
+            .order_by(Decision.created_at)
+        )
+        result = await self._session.execute(stmt)
+        return list(result.scalars().all())
+
+    # ── Subtask ──────────────────────────────────────────────────
+
+    async def save_subtask(
+        self,
+        parent_thread_id: str,
+        label: str,
+        description: str,
+        *,
+        dependencies: str = "[]",
+        sequence_order: int = 0,
+        child_thread_id: str | None = None,
+    ) -> Subtask:
+        """Record a subtask for a thread."""
+        subtask = Subtask(
+            parent_thread_id=parent_thread_id,
+            label=label,
+            description=description,
+            dependencies=dependencies,
+            sequence_order=sequence_order,
+            child_thread_id=child_thread_id,
+        )
+        self._session.add(subtask)
+        await self._session.flush()
+        return subtask
+
+    async def get_subtasks(self, parent_thread_id: str) -> list[Subtask]:
+        """Get all subtasks for a parent thread, ordered by sequence."""
+        stmt = (
+            select(Subtask)
+            .where(Subtask.parent_thread_id == parent_thread_id)
+            .order_by(Subtask.sequence_order)
+        )
+        result = await self._session.execute(stmt)
+        return list(result.scalars().all())
+
+    async def update_subtask_status(self, subtask_id: str, status: str) -> Subtask:
+        """Update the status of a subtask.
+
+        Raises StorageError if the subtask does not exist.
+        """
+        subtask = await self._session.get(Subtask, subtask_id)
+        if subtask is None:
+            msg = f"Subtask not found: {subtask_id}"
+            raise StorageError(msg)
+        subtask.status = status
+        await self._session.flush()
+        return subtask
+
+    # ── Vote ──────────────────────────────────────────────────────
+
+    async def save_vote(self, thread_id: str, model_ref: str, content: str) -> Vote:
+        """Record a vote for a thread."""
+        vote = Vote(
+            thread_id=thread_id,
+            model_ref=model_ref,
+            content=content,
+        )
+        self._session.add(vote)
+        await self._session.flush()
+        return vote
+
+    async def get_votes(self, thread_id: str) -> list[Vote]:
+        """Get all votes for a thread, ordered chronologically."""
+        stmt = select(Vote).where(Vote.thread_id == thread_id).order_by(Vote.created_at)
         result = await self._session.execute(stmt)
         return list(result.scalars().all())

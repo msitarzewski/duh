@@ -9,6 +9,7 @@ from duh.memory.models import (
     ThreadSummary,
     Turn,
     TurnSummary,
+    Vote,
 )
 from duh.memory.repository import MemoryRepository
 from duh.memory.summary import (
@@ -26,6 +27,7 @@ __all__ = [
     "ThreadSummary",
     "Turn",
     "TurnSummary",
+    "Vote",
     "build_context",
     "estimate_tokens",
     "generate_thread_summary",
