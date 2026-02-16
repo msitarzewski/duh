@@ -1,46 +1,73 @@
-# duh — Phase 0: Prove the Thesis
+# duh
 
-Does multi-model consensus actually produce better answers than a single model?
+**Multi-model consensus engine** -- because one LLM opinion isn't enough.
 
-Before building any product, we validate the core thesis: if making Claude and GPT debate a question doesn't consistently beat asking Claude alone, the product should not be built.
+duh asks multiple LLMs the same question, forces them to challenge each other's answers, and produces a single revised response that's stronger than any individual model could generate alone.
 
-## Benchmark
+## What it does
 
-50 questions across 5 categories, 4 methods compared:
+- **Proposes** -- The strongest available model answers your question
+- **Challenges** -- Other models find genuine flaws (forced disagreement, no sycophancy allowed)
+- **Revises** -- The proposer addresses every valid challenge and produces an improved answer
 
-- **(A) Direct**: Single model, direct answer (Sonnet)
-- **(B) Self-debate**: Same model proposes, critiques itself, synthesizes (Sonnet)
-- **(C) Consensus**: Claude proposes, GPT challenges (forced disagreement), Claude revises (Sonnet + GPT-4o)
-- **(D) Ensemble**: 3 parallel samples synthesized (Sonnet)
-
-Blind LLM-as-judge evaluation with two independent judges (GPT-4o + Sonnet).
-
-## Setup
+## Quick start
 
 ```bash
-uv sync
+uv add duh
 export ANTHROPIC_API_KEY=sk-ant-...
 export OPENAI_API_KEY=sk-...
+duh ask "What database should I use for a new SaaS product?"
 ```
 
-## Run
+## Features
+
+- **Multi-model consensus** -- Claude and GPT debate. Sycophantic challenges are detected and flagged.
+- **Persistent memory** -- Every thread, contribution, and decision stored in SQLite. Search with `duh recall`.
+- **Cost tracking** -- Per-model token costs in real-time. Configurable warn threshold and hard limit.
+- **Local models** -- Ollama and LM Studio via the OpenAI-compatible API. Mix cloud + local.
+- **Docker** -- Run in a container with persistent volume storage.
+- **Rich CLI** -- Styled panels, spinners, and formatted output.
+
+## Commands
 
 ```bash
-# Pilot run (5 questions)
-uv run python -m phase0.runner --pilot
-
-# Full benchmark (50 questions)
-uv run python -m phase0.runner
-
-# Judge results
-uv run python -m phase0.judge
-
-# Generate report
-uv run python -m phase0.analyze
+duh ask "question"        # Run consensus query
+duh recall "keyword"      # Search past decisions
+duh threads               # List past threads
+duh show <thread-id>      # Inspect full debate history
+duh models                # List available models
+duh cost                  # Show cumulative costs
 ```
 
-## Exit Criteria
+## How consensus works
 
-- **PROCEED**: Consensus (C) clearly beats Direct (A) on judgment/strategy (>60% win rate)
-- **ITERATE**: Consensus only marginally beats Self-Debate (B) — refine prompts, re-test
-- **STOP**: Consensus consistently loses — thesis invalidated
+```
+PROPOSE  -->  CHALLENGE  -->  REVISE  -->  COMMIT
+```
+
+1. Strongest model proposes an answer
+2. Other models challenge with forced disagreement
+3. Proposer revises, addressing each valid challenge
+4. Decision extracted with confidence score and preserved dissent
+
+Convergence detection (Jaccard similarity >= 0.7) stops early when challenges repeat.
+
+## Phase 0 benchmark
+
+Before building duh, we validated the thesis: 50 questions, 4 methods, blind LLM-as-judge evaluation. Consensus consistently outperformed direct answers, self-debate, and ensemble approaches -- especially on questions requiring nuanced judgment and multi-perspective analysis. See [full benchmark results](docs/reference/benchmarks.md).
+
+## Documentation
+
+Full documentation: [docs/](docs/index.md)
+
+- [Installation](docs/getting-started/installation.md)
+- [Quickstart](docs/getting-started/quickstart.md)
+- [How Consensus Works](docs/concepts/how-consensus-works.md)
+- [CLI Reference](docs/cli/index.md)
+- [Python API](docs/python-api/library-usage.md)
+- [Docker Guide](docs/guides/docker.md)
+- [Config Reference](docs/reference/config-reference.md)
+
+## License
+
+TBD

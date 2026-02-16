@@ -1,17 +1,16 @@
 # Active Context
 
-**Last Updated**: 2026-02-15
-**Current Phase**: Phase 0 COMPLETE — exit decision PROCEED. Starting v0.1.
-**Next Action**: v0.1 task 1 — project scaffolding.
+**Last Updated**: 2026-02-16
+**Current Phase**: v0.1 in progress.
+**Next Action**: v0.1 task 25 — Documentation.
 
 ---
 
 ## Current State
 
-- **Phase 0 exit decision: PROCEED.** Thesis validated — multi-model consensus beats single-model answers.
-- Benchmark: 17 questions (partial run, full budget), judged (small budget), analyzed.
-- Total Phase 0 cost: $7.19 (methods $6.01 + judging $1.17).
-- v0.1 development begins now.
+- **v0.1 Tasks 1-24 COMPLETE.** Through Docker.
+- 681 tests passing, ruff clean, mypy strict clean (25 source files).
+- Next: task 25 (Documentation) — final v0.1 task.
 
 ## Phase 0 Benchmark Results (Summary)
 
@@ -33,25 +32,33 @@ When Phase 0 exits with PROCEED, v0.1 implementation starts. Key references:
 - **Tech stack**: `techContext.md` — Python, asyncio, SQLAlchemy, Rich, Click, Docker, uv
 - **Architecture decisions**: `decisions.md` — all 8 foundational decisions documented
 
-### v0.1 Task Order (from roadmap)
+### v0.1 Task Order (revised — error hierarchy and config moved earlier)
 
-1. Project scaffolding (`src/duh/` layout, pytest, ruff, mypy, CI, Docker skeleton)
-2. Provider adapter interface + data classes
-3. Mock provider + test fixtures
-4. Anthropic adapter
-5. OpenAI adapter (covers GPT + Ollama via base_url)
-6. Provider manager
-7. Configuration (TOML + Pydantic)
-8. Error handling + retry
-9. SQLAlchemy models
-10. Memory repository
-11. Consensus state machine
-12-16. State handlers (PROPOSE, CHALLENGE, REVISE, COMMIT, convergence)
-17-18. Context builder + summary generator
-19-20. Integration tests + sycophancy tests
-21-22. CLI app + display
-23. Docker
-24. Documentation
+1. ~~Project scaffolding~~ DONE
+2. ~~Core error hierarchy + base types~~ DONE
+3. ~~Provider adapter interface + data classes~~ DONE
+4. ~~Configuration (TOML + Pydantic)~~ DONE
+5. ~~Mock provider + test fixtures~~ DONE
+6. ~~Anthropic adapter~~ DONE
+7. ~~OpenAI adapter (GPT + Ollama via base_url)~~ DONE
+8. ~~Retry with backoff utility~~ DONE
+9. ~~Provider manager~~ DONE
+10. ~~SQLAlchemy models~~ DONE
+11. ~~Memory repository~~ DONE
+12. ~~Consensus state machine~~ DONE
+13. ~~PROPOSE handler~~ DONE
+14. ~~CHALLENGE handler~~ DONE
+15. ~~REVISE handler~~ DONE
+16. ~~COMMIT handler~~ DONE
+17. ~~Convergence detection~~ DONE
+18. ~~Context builder~~ DONE
+19. ~~Summary generator~~ DONE
+20. ~~Integration tests (full loop with mock providers)~~ DONE
+21. ~~Sycophancy test suite~~ DONE
+22. ~~CLI app~~ DONE (Click commands)
+23. ~~CLI display (Rich Live panels)~~ DONE
+24. ~~Docker~~ DONE
+25. Documentation
 
 ### Phase 0 Artifacts That Feed v0.1
 

@@ -1,0 +1,12 @@
+# Default configuration for duh running in Docker.
+# The database is stored in the /data volume for persistence.
+# API keys are read from environment variables.
+
+[database]
+url = "sqlite+aiosqlite:////data/duh.db"
+
+[providers.anthropic]
+api_key_env = "ANTHROPIC_API_KEY"
+
+[providers.openai]
+api_key_env = "OPENAI_API_KEY"

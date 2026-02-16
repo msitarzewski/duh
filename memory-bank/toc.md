@@ -22,7 +22,11 @@
 - [tmp-research-analysis.md](./tmp-research-analysis.md) — Research analyst: competitive cross-reference, prior art, Self-MoA finding, recommendations
 
 ## Tasks
-_Phase 0 implementation complete. Task docs pending Phase 0 exit decision and v0.1 start._
+- [tasks/2026-02/README.md](./tasks/2026-02/README.md) — February 2026 monthly summary
+- [tasks/2026-02/150215_project-scaffolding.md](./tasks/2026-02/150215_project-scaffolding.md) — v0.1 Task 1: project scaffolding
+- [tasks/2026-02/150215_core-errors.md](./tasks/2026-02/150215_core-errors.md) — v0.1 Task 2: core error hierarchy
+- [tasks/2026-02/150215_provider-interface.md](./tasks/2026-02/150215_provider-interface.md) — v0.1 Task 3: provider adapter interface
+- [tasks/2026-02/150215_configuration.md](./tasks/2026-02/150215_configuration.md) — v0.1 Task 4: configuration
 
 ## Phase 0 Code (not memory bank — in repo root)
 - `phase0/` — Benchmark framework (config, models, prompts, methods, questions, runner, judge, analyze)

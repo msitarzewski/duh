@@ -1,0 +1,81 @@
+site_name: duh docs
+site_description: Multi-model consensus engine documentation
+repo_url: https://github.com/msitarzewski/duh
+repo_name: msitarzewski/duh
+
+theme:
+  name: material
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: deep purple
+      accent: amber
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: deep purple
+      accent: amber
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.expand
+    - navigation.top
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+    - content.tabs.link
+
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+  - tables
+  - attr_list
+  - md_in_html
+  - toc:
+      permalink: true
+
+nav:
+  - Home: index.md
+  - Getting Started:
+      - Installation: getting-started/installation.md
+      - Quickstart: getting-started/quickstart.md
+      - Configuration: getting-started/configuration.md
+  - Concepts:
+      - How Consensus Works: concepts/how-consensus-works.md
+      - Providers and Models: concepts/providers-and-models.md
+      - Memory and Persistence: concepts/memory-and-persistence.md
+      - Cost Management: concepts/cost-management.md
+  - CLI Reference:
+      - Overview: cli/index.md
+      - duh ask: cli/ask.md
+      - duh recall: cli/recall.md
+      - duh threads: cli/threads.md
+      - duh show: cli/show.md
+      - duh models: cli/models.md
+      - duh cost: cli/cost.md
+  - Guides:
+      - Docker: guides/docker.md
+      - Local Models: guides/local-models.md
+  - Python API:
+      - Library Usage: python-api/library-usage.md
+  - Reference:
+      - Config Reference: reference/config-reference.md
+      - Errors: reference/errors.md
+      - Benchmarks: reference/benchmarks.md
+  - Troubleshooting: troubleshooting.md

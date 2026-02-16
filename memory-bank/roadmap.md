@@ -227,42 +227,45 @@ $ duh ask "We're hiring two more engineers. Should we start splitting the monoli
 
 Tests are written alongside each module, not after. Every task below includes its own unit tests as part of the deliverable. A task is not complete until its tests pass.
 
-1. **Project scaffolding**: `pyproject.toml`, `src/duh/` layout, pytest + pytest-asyncio + pytest-cov + ruff + mypy setup, CI pipeline with coverage gates, Docker skeleton
-2. **Provider adapter interface + tests**: `ModelProvider` protocol, `ModelInfo`, `ModelResponse`, `StreamChunk`, `TokenUsage` data classes. Tests: instantiation, serialization, capability flags
-3. **Mock provider + test fixtures**: `MockProvider` with deterministic responses, canned response library, in-memory DB fixture. This is foundational — every later test depends on it
-4. **Anthropic adapter + tests**: Send, stream, health check, model listing. Tests: request building, response parsing, error mapping, streaming chunk assembly (mocked HTTP)
-5. **OpenAI adapter + tests**: Send, stream, health check (covers GPT + Ollama via base_url). Tests: same coverage as Anthropic, plus base_url override for Ollama
-6. **Provider manager + tests**: Registration, model discovery, cost accumulator, routing by model_ref. Tests: multi-provider registration, cost calculation accuracy, model resolution, unknown model errors
-7. **Configuration + tests**: TOML loading, env var overrides, Pydantic validation, defaults. Tests: valid config, missing keys, env var precedence, invalid values
-8. **Error handling + tests**: Exception hierarchy, retry with backoff. Tests: retry behavior, backoff timing, non-retryable errors fail fast
-9. **SQLAlchemy models + tests**: Thread, Turn, Contribution, TurnSummary, ThreadSummary, Decision. Tests: model creation, relationships, constraints, indexes, round-trip persistence (in-memory SQLite)
-10. **Memory repository + tests**: CRUD operations, keyword search for recall, thread listing. Tests: save/load cycles, search relevance, empty results, concurrent access
-11. **Consensus state machine + tests**: States enum, transitions, ConsensusContext dataclass, guard conditions. Tests: every valid transition, every invalid transition rejected, context mutation
-12. **PROPOSE handler + tests**: Model selection, prompt building, streaming integration. Tests: prompt construction, model selection strategies, streaming accumulation
-13. **CHALLENGE handler + tests**: Parallel fan-out, forced disagreement prompts, sycophancy detection. Tests: parallel execution, provider failure graceful degradation, sycophancy flagging with known-mild challenges
-14. **REVISE handler + tests**: Synthesis prompt, addressing challenges. Tests: prompt includes all challenges, revision references specific critiques
-15. **COMMIT handler + tests**: Decision extraction, persistence, dissent preservation. Tests: decision record completeness, dissent captured, DB round-trip
-16. **Convergence detection + tests**: Compare challenges across rounds, early stopping logic. Tests: identical challenges trigger early stop, different challenges continue, threshold behavior
-17. **Context builder + tests**: Thread summary + recent turns + past decisions assembled for model context. Tests: context fits within token budget, past decisions included when relevant, empty history handled
-18. **Summary generator + tests**: Turn and thread summaries via fast model. Tests: summary produced, model selection (cheapest), regeneration-not-append behavior
-19. **Consensus engine integration tests**: Full loop with mock providers — PROPOSE through COMMIT. Multi-round tests. Provider failure mid-loop. Cost accumulation. Same-model ensemble mode
-20. **Sycophancy test suite**: Known-flaw proposals paired with expected challenge behaviors. Verifies challenge prompts produce genuine disagreement, not "great point, and also..."
-21. **CLI app + tests**: Click commands (ask, recall, threads, show, models, cost). Tests: argument parsing, output formatting, error display
-22. **CLI display**: Rich Live panels for consensus visualization. Tests: panel rendering with mock event data
-23. **Docker**: Dockerfile, docker-compose, volume mounts
-24. **Documentation**: README, quickstart, configuration reference
+1. **Project scaffolding** ~~DONE~~: `pyproject.toml`, `src/duh/` layout, pytest + pytest-asyncio + pytest-cov + ruff + mypy setup, CI pipeline with coverage gates, Docker skeleton
+2. **Core error hierarchy + base types** ~~DONE~~: Exception hierarchy (DuhError, ProviderError tree, ConsensusError tree, ConfigError, StorageError). Tests: hierarchy, attributes, formatting
+3. **Provider adapter interface + data classes** ~~DONE~~: `ModelProvider` protocol, `ModelInfo`, `ModelResponse`, `StreamChunk`, `TokenUsage`, `PromptMessage` data classes. Tests: instantiation, immutability, protocol conformance
+4. **Configuration** ~~DONE~~: TOML loading, env var overrides, Pydantic validation, defaults, file discovery (XDG + project-local + env var). Tests: valid config, missing keys, env var precedence, invalid values
+5. **Mock provider + test fixtures** ~~DONE~~: `MockProvider` with deterministic responses, canned response library, shared conftest fixtures. Tests: protocol conformance, send, stream, health, fixtures
+6. **Anthropic adapter** ~~DONE~~: Send, stream, health check, model listing, error mapping, cache token extraction. Tests: request building, response parsing, error mapping, streaming (mocked SDK)
+7. **OpenAI adapter** ~~DONE~~: Send, stream, health check (covers GPT + Ollama via base_url), error mapping. Tests: same coverage as Anthropic, plus base_url override
+8. **Retry with backoff** ~~DONE~~: RetryConfig, is_retryable, retry_with_backoff. Exponential backoff with jitter, retry_after respect. Tests: config, retryability, delay computation, full retry behavior
+9. **Provider manager** ~~DONE~~: Registration, model discovery, cost accumulator, routing by model_ref, hard-limit enforcement. Tests: multi-provider registration, cost calculation, model resolution, unknown model errors
+10. **SQLAlchemy models** ~~DONE~~: Thread, Turn, Contribution, TurnSummary, ThreadSummary, Decision. Tests: model creation, relationships, constraints, indexes, round-trip persistence (in-memory SQLite)
+11. **Memory repository** ~~DONE~~: CRUD operations, keyword search, thread listing, eager loading, upsert summaries. Tests: save/load cycles, search relevance, empty results, pagination
+12. **Consensus state machine** ~~DONE~~: States enum, transitions, ConsensusContext dataclass, guard conditions, round archival. Tests: every valid transition, every invalid transition rejected, context mutation
+13. **PROPOSE handler + tests**: Model selection, prompt building, streaming integration. Tests: prompt construction, model selection strategies, streaming accumulation
+14. **CHALLENGE handler + tests**: Parallel fan-out, forced disagreement prompts, sycophancy detection. Tests: parallel execution, provider failure graceful degradation, sycophancy flagging with known-mild challenges
+15. **REVISE handler + tests**: Synthesis prompt, addressing challenges. Tests: prompt includes all challenges, revision references specific critiques
+16. **COMMIT handler + tests** ~~DONE~~: Decision extraction, persistence, dissent preservation. Tests: decision record completeness, dissent captured, DB round-trip
+17. **Convergence detection + tests** ~~DONE~~: Compare challenges across rounds, early stopping logic. Tests: identical challenges trigger early stop, different challenges continue, threshold behavior
+18. **Context builder + tests** ~~DONE~~: Thread summary + recent turns + past decisions assembled for model context. Tests: context fits within token budget, past decisions included when relevant, empty history handled
+19. **Summary generator + tests** ~~DONE~~: Turn and thread summaries via fast model. Tests: summary produced, model selection (cheapest), regeneration-not-append behavior
+20. **Consensus engine integration tests** ~~DONE~~: Full loop with mock providers — PROPOSE through COMMIT. Multi-round tests. Provider failure mid-loop. Cost accumulation. Same-model ensemble mode
+21. **Sycophancy test suite**: Known-flaw proposals paired with expected challenge behaviors. Verifies challenge prompts produce genuine disagreement, not "great point, and also..."
+22. **CLI app + tests**: Click commands (ask, recall, threads, show, models, cost). Tests: argument parsing, output formatting, error display
+23. **CLI display**: Rich Live panels for consensus visualization. Tests: panel rendering with mock event data
+24. **Docker**: Dockerfile, docker-compose, volume mounts
+25. **Documentation**: README, quickstart, configuration reference
 
 #### Dependencies Between Tasks
 
 ```
 1 (scaffolding)
-  -> 2 (adapter interface) -> 3, 4 (adapters) -> 5 (manager)
-  -> 12 (models) -> 13 (repository)
-  -> 18 (config)
-5 (manager) + 13 (repo) -> 6 (state machine) -> 7, 8, 9, 10, 11 (handlers)
-7-11 (handlers) -> 14 (context builder) -> 15 (summaries)
-6-15 -> 16 (CLI app) + 17 (CLI display)
-All -> 19 (error handling) -> 20 (Docker) -> 21 (tests) -> 22 (sycophancy tests) -> 23 (docs)
+  -> 2 (errors) + 3 (adapter interface) + 4 (config)
+  -> 5 (mock provider) -> 6, 7 (Anthropic, OpenAI adapters)
+  -> 8 (retry) + 9 (provider manager)
+  -> 10 (SQLAlchemy models) -> 11 (memory repository)
+9 (manager) + 11 (repo) -> 12 (state machine) -> 13-16 (handlers) + 17 (convergence)
+13-17 (handlers + convergence) -> 18 (context builder) -> 19 (summaries)
+12-19 -> 20 (integration tests) + 21 (sycophancy tests)
+12-19 -> 22 (CLI app) + 23 (CLI display)
+All -> 24 (Docker) -> 25 (docs)
 ```
 
 ---

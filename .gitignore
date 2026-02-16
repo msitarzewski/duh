@@ -31,3 +31,25 @@ results/
 # OS
 .DS_Store
 Thumbs.db
+
+# Testing
+.coverage
+htmlcov/
+.pytest_cache/
+
+# Type checking
+.mypy_cache/
+
+# Linting
+.ruff_cache/
+
+# Database
+*.db
+*.db-journal
+
+# MkDocs
+site/
+
+# Memory bank setup
+memory-bank/setup.md
+

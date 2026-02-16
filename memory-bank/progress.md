@@ -60,4 +60,12 @@ Phase 0 benchmark framework — fully functional, pilot-tested on 5 questions.
 | 2026-02-15 | Phase 0 implementation complete | Done |
 | 2026-02-15 | Pilot run successful (5 Qs, small budget) | Done |
 | 2026-02-15 | Benchmark run (17 Qs) + exit decision: PROCEED | Done |
-| TBD | v0.1.0 — "It Works & Remembers" | Starting |
+| 2026-02-15 | v0.1 Task 1: Project scaffolding | Done |
+| 2026-02-15 | v0.1 Task 2: Core error hierarchy | Done |
+| 2026-02-15 | v0.1 Task 3: Provider adapter interface | Done |
+| 2026-02-15 | v0.1 Task 4: Configuration | Done |
+| 2026-02-15 | v0.1 Task 5: Mock provider + test fixtures | Done |
+| 2026-02-15 | v0.1 Task 6: Anthropic adapter | Done |
+| 2026-02-15 | v0.1 Task 7: OpenAI adapter (GPT + Ollama) | Done |
+| 2026-02-15 | v0.1 Task 8: Retry with backoff utility | Done |
+| TBD | v0.1.0 — "It Works & Remembers" | In Progress |

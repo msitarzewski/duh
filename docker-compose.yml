@@ -1,0 +1,15 @@
+# docker compose run duh ask "your question"
+# docker compose run duh recall "topic"
+# docker compose run duh threads
+
+services:
+  duh:
+    build: .
+    volumes:
+      - duh-data:/data
+    environment:
+      - ANTHROPIC_API_KEY
+      - OPENAI_API_KEY
+
+volumes:
+  duh-data:
