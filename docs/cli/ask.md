@@ -10,7 +10,7 @@ duh ask [OPTIONS] QUESTION
 
 ## Description
 
-The `ask` command is duh's primary command. It sends your question through the full consensus protocol:
+The `ask` command is duh's primary command. By default it sends your question through the full consensus protocol:
 
 1. **PROPOSE** -- Strongest model answers the question
 2. **CHALLENGE** -- Other models challenge the proposal with forced disagreement
@@ -19,11 +19,18 @@ The `ask` command is duh's primary command. It sends your question through the f
 
 The process repeats for up to `max_rounds` (default: 3) or until convergence is detected.
 
+You can also select alternative protocols:
+
+- **Voting** (`--protocol voting`) -- Fan out to all models in parallel, then aggregate the best answer
+- **Auto** (`--protocol auto`) -- Classify the question first (reasoning vs. judgment), then route to consensus or voting
+- **Decomposition** (`--decompose`) -- Break the question into subtasks, solve each with consensus, and synthesize
+
 Output is displayed in real-time with Rich-styled panels:
 
 - Green panel: Proposal
 - Yellow panel: Challenges (with sycophancy flags)
 - Blue panel: Revision
+- Cyan panel: Votes, decomposition plan, subtask results, tool usage
 - White panel: Final decision with confidence and cost
 
 ## Arguments
@@ -37,6 +44,9 @@ Output is displayed in real-time with Rich-styled panels:
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
 | `--rounds` | int | From config (3) | Maximum consensus rounds. Overrides `general.max_rounds` in config. |
+| `--decompose` | flag | `false` | Decompose the question into subtasks before consensus. |
+| `--protocol` | choice | From config (`consensus`) | Protocol: `consensus` (default), `voting`, or `auto` (classify first). |
+| `--tools` / `--no-tools` | flag | From config | Enable or disable tool use (web search, code exec, file read). Overrides `tools.enabled` in config. |
 
 ## Examples
 
@@ -56,6 +66,36 @@ Deeper debate (more rounds):
 
 ```bash
 duh ask --rounds 5 "Design a microservices architecture for an e-commerce platform"
+```
+
+Use the voting protocol:
+
+```bash
+duh ask --protocol voting "Which Python web framework should I use?"
+```
+
+Auto-detect whether to use consensus or voting:
+
+```bash
+duh ask --protocol auto "Is Rust worth learning in 2026?"
+```
+
+Decompose a complex question into subtasks:
+
+```bash
+duh ask --decompose "Design a complete CI/CD pipeline for a monorepo"
+```
+
+Enable tool use (web search, code execution, file read):
+
+```bash
+duh ask --tools "What is the current LTS version of Node.js?"
+```
+
+Disable tool use even if enabled in config:
+
+```bash
+duh ask --no-tools "Explain the CAP theorem"
 ```
 
 With a specific config:
@@ -104,8 +144,30 @@ The full, untruncated consensus decision with confidence and cost.
 
 Preserved genuine challenges that represent minority viewpoints.
 
+### Voting output
+
+When using `--protocol voting`, the output shows:
+
+- **Votes panel** (cyan) -- Each model's independent answer
+- **Decision panel** (white) -- The aggregated best answer
+- **Stats line** -- Strategy (majority/weighted), confidence, vote count, cost
+
+### Decomposition output
+
+When using `--decompose`, the output shows:
+
+- **DECOMPOSE panel** (magenta) -- The subtask DAG with labels, descriptions, and dependencies
+- **Subtask results** -- Each subtask's consensus decision and confidence
+- **SYNTHESIS panel** (white) -- The merged final answer from all subtask results
+- **Stats line** -- Aggregate confidence and cost
+
+### Tool usage output
+
+When tools are used during consensus (enabled via `--tools` or config), a **TOOLS panel** (cyan) appears after the decision showing each tool call with the phase, tool name, and arguments.
+
 ## Related commands
 
 - [`recall`](recall.md) -- Search for this decision later
 - [`show`](show.md) -- Inspect the full thread details
+- [`feedback`](feedback.md) -- Record whether the decision worked out
 - [`cost`](cost.md) -- Check cumulative spending

@@ -10,6 +10,8 @@ duh fixes this by making models debate. The strongest model proposes an answer, 
 
 ## How it works
 
+**Consensus protocol** (default):
+
 ```
 PROPOSE  -->  CHALLENGE  -->  REVISE  -->  COMMIT
    |              |              |            |
@@ -22,11 +24,20 @@ PROPOSE  -->  CHALLENGE  -->  REVISE  -->  COMMIT
 
 If challenges in consecutive rounds are too similar (Jaccard similarity >= 0.7), duh detects convergence and stops early. Otherwise it runs up to the configured maximum rounds.
 
+**Voting protocol** (`--protocol voting`): Fan out the question to all models in parallel, then a meta-judge picks or synthesizes the best answer.
+
+**Decomposition** (`--decompose`): Break a complex question into a DAG of subtasks, solve each independently, and merge the results.
+
 ## Key features
 
-- **Multi-model consensus** -- Claude and GPT (and local models) debate to produce better answers
+- **Multi-model consensus** -- Claude, GPT, and Gemini (and local models) debate to produce better answers
+- **Voting protocol** -- Fan out a question to all models in parallel and aggregate the best answer (majority or weighted)
+- **Query decomposition** -- Break complex questions into subtask DAGs, solve each with consensus, and synthesize a final answer
+- **Tool-augmented reasoning** -- Models can use web search, code execution, and file read during PROPOSE and CHALLENGE phases
+- **Decision taxonomy** -- Auto-classify decisions by intent, category, and genus for structured recall
+- **Outcome tracking** -- Record whether a past decision led to success, failure, or partial results with `duh feedback`
 - **Sycophancy detection** -- Flags challenges that defer to the proposal instead of genuinely disagreeing
-- **Persistent memory** -- Every thread, contribution, and decision is stored in SQLite for later recall
+- **Persistent memory** -- Every thread, contribution, decision, vote, and outcome is stored in SQLite for later recall
 - **Cost tracking** -- Per-model token costs displayed in real-time, with configurable warn/hard limits
 - **Local model support** -- Use Ollama or LM Studio via the OpenAI-compatible API
 - **Docker ready** -- Run in a container with persistent volume storage

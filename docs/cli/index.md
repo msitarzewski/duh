@@ -18,10 +18,11 @@ duh [OPTIONS] COMMAND [ARGS]...
 
 | Command | Description |
 |---------|-------------|
-| [`ask`](ask.md) | Run a consensus query |
+| [`ask`](ask.md) | Run a consensus query (supports consensus, voting, and decomposition protocols) |
 | [`recall`](recall.md) | Search past decisions by keyword |
 | [`threads`](threads.md) | List past consensus threads |
-| [`show`](show.md) | Show a thread with its full debate history |
+| [`show`](show.md) | Show a thread with its full debate history, votes, taxonomy, and outcomes |
+| [`feedback`](feedback.md) | Record an outcome (success/failure/partial) for a past decision |
 | [`models`](models.md) | List configured providers and available models |
 | [`cost`](cost.md) | Show cumulative cost from stored contributions |
 
@@ -31,6 +32,24 @@ Run a consensus query:
 
 ```bash
 duh ask "What testing framework should I use for a Python REST API?"
+```
+
+Use voting for quick judgment calls:
+
+```bash
+duh ask --protocol voting "Should I use Tailwind CSS or vanilla CSS?"
+```
+
+Decompose a complex question into subtasks:
+
+```bash
+duh ask --decompose "Plan a migration from monolith to microservices"
+```
+
+Enable tool use for up-to-date information:
+
+```bash
+duh ask --tools "What is the latest stable release of Python?"
 ```
 
 Search past decisions:
@@ -44,6 +63,12 @@ List recent threads, then inspect one:
 ```bash
 duh threads --limit 5
 duh show a1b2c3d4
+```
+
+Record whether a decision worked out:
+
+```bash
+duh feedback a1b2c3d4 --result success --notes "Worked great in production"
 ```
 
 Check costs:

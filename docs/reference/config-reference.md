@@ -7,7 +7,9 @@ Complete reference for all configuration fields in duh's TOML config files.
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
 | `max_rounds` | int | `3` | Maximum consensus rounds per query (1-10). |
-| `decomposer_model` | str | `""` | Model for question decomposition (reserved for future use). |
+| `protocol` | str | `"consensus"` | Default decision protocol: `consensus`, `voting`, or `auto`. Override per-query with `--protocol`. |
+| `decompose` | bool | `false` | Decompose questions into subtasks by default. Override per-query with `--decompose`. |
+| `decomposer_model` | str | `""` | Model for question decomposition. Uses cheapest model by input cost if empty. |
 | `summary_model` | str | `""` | Model for generating summaries. Uses cheapest model by input cost if empty. |
 | `stream_output` | bool | `true` | Stream model responses incrementally. |
 
@@ -27,7 +29,7 @@ Complete reference for all configuration fields in duh's TOML config files.
 
 ## `[providers.<name>]`
 
-Provider configuration is a dictionary keyed by provider name. Default providers are `anthropic` and `openai`.
+Provider configuration is a dictionary keyed by provider name. Default providers are `anthropic`, `openai`, and `google`.
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
@@ -55,6 +57,53 @@ Provider configuration is a dictionary keyed by provider name. Default providers
 | `level` | str | `"INFO"` | Log level: `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL`. |
 | `file` | str | `""` | Path to log file. Empty = stderr only. |
 | `structured` | bool | `false` | Use structured (JSON) log format. |
+
+## `[tools]`
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `enabled` | bool | `false` | Enable tool-augmented reasoning. Models can call tools during PROPOSE and CHALLENGE phases. Override per-query with `--tools` / `--no-tools`. |
+| `max_rounds` | int | `5` | Maximum tool call iterations per phase. Prevents runaway tool loops. |
+
+### `[tools.web_search]`
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `backend` | str | `"duckduckgo"` | Search backend. Currently supports `duckduckgo`. |
+| `api_key` | str \| null | `null` | API key for the search backend (if required). |
+| `max_results` | int | `5` | Maximum search results returned per query. |
+
+### `[tools.code_execution]`
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `enabled` | bool | `false` | Enable code execution tool. Requires explicit opt-in for safety. |
+| `timeout` | int | `30` | Maximum execution time in seconds. |
+| `max_output` | int | `10000` | Maximum output characters captured from execution. |
+
+!!! warning "Code execution safety"
+    Code execution runs in the local environment. Enable only when you trust the models' tool use. Consider using Docker for isolation.
+
+## `[voting]`
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `enabled` | bool | `false` | Enable voting protocol availability. |
+| `aggregation` | str | `"majority"` | Aggregation strategy: `majority` (meta-judge picks best) or `weighted` (synthesis weighted by model capability). |
+
+## `[decompose]`
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `max_subtasks` | int | `7` | Maximum number of subtasks per decomposition (range: 2-7). |
+| `parallel` | bool | `true` | Execute independent subtasks in parallel. |
+
+## `[taxonomy]`
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `enabled` | bool | `false` | Auto-classify decisions with intent, category, and genus during COMMIT. |
+| `model_ref` | str | `""` | Model to use for classification. Empty = cheapest available model. |
 
 ## Config file locations
 

@@ -67,6 +67,7 @@ nav:
       - duh recall: cli/recall.md
       - duh threads: cli/threads.md
       - duh show: cli/show.md
+      - duh feedback: cli/feedback.md
       - duh models: cli/models.md
       - duh cost: cli/cost.md
   - Guides:

@@ -19,6 +19,7 @@ if TYPE_CHECKING:
     from duh.consensus.machine import ConsensusContext
     from duh.providers.base import ModelResponse
     from duh.providers.manager import ProviderManager
+    from duh.tools.registry import ToolRegistry
 
 
 # ── Prompt templates ──────────────────────────────────────────
@@ -46,26 +47,82 @@ _REVISER_SYSTEM = (
     "Do not mention the debate process. Just give the best possible answer."
 )
 
-_CHALLENGER_SYSTEM = (
-    "You are a rigorous independent analyst reviewing another expert's answer. "
-    "Your role is to strengthen the final answer by finding "
-    "what's wrong or missing.\n\n"
-    "CRITICAL INSTRUCTIONS:\n"
-    "- You MUST disagree with at least one substantive point. Not a nitpick — "
-    "a genuine disagreement about approach, framing, or conclusion.\n"
-    '- DO NOT start with praise. No "This is a good answer" or '
-    '"I agree with most points."\n'
-    '- Start DIRECTLY with "I disagree with..." or "The answer gets wrong..." or '
-    '"A critical gap is..."\n'
-    "- Identify at least 2 specific problems:\n"
-    "  1. Something factually wrong, oversimplified, or misleadingly framed\n"
-    "  2. A practical consideration, risk, or alternative that changes the "
-    "recommendation\n"
-    "- If the answer recommends approach X, argue for when Y would be better\n"
-    "- Be concrete: cite specifics, give counter-examples, provide numbers\n\n"
-    "Your challenge will be used to improve the answer, so genuine disagreement "
-    "is more valuable than polite agreement."
-)
+_CHALLENGE_FRAMINGS: dict[str, str] = {
+    "flaw": (
+        "You are a rigorous analyst reviewing another expert's answer. "
+        "Your role is to find factual errors, logical flaws, and "
+        "oversimplifications.\n\n"
+        "CRITICAL INSTRUCTIONS:\n"
+        "- You MUST identify at least one substantive factual or "
+        "logical error.\n"
+        '- DO NOT start with praise. No "This is a good answer" or '
+        '"I agree with most points."\n'
+        '- Start DIRECTLY with "The answer gets wrong..." or '
+        '"A factual error is..."\n'
+        "- For each flaw: state what's wrong, why it matters, and "
+        "what the correct information is.\n"
+        "- Be concrete: cite specifics, give counter-examples, "
+        "provide numbers.\n\n"
+        "Your challenge will be used to improve the answer."
+    ),
+    "alternative": (
+        "You are a creative strategist reviewing another expert's answer. "
+        "Your role is to propose fundamentally different approaches "
+        "the answer overlooks.\n\n"
+        "CRITICAL INSTRUCTIONS:\n"
+        "- You MUST propose at least one alternative approach that "
+        "could be superior.\n"
+        '- DO NOT start with praise. No "This is a good answer."\n'
+        '- Start DIRECTLY with "An alternative approach is..." or '
+        '"The answer overlooks..."\n'
+        "- For each alternative: explain the approach, when it's "
+        "better, and its trade-offs vs the proposed solution.\n"
+        "- Think laterally: different technologies, methodologies, "
+        "or framings.\n\n"
+        "Your alternatives will broaden the answer's perspective."
+    ),
+    "risk": (
+        "You are a risk analyst reviewing another expert's answer. "
+        "Your role is to identify risks, failure modes, and "
+        "unintended consequences.\n\n"
+        "CRITICAL INSTRUCTIONS:\n"
+        "- You MUST identify at least two concrete risks the answer "
+        "doesn't adequately address.\n"
+        '- DO NOT start with praise. No "This is a good answer."\n'
+        '- Start DIRECTLY with "A critical risk is..." or '
+        '"The answer underestimates..."\n'
+        "- For each risk: describe the scenario, its likelihood, "
+        "impact, and suggested mitigation.\n"
+        "- Consider: edge cases, scaling issues, security, "
+        "dependencies, and second-order effects.\n\n"
+        "Your risk analysis will strengthen the recommendation."
+    ),
+    "devils_advocate": (
+        "You are a devil's advocate reviewing another expert's answer. "
+        "Your role is to argue the strongest possible case against "
+        "the recommendation.\n\n"
+        "CRITICAL INSTRUCTIONS:\n"
+        "- You MUST construct a compelling argument for why the "
+        "answer's recommendation is wrong.\n"
+        '- DO NOT start with praise. No "This is a good answer."\n'
+        '- Start DIRECTLY with "I disagree because..." or '
+        '"The recommendation fails because..."\n'
+        "- Argue as if you genuinely believe the opposite position.\n"
+        "- Use evidence, examples, and logic to support your "
+        "counter-argument.\n"
+        "- If the answer recommends X, make the strongest case "
+        "for not-X.\n\n"
+        "Your counter-argument will stress-test the recommendation."
+    ),
+}
+
+# Ordered list for round-robin assignment
+_FRAMING_ORDER: list[str] = [
+    "flaw",
+    "alternative",
+    "risk",
+    "devils_advocate",
+]
 
 # Phrases in the opening ~200 chars that indicate sycophantic agreement
 _SYCOPHANCY_MARKERS = (
@@ -145,6 +202,18 @@ def select_proposer(provider_manager: ProviderManager) -> str:
     return max(models, key=lambda m: m.output_cost_per_mtok).model_ref
 
 
+# ── Tool call logging ────────────────────────────────────────
+
+
+def _log_tool_calls(ctx: ConsensusContext, response: ModelResponse, phase: str) -> None:
+    """Log any tool calls from a response to the context."""
+    if response.tool_calls:
+        for tc in response.tool_calls:
+            ctx.tool_calls_log.append(
+                {"phase": phase, "tool": tc.name, "arguments": tc.arguments}
+            )
+
+
 # ── PROPOSE handler ───────────────────────────────────────────
 
 
@@ -155,6 +224,7 @@ async def handle_propose(
     *,
     temperature: float = 0.7,
     max_tokens: int = 4096,
+    tool_registry: ToolRegistry | None = None,
 ) -> ModelResponse:
     """Execute the PROPOSE phase of consensus.
 
@@ -165,12 +235,17 @@ async def handle_propose(
     responsible for transitioning via the state machine before
     calling this handler.
 
+    When ``tool_registry`` is provided, uses :func:`tool_augmented_send`
+    instead of a direct ``provider.send()`` call, enabling the model
+    to use tools during proposal generation.
+
     Args:
         ctx: Consensus context (must be in PROPOSE state).
         provider_manager: For model routing and cost tracking.
         model_ref: Which model to use (e.g. ``"anthropic:claude-opus-4-6"``).
         temperature: Sampling temperature.
         max_tokens: Maximum output tokens.
+        tool_registry: Optional tool registry for tool-augmented calls.
 
     Returns:
         The :class:`ModelResponse` from the provider.
@@ -187,9 +262,22 @@ async def handle_propose(
     messages = build_propose_prompt(ctx)
     provider, model_id = provider_manager.get_provider(model_ref)
 
-    response = await provider.send(
-        messages, model_id, max_tokens=max_tokens, temperature=temperature
-    )
+    if tool_registry is not None:
+        from duh.tools.augmented_send import tool_augmented_send
+
+        response = await tool_augmented_send(
+            provider,
+            model_id,
+            messages,
+            tool_registry,
+            max_tokens=max_tokens,
+            temperature=temperature,
+        )
+        _log_tool_calls(ctx, response, "propose")
+    else:
+        response = await provider.send(
+            messages, model_id, max_tokens=max_tokens, temperature=temperature
+        )
 
     # Record cost
     model_info = provider_manager.get_model_info(model_ref)
@@ -205,16 +293,24 @@ async def handle_propose(
 # ── CHALLENGE prompt + selection + detection ──────────────────
 
 
-def build_challenge_prompt(ctx: ConsensusContext) -> list[PromptMessage]:
+def build_challenge_prompt(
+    ctx: ConsensusContext,
+    framing: str = "flaw",
+) -> list[PromptMessage]:
     """Build prompt messages for the CHALLENGE phase.
 
-    System prompt uses forced disagreement framing.
-    User prompt includes the question and the proposal to challenge.
+    Uses the specified framing to produce a distinct system prompt.
+    Falls back to ``"flaw"`` if the framing is not recognized.
+
+    Args:
+        ctx: Consensus context with the proposal to challenge.
+        framing: One of the challenge framing types.
     """
-    system = f"{_grounding_prefix()}\n\n{_CHALLENGER_SYSTEM}"
+    system_text = _CHALLENGE_FRAMINGS.get(framing, _CHALLENGE_FRAMINGS["flaw"])
+    system = f"{_grounding_prefix()}\n\n{system_text}"
     user_content = (
         f"Question: {ctx.question}\n\n"
-        f"Answer from another expert (do NOT defer to this — challenge it):\n"
+        f"Answer from another expert (do NOT defer to this -- challenge it):\n"
         f"{ctx.proposal}"
     )
     return [
@@ -275,21 +371,42 @@ def detect_sycophancy(challenge_text: str) -> bool:
 
 
 async def _call_challenger(
+    ctx: ConsensusContext,
     provider_manager: ProviderManager,
     model_ref: str,
-    messages: list[PromptMessage],
+    framing: str,
     *,
     temperature: float,
     max_tokens: int,
-) -> tuple[str, ModelResponse]:
-    """Call a single challenger model. Returns (model_ref, response)."""
+    tool_registry: ToolRegistry | None = None,
+) -> tuple[str, str, ModelResponse]:
+    """Call a single challenger model.
+
+    Returns (model_ref, framing, response).
+    """
+    messages = build_challenge_prompt(ctx, framing=framing)
     provider, model_id = provider_manager.get_provider(model_ref)
-    response = await provider.send(
-        messages, model_id, max_tokens=max_tokens, temperature=temperature
-    )
+
+    if tool_registry is not None:
+        from duh.tools.augmented_send import tool_augmented_send
+
+        response = await tool_augmented_send(
+            provider,
+            model_id,
+            messages,
+            tool_registry,
+            max_tokens=max_tokens,
+            temperature=temperature,
+        )
+        _log_tool_calls(ctx, response, "challenge")
+    else:
+        response = await provider.send(
+            messages, model_id, max_tokens=max_tokens, temperature=temperature
+        )
+
     model_info = provider_manager.get_model_info(model_ref)
     provider_manager.record_usage(model_info, response.usage)
-    return model_ref, response
+    return model_ref, framing, response
 
 
 async def handle_challenge(
@@ -299,14 +416,19 @@ async def handle_challenge(
     *,
     temperature: float = 0.7,
     max_tokens: int = 4096,
+    tool_registry: ToolRegistry | None = None,
 ) -> list[ModelResponse]:
     """Execute the CHALLENGE phase of consensus.
 
-    Fans out to all challenger models in parallel. Individual
-    failures are tolerated — only raises if ALL challengers fail.
-    Flags sycophantic responses on the resulting ChallengeResult.
+    Fans out to all challenger models in parallel with differentiated
+    framings assigned round-robin. Individual failures are tolerated
+    -- only raises if ALL challengers fail. Flags sycophantic
+    responses on the resulting ChallengeResult.
 
     The context must already be in CHALLENGE state.
+
+    When ``tool_registry`` is provided, each challenger can use tools
+    during challenge generation via :func:`tool_augmented_send`.
 
     Args:
         ctx: Consensus context (must be in CHALLENGE state).
@@ -314,6 +436,7 @@ async def handle_challenge(
         challenger_models: List of model_ref strings to challenge with.
         temperature: Sampling temperature for challengers.
         max_tokens: Maximum output tokens per challenger.
+        tool_registry: Optional tool registry for tool-augmented calls.
 
     Returns:
         List of successful :class:`ModelResponse` objects.
@@ -330,17 +453,18 @@ async def handle_challenge(
         msg = "handle_challenge requires a proposal in context"
         raise ConsensusError(msg)
 
-    messages = build_challenge_prompt(ctx)
-
+    # Assign framings round-robin
     tasks = [
         _call_challenger(
+            ctx,
             provider_manager,
             ref,
-            messages,
+            _FRAMING_ORDER[i % len(_FRAMING_ORDER)],
             temperature=temperature,
             max_tokens=max_tokens,
+            tool_registry=tool_registry,
         )
-        for ref in challenger_models
+        for i, ref in enumerate(challenger_models)
     ]
     raw_results = await asyncio.gather(*tasks, return_exceptions=True)
 
@@ -350,12 +474,13 @@ async def handle_challenge(
     for result in raw_results:
         if isinstance(result, BaseException):
             continue
-        model_ref, response = result
+        model_ref, framing, response = result
         challenges.append(
             ChallengeResult(
                 model_ref=model_ref,
                 content=response.content,
                 sycophantic=detect_sycophancy(response.content),
+                framing=framing,
             )
         )
         responses.append(response)
@@ -500,18 +625,29 @@ def _extract_dissent(challenges: list[ChallengeResult]) -> str | None:
     return "\n\n".join(f"[{c.model_ref}]: {c.content}" for c in genuine)
 
 
-async def handle_commit(ctx: ConsensusContext) -> None:
+async def handle_commit(
+    ctx: ConsensusContext,
+    provider_manager: ProviderManager | None = None,
+    *,
+    classify: bool = False,
+) -> None:
     """Execute the COMMIT phase of consensus.
 
     Extracts the decision from the revision, computes a confidence
     score based on challenge quality, and preserves dissent from
-    genuine challenges. Does NOT call any model — this is a pure
-    extraction and scoring step.
+    genuine challenges.
+
+    If ``classify=True`` and a provider_manager is given, makes an
+    optional lightweight model call (cheapest model, JSON mode) to
+    classify the decision into taxonomy fields (intent, category,
+    genus). Falls back gracefully if classification fails.
 
     The context must already be in COMMIT state.
 
     Args:
         ctx: Consensus context (must be in COMMIT state).
+        provider_manager: For taxonomy classification (optional).
+        classify: Whether to attempt taxonomy classification.
 
     Raises:
         ConsensusError: If context is not in COMMIT state or
@@ -528,3 +664,58 @@ async def handle_commit(ctx: ConsensusContext) -> None:
     ctx.decision = ctx.revision
     ctx.confidence = _compute_confidence(ctx.challenges)
     ctx.dissent = _extract_dissent(ctx.challenges)
+
+    # Optional taxonomy classification
+    if classify and provider_manager is not None:
+        taxonomy = await _classify_decision(ctx, provider_manager)
+        if taxonomy:
+            ctx.taxonomy = taxonomy
+
+
+async def _classify_decision(
+    ctx: ConsensusContext,
+    provider_manager: ProviderManager,
+) -> dict[str, str] | None:
+    """Classify a decision into taxonomy fields.
+
+    Uses the cheapest model with JSON mode. Returns None on failure.
+    """
+    from duh.consensus.json_extract import JSONExtractionError, extract_json
+
+    models = provider_manager.list_all_models()
+    if not models:
+        return None
+
+    cheapest = min(models, key=lambda m: m.input_cost_per_mtok)
+    provider, model_id = provider_manager.get_provider(cheapest.model_ref)
+
+    prompt = (
+        "Classify this decision into taxonomy fields. "
+        "Return ONLY a JSON object with these fields:\n"
+        '- "intent": one of "factual", "judgment", "creative", '
+        '"strategic", "technical"\n'
+        '- "category": a short topic label (e.g. "database", '
+        '"security", "architecture")\n'
+        '- "genus": a more specific classification (optional, '
+        "can be null)\n\n"
+        f"Question: {ctx.question}\n"
+        f"Decision: {ctx.decision}"
+    )
+
+    try:
+        response = await provider.send(
+            [PromptMessage(role="user", content=prompt)],
+            model_id,
+            max_tokens=200,
+            temperature=0.3,
+            response_format="json",
+        )
+        data = extract_json(response.content)
+        provider_manager.record_usage(cheapest, response.usage)
+        return {
+            "intent": str(data.get("intent", "")),
+            "category": str(data.get("category", "")),
+            "genus": str(data.get("genus", "")) if data.get("genus") else "",
+        }
+    except (JSONExtractionError, Exception):
+        return None

@@ -149,3 +149,124 @@
 - Created docker-compose.yml, .dockerignore, docker/config.toml
 - Fixed bug: providers now auto-discovered from env vars (default config was empty)
 - See: [160216_docker.md](./160216_docker.md)
+
+---
+
+## v0.2 Development
+
+### 2026-02-16: Alembic Migrations (v0.2 Task 1)
+- Created `001_v01_baseline.py` and `002_v02_schema.py` migration scripts
+- Outcome, Subtask tables; taxonomy fields (domain, category, tags, complexity) on Decision
+- Files: `alembic/versions/001_v01_baseline.py`, `alembic/versions/002_v02_schema.py`
+
+### 2026-02-16: Structured Output (v0.2 Task 2)
+- Added `response_format`, `tools`, `tool_calls` parameters to all provider adapters
+- Extended MockProvider with structured output support
+- Files: `src/duh/providers/base.py`, `src/duh/providers/anthropic.py`, `src/duh/providers/openai.py`, `src/duh/providers/google.py`
+
+### 2026-02-16: JSON Extract (v0.2 Task 3)
+- Created `src/duh/consensus/json_extract.py` for reliable JSON extraction from model responses
+- Handles markdown code blocks, partial JSON, nested structures
+
+### 2026-02-16: Challenge Framings (v0.2 Task 4)
+- Added 4 challenge framing types: flaw, alternative, risk, devils_advocate
+- Round-robin assignment in `_CHALLENGE_FRAMINGS`
+- Added `ChallengeResult.framing` field
+- Files: `src/duh/consensus/handlers.py`
+
+### 2026-02-16: Tool Framework (v0.2 Task 5)
+- Created Tool protocol and ToolRegistry
+- Files: `src/duh/tools/base.py`, `src/duh/tools/registry.py`
+
+### 2026-02-16: Tool-Augmented Send (v0.2 Task 6)
+- Created `tool_augmented_send()` loop: send -> detect tool_calls -> execute -> re-send
+- Files: `src/duh/tools/augmented_send.py`
+
+### 2026-02-16: Config Schema (v0.2 Task 7)
+- Added `ToolsConfig`, `VotingConfig`, `DecomposeConfig`, `TaxonomyConfig`
+- Added `GeneralConfig.protocol` and `GeneralConfig.decompose` fields
+- Files: `src/duh/config/schema.py`
+
+### 2026-02-16: Models + Repository (v0.2 Task 8)
+- Added `Outcome`, `Subtask`, `Vote` ORM models
+- Added taxonomy fields to `Decision` model
+- Extended `MemoryRepository` with full CRUD for new models
+- Files: `src/duh/memory/models.py`, `src/duh/memory/repository.py`
+
+### 2026-02-16: Taxonomy at COMMIT (v0.2 Task 9)
+- `handle_commit(classify=True)` triggers `_classify_decision()` via lightweight model call
+- Structured output for domain, category, tags, complexity
+- Files: `src/duh/consensus/handlers.py`
+
+### 2026-02-16: Feedback CLI (v0.2 Task 10)
+- `duh feedback <thread_id> --result --notes` command
+- Records real-world outcomes for knowledge accumulation
+- Files: `src/duh/cli/app.py`
+
+### 2026-02-16: Outcome Context (v0.2 Task 11)
+- `build_context(outcomes=...)` injects `[OUTCOME: result]` format into context
+- Files: `src/duh/memory/context.py`
+
+### 2026-02-16: Display Updates (v0.2 Task 12)
+- Added `show_taxonomy()`, `show_outcome()` methods
+- Updated `show` command with taxonomy and outcome display
+- Files: `src/duh/cli/display.py`, `src/duh/cli/app.py`
+
+### 2026-02-16: DECOMPOSE State + Handler (v0.2 Task 13)
+- Added `ConsensusState.DECOMPOSE`, `SubtaskSpec` dataclass
+- Created `handle_decompose()` and `validate_subtask_dag()`
+- Files: `src/duh/consensus/machine.py`, `src/duh/consensus/decompose.py`
+
+### 2026-02-16: Scheduler (v0.2 Task 14)
+- Created `schedule_subtasks()` with `TopologicalSorter` + `asyncio.gather`
+- Respects dependency DAG, parallel execution of independent subtasks
+- Files: `src/duh/consensus/scheduler.py`
+
+### 2026-02-16: Synthesis (v0.2 Task 15)
+- Created `synthesize()` with merge/prioritize strategies
+- Files: `src/duh/consensus/synthesis.py`
+
+### 2026-02-16: Decomposition CLI (v0.2 Task 16)
+- `duh ask --decompose` flag triggers DECOMPOSE -> schedule -> synthesize flow
+- Display: `show_decompose()`, `show_subtask_progress()`, `show_synthesis()`
+- Files: `src/duh/cli/app.py`, `src/duh/cli/display.py`
+
+### 2026-02-16: Voting + Classifier (v0.2 Task 17)
+- Created `run_voting()` with majority/weighted aggregation
+- Created `classify_task_type()` and `TaskType` enum for auto protocol selection
+- Files: `src/duh/consensus/voting.py`, `src/duh/consensus/classifier.py`
+
+### 2026-02-16: Voting CLI + Persistence (v0.2 Task 18)
+- `duh ask --protocol consensus|voting|auto` flag
+- Auto mode calls `classify_task_type()` to select protocol
+- Display: `show_votes()`, `show_voting_result()`
+- Migration `003_v02_votes.py` for Vote persistence
+- Files: `src/duh/cli/app.py`, `src/duh/cli/display.py`, `alembic/versions/003_v02_votes.py`
+
+### 2026-02-16: Tool Implementations (v0.2 Task 19)
+- `web_search.py` — DuckDuckGo search via `duckduckgo-search>=7.0`
+- `code_exec.py` — asyncio subprocess with timeout and truncation
+- `file_read.py` — path traversal rejection, binary rejection, 100KB max
+- Files: `src/duh/tools/web_search.py`, `src/duh/tools/code_exec.py`, `src/duh/tools/file_read.py`
+
+### 2026-02-16: Provider Tool Call Parsing (v0.2 Task 20)
+- All 3 providers parse `tool_calls` from responses
+- Verified `tools` parameter forwarded correctly
+- Files: `src/duh/providers/anthropic.py`, `src/duh/providers/openai.py`, `src/duh/providers/google.py`
+
+### 2026-02-16: Tool Integration in Handlers (v0.2 Task 21)
+- `handle_propose()` + `handle_challenge()` accept optional `tool_registry`
+- Use `tool_augmented_send()` when tools provided
+- Files: `src/duh/consensus/handlers.py`
+
+### 2026-02-16: Tool CLI Setup (v0.2 Task 22)
+- `duh ask --tools` flag enables tool-augmented reasoning
+- `_setup_tools(config)` creates ToolRegistry from config
+- `show_tool_use()` display method
+- Files: `src/duh/cli/app.py`, `src/duh/cli/display.py`
+
+### 2026-02-16: v0.2 Integration Tests + Docs (Phase 6)
+- Integration tests: taxonomy_outcomes, decompose_loop, voting_loop, tool_augmented
+- README and MkDocs documentation updated
+- Version bumped to 0.2.0
+- **Final count: 1093 tests, 39 source files, 4 providers**

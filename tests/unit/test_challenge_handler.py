@@ -78,10 +78,24 @@ class TestBuildChallengePrompt:
 
     def test_system_has_adversarial_framing(self) -> None:
         ctx = _challenge_ctx()
-        messages = build_challenge_prompt(ctx)
+        messages = build_challenge_prompt(ctx, framing="flaw")
         system = messages[0].content
-        assert "MUST disagree" in system
+        assert "MUST identify" in system
         assert "DO NOT start with praise" in system
+
+    def test_different_framings_produce_different_prompts(self) -> None:
+        ctx = _challenge_ctx()
+        flaw = build_challenge_prompt(ctx, framing="flaw")[0].content
+        alt = build_challenge_prompt(ctx, framing="alternative")[0].content
+        risk = build_challenge_prompt(ctx, framing="risk")[0].content
+        devil = build_challenge_prompt(ctx, framing="devils_advocate")[0].content
+        assert len({flaw, alt, risk, devil}) == 4
+
+    def test_unknown_framing_falls_back_to_flaw(self) -> None:
+        ctx = _challenge_ctx()
+        messages = build_challenge_prompt(ctx, framing="nonexistent")
+        flaw_messages = build_challenge_prompt(ctx, framing="flaw")
+        assert messages[0].content == flaw_messages[0].content
 
     def test_system_has_grounding(self) -> None:
         ctx = _challenge_ctx()
@@ -102,7 +116,8 @@ class TestBuildChallengePrompt:
     def test_user_has_challenge_framing(self) -> None:
         ctx = _challenge_ctx()
         messages = build_challenge_prompt(ctx)
-        assert "do NOT defer" in messages[1].content
+        user_content = messages[1].content
+        assert "challenge it" in user_content
 
 
 # ── Model selection ──────────────────────────────────────────────

@@ -21,6 +21,7 @@ from duh.providers.base import (
     ModelResponse,
     StreamChunk,
     TokenUsage,
+    ToolCallData,
 )
 
 if TYPE_CHECKING:
@@ -145,15 +146,23 @@ class GoogleProvider:
         max_tokens: int = 4096,
         temperature: float = 0.7,
         stop_sequences: list[str] | None = None,
+        response_format: str | None = None,
+        tools: list[dict[str, object]] | None = None,
     ) -> ModelResponse:
         system, contents = _build_contents(messages)
 
-        config = genai.types.GenerateContentConfig(
-            max_output_tokens=max_tokens,
-            temperature=temperature,
-            stop_sequences=stop_sequences or [],
-            system_instruction=system,
-        )
+        config_kwargs: dict[str, Any] = {
+            "max_output_tokens": max_tokens,
+            "temperature": temperature,
+            "stop_sequences": stop_sequences or [],
+            "system_instruction": system,
+        }
+        if response_format == "json":
+            config_kwargs["response_mime_type"] = "application/json"
+        if tools:
+            config_kwargs["tools"] = tools
+
+        config = genai.types.GenerateContentConfig(**config_kwargs)
 
         start = time.monotonic()
         try:
@@ -167,7 +176,27 @@ class GoogleProvider:
 
         latency_ms = (time.monotonic() - start) * 1000
 
+        # Extract text and function calls
         content = response.text or ""
+        tool_calls_data: list[ToolCallData] = []
+        if response.candidates:
+            cand_content = response.candidates[0].content
+            parts = cand_content.parts if cand_content else None
+            if parts:
+                for part in parts:
+                    fc = getattr(part, "function_call", None)
+                    if fc and fc.name:
+                        import json
+
+                        args = dict(fc.args) if fc.args else {}
+                        tool_calls_data.append(
+                            ToolCallData(
+                                id=f"google-{fc.name}",
+                                name=str(fc.name),
+                                arguments=json.dumps(args),
+                            )
+                        )
+
         input_tokens = 0
         output_tokens = 0
         if response.usage_metadata:
@@ -187,6 +216,7 @@ class GoogleProvider:
             finish_reason="stop",
             latency_ms=latency_ms,
             raw_response=response,
+            tool_calls=tool_calls_data if tool_calls_data else None,
         )
 
     async def stream(

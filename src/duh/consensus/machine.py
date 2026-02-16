@@ -21,6 +21,7 @@ class ConsensusState(enum.Enum):
     """States in the consensus protocol."""
 
     IDLE = "idle"
+    DECOMPOSE = "decompose"
     PROPOSE = "propose"
     CHALLENGE = "challenge"
     REVISE = "revise"
@@ -39,6 +40,7 @@ class ChallengeResult:
     model_ref: str
     content: str
     sycophantic: bool = False
+    framing: str = ""
 
 
 @dataclass(frozen=True, slots=True)
@@ -53,6 +55,15 @@ class RoundResult:
     decision: str
     confidence: float
     dissent: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class SubtaskSpec:
+    """Specification for a single subtask in a decomposed question."""
+
+    label: str
+    description: str
+    dependencies: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -84,6 +95,15 @@ class ConsensusContext:
 
     # History
     round_history: list[RoundResult] = field(default_factory=list)
+
+    # Decomposition (set by DECOMPOSE handler)
+    subtasks: list[SubtaskSpec] = field(default_factory=list)
+
+    # Taxonomy (set by COMMIT handler if classification enabled)
+    taxonomy: dict[str, str] | None = None
+
+    # Tool usage log (set by handlers when tool_registry is provided)
+    tool_calls_log: list[dict[str, str]] = field(default_factory=list)
 
     # Error
     error: str | None = None
@@ -121,7 +141,8 @@ class ConsensusContext:
 # Transitions allowed from non-terminal states.
 # FAILED can be reached from any non-terminal state (handled separately).
 _VALID_TRANSITIONS: dict[ConsensusState, frozenset[ConsensusState]] = {
-    ConsensusState.IDLE: frozenset({ConsensusState.PROPOSE}),
+    ConsensusState.IDLE: frozenset({ConsensusState.PROPOSE, ConsensusState.DECOMPOSE}),
+    ConsensusState.DECOMPOSE: frozenset({ConsensusState.PROPOSE}),
     ConsensusState.PROPOSE: frozenset({ConsensusState.CHALLENGE}),
     ConsensusState.CHALLENGE: frozenset({ConsensusState.REVISE}),
     ConsensusState.REVISE: frozenset({ConsensusState.COMMIT}),
@@ -216,7 +237,14 @@ class ConsensusStateMachine:
         """Return an error message if a guard condition fails, else None."""
         ctx = self._ctx
 
-        if to == ConsensusState.PROPOSE and ctx.state == ConsensusState.IDLE:
+        if to == ConsensusState.DECOMPOSE:
+            if not ctx.question.strip():
+                return "Cannot decompose: question is empty"
+
+        elif to == ConsensusState.PROPOSE and ctx.state in {
+            ConsensusState.IDLE,
+            ConsensusState.DECOMPOSE,
+        }:
             if not ctx.question.strip():
                 return "Cannot propose: question is empty"
 
@@ -252,7 +280,10 @@ class ConsensusStateMachine:
         """Mutate context for the transition."""
         current = self._ctx.state
 
-        if to == ConsensusState.PROPOSE and current == ConsensusState.IDLE:
+        if to == ConsensusState.PROPOSE and current in {
+            ConsensusState.IDLE,
+            ConsensusState.DECOMPOSE,
+        }:
             self._ctx.current_round = 1
             self._ctx._clear_round_data()
 

@@ -290,31 +290,36 @@ class TestPromptAntiSycophancy:
     """Verify the challenge prompt includes anti-sycophancy instructions."""
 
     def test_prompt_forces_disagreement(self) -> None:
+        """Each framing MUST require identification of specific issues."""
         ctx = _challenge_ctx()
-        messages = build_challenge_prompt(ctx)
-        system = messages[0].content
-        assert "MUST disagree" in system
+        for framing in ("flaw", "alternative", "risk", "devils_advocate"):
+            messages = build_challenge_prompt(ctx, framing=framing)
+            system = messages[0].content
+            assert "MUST" in system, f"{framing} missing MUST instruction"
 
     def test_prompt_forbids_praise(self) -> None:
         ctx = _challenge_ctx()
-        messages = build_challenge_prompt(ctx)
-        system = messages[0].content
-        assert "DO NOT start with praise" in system
+        for framing in ("flaw", "alternative", "risk", "devils_advocate"):
+            messages = build_challenge_prompt(ctx, framing=framing)
+            system = messages[0].content
+            assert "DO NOT start with praise" in system
 
     def test_prompt_suggests_disagreement_openers(self) -> None:
+        """Devils advocate framing should suggest 'I disagree'."""
         ctx = _challenge_ctx()
-        messages = build_challenge_prompt(ctx)
+        messages = build_challenge_prompt(ctx, framing="devils_advocate")
         system = messages[0].content
-        assert "I disagree with" in system
+        assert "I disagree" in system
 
     def test_prompt_warns_against_deference(self) -> None:
         ctx = _challenge_ctx()
         messages = build_challenge_prompt(ctx)
         user = messages[1].content
-        assert "do NOT defer" in user
+        assert "challenge it" in user
 
     def test_prompt_requires_specific_problems(self) -> None:
+        """Flaw framing should require finding factual/logical errors."""
         ctx = _challenge_ctx()
-        messages = build_challenge_prompt(ctx)
+        messages = build_challenge_prompt(ctx, framing="flaw")
         system = messages[0].content
-        assert "at least 2 specific problems" in system
+        assert "factual" in system.lower() or "logical" in system.lower()

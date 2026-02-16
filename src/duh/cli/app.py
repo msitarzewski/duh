@@ -24,6 +24,7 @@ if TYPE_CHECKING:
     from duh.config.schema import DuhConfig
     from duh.providers.base import ModelInfo
     from duh.providers.manager import ProviderManager
+    from duh.tools.registry import ToolRegistry
 
 
 # ── Helpers ──────────────────────────────────────────────────────
@@ -115,11 +116,43 @@ async def _setup_providers(config: DuhConfig) -> ProviderManager:
     return pm
 
 
+def _setup_tools(config: DuhConfig) -> ToolRegistry | None:
+    """Set up tool registry from config.
+
+    Returns None if tools are disabled.
+    """
+    if not config.tools.enabled:
+        return None
+
+    from duh.tools.registry import ToolRegistry
+
+    registry = ToolRegistry()
+
+    # Web search tool (always available when tools enabled)
+    from duh.tools.web_search import WebSearchTool
+
+    registry.register(WebSearchTool(config.tools.web_search))
+
+    # File read tool (always available when tools enabled)
+    from duh.tools.file_read import FileReadTool
+
+    registry.register(FileReadTool())
+
+    # Code execution tool (only if explicitly enabled)
+    if config.tools.code_execution.enabled:
+        from duh.tools.code_exec import CodeExecutionTool
+
+        registry.register(CodeExecutionTool(config.tools.code_execution))
+
+    return registry
+
+
 async def _run_consensus(
     question: str,
     config: DuhConfig,
     pm: ProviderManager,
     display: ConsensusDisplay | None = None,
+    tool_registry: ToolRegistry | None = None,
 ) -> tuple[str, float, str | None, float]:
     """Run the full consensus loop.
 
@@ -156,10 +189,10 @@ async def _run_consensus(
         proposer = select_proposer(pm)
         if display:
             with display.phase_status("PROPOSE", proposer):
-                await handle_propose(ctx, pm, proposer)
+                await handle_propose(ctx, pm, proposer, tool_registry=tool_registry)
             display.show_propose(proposer, ctx.proposal or "")
         else:
-            await handle_propose(ctx, pm, proposer)
+            await handle_propose(ctx, pm, proposer, tool_registry=tool_registry)
 
         # CHALLENGE
         sm.transition(ConsensusState.CHALLENGE)
@@ -167,10 +200,12 @@ async def _run_consensus(
         if display:
             detail = f"{len(challengers)} models"
             with display.phase_status("CHALLENGE", detail):
-                await handle_challenge(ctx, pm, challengers)
+                await handle_challenge(
+                    ctx, pm, challengers, tool_registry=tool_registry
+                )
             display.show_challenges(ctx.challenges)
         else:
-            await handle_challenge(ctx, pm, challengers)
+            await handle_challenge(ctx, pm, challengers, tool_registry=tool_registry)
 
         # REVISE
         sm.transition(ConsensusState.REVISE)
@@ -204,6 +239,10 @@ async def _run_consensus(
         break
 
     sm.transition(ConsensusState.COMPLETE)
+
+    # Show tool usage if any
+    if display and ctx.tool_calls_log:
+        display.show_tool_use(ctx.tool_calls_log)
 
     return (
         ctx.decision or "",
@@ -248,8 +287,32 @@ def cli(ctx: click.Context, config_path: str | None) -> None:
     default=None,
     help="Max consensus rounds (overrides config).",
 )
+@click.option(
+    "--decompose",
+    is_flag=True,
+    default=False,
+    help="Decompose the question into subtasks before consensus.",
+)
+@click.option(
+    "--protocol",
+    type=click.Choice(["consensus", "voting", "auto"]),
+    default=None,
+    help="Protocol: consensus (default), voting, or auto (classify first).",
+)
+@click.option(
+    "--tools/--no-tools",
+    default=None,
+    help="Enable/disable tool use (overrides config).",
+)
 @click.pass_context
-def ask(ctx: click.Context, question: str, rounds: int | None) -> None:
+def ask(
+    ctx: click.Context,
+    question: str,
+    rounds: int | None,
+    decompose: bool,
+    protocol: str | None,
+    tools: bool | None,
+) -> None:
     """Run a consensus query.
 
     Sends QUESTION to multiple LLMs, challenges their answers,
@@ -258,6 +321,34 @@ def ask(ctx: click.Context, question: str, rounds: int | None) -> None:
     config = _load_config(ctx.obj["config_path"])
     if rounds is not None:
         config.general.max_rounds = rounds
+
+    # Override tool settings from CLI flag
+    if tools is not None:
+        config.tools.enabled = tools
+
+    # Determine effective protocol
+    effective_protocol = protocol or config.general.protocol
+
+    if decompose or config.general.decompose:
+        try:
+            asyncio.run(_ask_decompose_async(question, config))
+        except DuhError as e:
+            _error(str(e))
+        return
+
+    if effective_protocol == "voting":
+        try:
+            asyncio.run(_ask_voting_async(question, config))
+        except DuhError as e:
+            _error(str(e))
+        return
+
+    if effective_protocol == "auto":
+        try:
+            asyncio.run(_ask_auto_async(question, config))
+        except DuhError as e:
+            _error(str(e))
+        return
 
     try:
         result = asyncio.run(_ask_async(question, config))
@@ -288,9 +379,193 @@ async def _ask_async(
             "~/.config/duh/config.toml or set API key environment variables."
         )
 
+    tool_registry = _setup_tools(config)
     display = ConsensusDisplay()
     display.start()
-    return await _run_consensus(question, config, pm, display=display)
+    return await _run_consensus(
+        question, config, pm, display=display, tool_registry=tool_registry
+    )
+
+
+async def _ask_voting_async(
+    question: str,
+    config: DuhConfig,
+) -> None:
+    """Async implementation for the ask --protocol=voting command."""
+    from duh.cli.display import ConsensusDisplay
+    from duh.consensus.voting import run_voting
+    from duh.memory.repository import MemoryRepository
+
+    pm = await _setup_providers(config)
+
+    if not pm.list_all_models():
+        _error(
+            "No models available. Configure providers in "
+            "~/.config/duh/config.toml or set API key environment variables."
+        )
+
+    display = ConsensusDisplay()
+    display.start()
+
+    aggregation = config.voting.aggregation
+    result = await run_voting(question, pm, aggregation=aggregation)
+
+    if result.votes:
+        display.show_votes(list(result.votes))
+
+    display.show_voting_result(result, pm.total_cost)
+
+    # Persist votes
+    factory, engine = await _create_db(config)
+    async with factory() as session:
+        repo = MemoryRepository(session)
+        thread = await repo.create_thread(question)
+        thread.status = "complete"
+        for vote in result.votes:
+            await repo.save_vote(thread.id, vote.model_ref, vote.content)
+        # Save aggregated decision
+        if result.decision:
+            turn = await repo.create_turn(thread.id, 1, "COMMIT")
+            await repo.save_decision(
+                turn.id,
+                thread.id,
+                result.decision,
+                result.confidence,
+            )
+        await session.commit()
+    await engine.dispose()
+
+
+async def _ask_auto_async(
+    question: str,
+    config: DuhConfig,
+) -> None:
+    """Async implementation for the ask --protocol=auto command.
+
+    Classifies the question first, then routes to voting (for judgment)
+    or consensus (for reasoning/unknown).
+    """
+    from duh.consensus.classifier import TaskType, classify_task_type
+
+    pm = await _setup_providers(config)
+
+    if not pm.list_all_models():
+        _error(
+            "No models available. Configure providers in "
+            "~/.config/duh/config.toml or set API key environment variables."
+        )
+
+    task_type = await classify_task_type(question, pm)
+    click.echo(f"Classified as: {task_type.value}")
+
+    if task_type == TaskType.JUDGMENT:
+        await _ask_voting_async(question, config)
+    else:
+        # Reasoning or unknown -> use consensus
+        from duh.cli.display import ConsensusDisplay
+
+        display = ConsensusDisplay()
+        display.start()
+        decision, confidence, dissent, cost = await _run_consensus(
+            question, config, pm, display=display
+        )
+        display.show_final_decision(decision, confidence, cost, dissent)
+
+
+async def _ask_decompose_async(
+    question: str,
+    config: DuhConfig,
+) -> None:
+    """Async implementation for the ask --decompose command.
+
+    Runs DECOMPOSE -> schedule_subtasks -> synthesize, displaying
+    each phase.  Single-subtask optimization: if only one subtask
+    is produced, runs normal consensus instead of synthesis.
+    """
+    import json as json_mod
+
+    from duh.cli.display import ConsensusDisplay
+    from duh.consensus.decompose import handle_decompose
+    from duh.consensus.machine import (
+        ConsensusContext,
+        ConsensusState,
+        ConsensusStateMachine,
+    )
+    from duh.consensus.scheduler import schedule_subtasks
+    from duh.consensus.synthesis import synthesize
+
+    pm = await _setup_providers(config)
+
+    if not pm.list_all_models():
+        _error(
+            "No models available. Configure providers in "
+            "~/.config/duh/config.toml or set API key environment variables."
+        )
+
+    display = ConsensusDisplay()
+    display.start()
+
+    # DECOMPOSE
+    ctx = ConsensusContext(
+        thread_id="",
+        question=question,
+        max_rounds=config.general.max_rounds,
+    )
+    sm = ConsensusStateMachine(ctx)
+    sm.transition(ConsensusState.DECOMPOSE)
+
+    with display.phase_status("DECOMPOSE", "analyzing"):
+        subtask_specs = await handle_decompose(
+            ctx, pm, max_subtasks=config.decompose.max_subtasks
+        )
+
+    display.show_decompose(subtask_specs)
+
+    # Persist subtasks to DB
+    factory, engine = await _create_db(config)
+    async with factory() as session:
+        from duh.memory.repository import MemoryRepository
+
+        repo = MemoryRepository(session)
+        thread = await repo.create_thread(question)
+
+        for i, spec in enumerate(subtask_specs):
+            await repo.save_subtask(
+                parent_thread_id=thread.id,
+                label=spec.label,
+                description=spec.description,
+                dependencies=json_mod.dumps(spec.dependencies),
+                sequence_order=i,
+            )
+        await session.commit()
+
+    # Single-subtask optimization: skip synthesis
+    if len(subtask_specs) == 1:
+        result = await _run_consensus(question, config, pm, display=display)
+        decision, confidence, dissent, cost = result
+        display.show_final_decision(decision, confidence, cost, dissent)
+        await engine.dispose()
+        return
+
+    # Schedule subtasks
+    subtask_results = await schedule_subtasks(subtask_specs, question, config, pm)
+
+    for sr in subtask_results:
+        display.show_subtask_progress(sr)
+
+    # Synthesize
+    with display.phase_status("SYNTHESIS", "merging"):
+        synthesis_result = await synthesize(question, subtask_results, pm)
+
+    display.show_synthesis(synthesis_result)
+    display.show_final_decision(
+        synthesis_result.content,
+        synthesis_result.confidence,
+        pm.total_cost,
+        None,
+    )
+
+    await engine.dispose()
 
 
 # ── recall ───────────────────────────────────────────────────────
@@ -426,6 +701,8 @@ async def _show_async(config: DuhConfig, thread_id: str) -> None:
             thread_id = matches[0].id
 
         thread = await repo.get_thread(thread_id)
+        decisions_with_outcomes = await repo.get_decisions_with_outcomes(thread_id)
+        votes = await repo.get_votes(thread_id)
 
     await engine.dispose()
 
@@ -437,6 +714,14 @@ async def _show_async(config: DuhConfig, thread_id: str) -> None:
     click.echo(f"Status: {thread.status}")
     click.echo(f"Created: {thread.created_at.strftime('%Y-%m-%d %H:%M')}")
     click.echo()
+
+    # Show votes if any
+    if votes:
+        click.echo("--- Votes ---")
+        for vote in votes:
+            click.echo(f"  [{vote.model_ref}]")
+            click.echo(f"  {vote.content}")
+            click.echo()
 
     for turn in thread.turns:
         click.echo(f"--- Round {turn.round_number} ---")
@@ -450,7 +735,95 @@ async def _show_async(config: DuhConfig, thread_id: str) -> None:
             click.echo(f"  {turn.decision.content}")
             if turn.decision.dissent:
                 click.echo(f"  Dissent: {turn.decision.dissent}")
+
+            # Taxonomy display
+            d = turn.decision
+            if d.intent or d.category or d.genus:
+                click.echo(
+                    f"  Taxonomy: intent={d.intent or ''}"
+                    f" category={d.category or ''}"
+                    f" genus={d.genus or ''}"
+                )
             click.echo()
+
+    # Show outcomes for the thread
+    for dec in decisions_with_outcomes:
+        if dec.outcome is not None:
+            click.echo(
+                f"  Outcome: {dec.outcome.result}"
+                + (f" - {dec.outcome.notes}" if dec.outcome.notes else "")
+            )
+
+
+# ── feedback ────────────────────────────────────────────────
+
+
+@cli.command()
+@click.argument("thread_id")
+@click.option(
+    "--result",
+    type=click.Choice(["success", "failure", "partial"]),
+    required=True,
+    help="Outcome result for the decision.",
+)
+@click.option("--notes", type=str, default=None, help="Optional notes.")
+@click.pass_context
+def feedback(
+    ctx: click.Context, thread_id: str, result: str, notes: str | None
+) -> None:
+    """Record an outcome for a thread's latest decision.
+
+    THREAD_ID can be the full UUID or a prefix (minimum 8 chars).
+    """
+    config = _load_config(ctx.obj["config_path"])
+    try:
+        asyncio.run(_feedback_async(config, thread_id, result, notes))
+    except DuhError as e:
+        _error(str(e))
+
+
+async def _feedback_async(
+    config: DuhConfig,
+    thread_id: str,
+    result_str: str,
+    notes: str | None,
+) -> None:
+    """Async implementation for the feedback command."""
+    from duh.memory.repository import MemoryRepository
+
+    factory, engine = await _create_db(config)
+    message: str = ""
+
+    async with factory() as session:
+        repo = MemoryRepository(session)
+
+        # Support prefix matching (same pattern as show command)
+        resolved_id = thread_id
+        if len(resolved_id) < 36:
+            thread_list = await repo.list_threads(limit=100)
+            matches = [t for t in thread_list if t.id.startswith(resolved_id)]
+            if not matches:
+                message = f"No thread matching '{thread_id}'."
+            elif len(matches) > 1:
+                lines = [f"Ambiguous prefix '{thread_id}'. Matches:"]
+                for m in matches:
+                    lines.append(f"  {m.id}  {m.question[:50]}")
+                message = "\n".join(lines)
+            else:
+                resolved_id = matches[0].id
+
+        if not message:
+            decisions = await repo.get_decisions(resolved_id)
+            if not decisions:
+                message = f"No decisions found for thread {resolved_id[:8]}."
+            else:
+                latest = decisions[-1]
+                await repo.save_outcome(latest.id, resolved_id, result_str, notes=notes)
+                await session.commit()
+                message = f"Outcome recorded: {result_str} for thread {resolved_id[:8]}"
+
+    await engine.dispose()
+    click.echo(message)
 
 
 # ── models ───────────────────────────────────────────────────────

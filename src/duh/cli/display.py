@@ -19,7 +19,10 @@ if TYPE_CHECKING:
 
     from rich.status import Status
 
-    from duh.consensus.machine import ChallengeResult
+    from duh.consensus.machine import ChallengeResult, SubtaskSpec
+    from duh.consensus.scheduler import SubtaskResult
+    from duh.consensus.synthesis import SynthesisResult
+    from duh.consensus.voting import VoteResult, VotingAggregation
 
 _TRUNCATE_LEN = 500
 
@@ -164,6 +167,159 @@ class ConsensusDisplay:
         self._console.print(
             f"[bold yellow]Warning:[/bold yellow] "
             f"{sycophantic_count}/{total} challenges flagged as sycophantic"
+        )
+
+    # ── Taxonomy & Outcome ─────────────────────────────────────
+
+    def show_taxonomy(
+        self,
+        intent: str | None,
+        category: str | None,
+        genus: str | None,
+    ) -> None:
+        """Display taxonomy classification fields."""
+        parts: list[str] = []
+        if intent:
+            parts.append(f"Intent: {intent}")
+        if category:
+            parts.append(f"Category: {category}")
+        if genus:
+            parts.append(f"Genus: {genus}")
+        if not parts:
+            return
+        self._console.print(
+            Panel(
+                "\n".join(parts),
+                title="[bold magenta]Taxonomy[/bold magenta]",
+                border_style="magenta",
+            )
+        )
+
+    def show_outcome(self, result: str, notes: str | None) -> None:
+        """Display outcome result and optional notes."""
+        body = f"Result: {result}"
+        if notes:
+            body += f"\nNotes: {notes}"
+        self._console.print(
+            Panel(
+                body,
+                title="[bold cyan]Outcome[/bold cyan]",
+                border_style="cyan",
+            )
+        )
+
+    # ── Decomposition ─────────────────────────────────────────
+
+    def show_decompose(self, subtask_specs: Sequence[SubtaskSpec]) -> None:
+        """Display the decomposition plan showing subtasks and deps."""
+        parts: list[str] = []
+        for i, spec in enumerate(subtask_specs, 1):
+            dep_text = ", ".join(spec.dependencies) if spec.dependencies else "none"
+            parts.append(
+                f"{i}. \\[{spec.label}] {spec.description}\n   Dependencies: {dep_text}"
+            )
+        body = "\n".join(parts)
+        self._console.print(
+            Panel(
+                body,
+                title=(
+                    f"[bold magenta]DECOMPOSE[/bold magenta]"
+                    f" ({len(subtask_specs)} subtasks)"
+                ),
+                border_style="magenta",
+            )
+        )
+
+    def show_subtask_progress(self, subtask_result: SubtaskResult) -> None:
+        """Display a completed subtask result."""
+        check = "[bold green]\\u2713[/bold green]"
+        self._console.print(
+            f"{check} [{subtask_result.label}]  "
+            f"Confidence: {subtask_result.confidence:.0%}"
+        )
+        self._console.print(
+            Panel(
+                _truncate(subtask_result.decision),
+                title=f"[bold cyan]{subtask_result.label}[/bold cyan]",
+                border_style="cyan",
+            )
+        )
+
+    def show_synthesis(self, synthesis_result: SynthesisResult) -> None:
+        """Display the synthesis result merging all subtask answers."""
+        self._console.print()
+        self._console.print(
+            Panel(
+                synthesis_result.content,
+                title=(
+                    f"[bold bright_white]SYNTHESIS[/bold bright_white]"
+                    f" ({synthesis_result.strategy})"
+                ),
+                border_style="bright_white",
+            )
+        )
+        self._console.print(f"Aggregate confidence: {synthesis_result.confidence:.0%}")
+
+    # ── Voting ─────────────────────────────────────────────────
+
+    def show_votes(self, votes: Sequence[VoteResult]) -> None:
+        """Display individual model votes in a panel."""
+        parts: list[Text] = []
+        for i, vote in enumerate(votes):
+            if i > 0:
+                parts.append(Text())  # blank line separator
+            header = Text(vote.model_ref, style="bold")
+            parts.append(header)
+            parts.append(Text(_truncate(vote.content)))
+
+        body = Text("\n").join(parts)
+        self._console.print(
+            Panel(
+                body,
+                title="[bold cyan]VOTES[/bold cyan]",
+                border_style="cyan",
+            )
+        )
+
+    def show_voting_result(self, result: VotingAggregation, cost: float) -> None:
+        """Display aggregated voting result with confidence."""
+        self._console.print()
+        self._console.rule(style="bright_white")
+        self._console.print(
+            Panel(
+                result.decision,
+                title="[bold bright_white]Decision[/bold bright_white]",
+                border_style="bright_white",
+            )
+        )
+        self._console.print(
+            f"Strategy: {result.strategy} | "
+            f"Confidence: {result.confidence:.0%} | "
+            f"Votes: {len(result.votes)} | "
+            f"Cost: ${cost:.4f}"
+        )
+
+    # ── Tool use ───────────────────────────────────────────────
+
+    def show_tool_use(self, tool_calls_log: list[dict[str, str]]) -> None:
+        """Display a summary of tool calls made during consensus."""
+        if not tool_calls_log:
+            return
+
+        parts: list[str] = []
+        for entry in tool_calls_log:
+            phase = entry.get("phase", "unknown")
+            tool = entry.get("tool", "unknown")
+            args = entry.get("arguments", "")
+            parts.append(f"  [{phase}] {tool}({args})")
+
+        body = "\n".join(parts)
+        self._console.print(
+            Panel(
+                body,
+                title=(f"[bold cyan]TOOLS[/bold cyan] ({len(tool_calls_log)} calls)"),
+                border_style="cyan",
+            )
         )
 
     # ── Final output ──────────────────────────────────────────

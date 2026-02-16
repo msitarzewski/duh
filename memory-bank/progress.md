@@ -1,10 +1,10 @@
 # Progress
 
-**Last Updated**: 2026-02-15
+**Last Updated**: 2026-02-16
 
 ---
 
-## Current State: v0.1 COMPLETE — 3 Providers, 703 Tests, Docs Live
+## Current State: v0.2 COMPLETE — 4 Providers, 1093 Tests, 39 Source Files
 
 ### What's Built
 
@@ -73,3 +73,10 @@ Phase 0 benchmark framework — fully functional, pilot-tested on 5 questions.
 | 2026-02-16 | Google Gemini adapter (Gemini 3 + 2.5) | Done |
 | 2026-02-16 | MkDocs site + GitHub Pages deployment | Done |
 | 2026-02-16 | GitHub repo created: msitarzewski/duh | Done |
+| 2026-02-16 | v0.2 T1-T7 (Phase 1: Foundation) — Alembic migrations, structured output, JSON extract, challenge framings, tool framework, tool-augmented send, config schema | Done |
+| 2026-02-16 | v0.2 T8-T12 (Phase 2: Taxonomy + Outcomes) — models/repo, taxonomy at COMMIT, feedback CLI, outcome context, display | Done |
+| 2026-02-16 | v0.2 T13-T15 (Phase 3: Decomposition) — DECOMPOSE state + handler, scheduler, synthesis | Done |
+| 2026-02-16 | v0.2 T16-T17 (Phase 4: Voting + Decompose CLI) — voting + classifier, decompose CLI integration | Done |
+| 2026-02-16 | v0.2 T18-T22 (Phase 5: Tools + Voting CLI) — voting CLI, tool implementations, provider tool parsing, tool handler integration, tool CLI setup | Done |
+| 2026-02-16 | v0.2 Phase 6 — Integration tests, README, version bump to 0.2.0 | Done |
+| 2026-02-16 | v0.2.0 — "It Thinks Deeper" | **Complete** |

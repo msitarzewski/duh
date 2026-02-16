@@ -2,12 +2,12 @@
 
 ## Core Files
 - [projectbrief.md](./projectbrief.md) — Vision, tenets, architecture, build sequence
-- [techContext.md](./techContext.md) — Tech stack decisions with rationale (Python, Docker, SQLAlchemy, etc.)
-- [decisions.md](./decisions.md) — Architectural decisions with context, alternatives, and consequences (11 ADRs)
-- [activeContext.md](./activeContext.md) — Current state, v0.1 readiness checklist, open questions
+- [techContext.md](./techContext.md) — Tech stack decisions with rationale (Python, Docker, SQLAlchemy, tools, etc.)
+- [decisions.md](./decisions.md) — Architectural decisions with context, alternatives, and consequences (15 ADRs)
+- [activeContext.md](./activeContext.md) — Current state, v0.2 complete, preparing v0.3
 - [progress.md](./progress.md) — Milestone tracking, what's built, what's next
 - [competitive-landscape.md](./competitive-landscape.md) — Research on existing tools, frameworks, and academic work
-- [quick-start.md](./quick-start.md) — Session entry point, v0.1 readiness checklist, key file references
+- [quick-start.md](./quick-start.md) — Session entry point, v0.3 readiness, key file references
 
 ## Context Files
 - [setup.md](./setup.md) — Original GPT-5.2 conversation that sparked the project

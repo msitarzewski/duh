@@ -1,7 +1,7 @@
 # duh Roadmap
 
-**Version**: 1.0
-**Date**: 2026-02-15
+**Version**: 1.3
+**Date**: 2026-02-16
 **Status**: Draft for review
 **Synthesized from**: Product Strategy, Systems Architecture, Devil's Advocate Review, Competitive Research Analysis
 
@@ -102,14 +102,14 @@ The devil's advocate correctly identified this as the existential risk: "If this
 
 ### Overview
 
-| Version | Theme | Key Deliverable | AI-Time Estimate |
-|---------|-------|-----------------|-----------------|
-| **0.1.0** | It Works & Remembers | Consensus CLI with basic persistence | 5-8 days |
-| **0.2.0** | It Thinks Deeper | Task decomposition, outcome tracking | 4-6 days |
-| **0.3.0** | It's Accessible | REST API, MCP server, Python client | 4-6 days |
-| **0.4.0** | It Has a Face | Web UI with real-time consensus display | 6-10 days |
-| **0.5.0** | It Scales | Multi-user, PostgreSQL, production hardening | 4-6 days |
-| **1.0.0** | duh. | Stable APIs, documentation, security audit | 5-8 days |
+| Version | Theme | Key Deliverable | AI-Time Estimate | Status |
+|---------|-------|-----------------|-----------------|--------|
+| **0.1.0** | It Works & Remembers | Consensus CLI with basic persistence | 5-8 days | **COMPLETE** |
+| **0.2.0** | It Thinks Deeper | Task decomposition, outcome tracking | 4-6 days | **COMPLETE** |
+| **0.3.0** | It's Accessible | REST API, MCP server, Python client | 4-6 days | |
+| **0.4.0** | It Has a Face | Web UI with real-time consensus display | 6-10 days | |
+| **0.5.0** | It Scales | Multi-user, PostgreSQL, production hardening | 4-6 days | |
+| **1.0.0** | duh. | Stable APIs, documentation, security audit | 5-8 days | |
 
 **Total AI-time**: ~30-46 days of autonomous execution (not calendar days — depends on session frequency and human review cadence)
 
@@ -291,37 +291,39 @@ All -> 24 (Docker) -> 25 (docs)
 
 #### Acceptance Criteria
 
-- [ ] Models can invoke web search during PROPOSE/CHALLENGE to ground claims in current data
-- [ ] Code execution tool available in sandboxed environment for verifying calculations/assumptions
-- [ ] Tool results visible in thread history (who searched what, what code ran, what results came back)
-- [ ] Every committed decision is auto-classified with intent, category, and genus tags
-- [ ] `duh threads --category technical` and `duh recall --intent decision` filter by taxonomy
-- [ ] Complex queries decompose into 2-7 subtasks automatically
-- [ ] Subtask results flow as context to dependent subtasks
-- [ ] `duh feedback` records and `duh recall` surfaces outcome data
-- [ ] Gemini participates alongside Claude, GPT, and local models
-- [ ] Voting mode available via `--mode vote` flag
-- [ ] Structured output produces reliable task lists from DECOMPOSE
+- [x] Models can invoke web search during PROPOSE/CHALLENGE to ground claims in current data
+- [x] Code execution tool available in sandboxed environment for verifying calculations/assumptions
+- [x] Tool results visible in thread history (who searched what, what code ran, what results came back)
+- [x] Every committed decision is auto-classified with intent, category, and genus tags
+- [x] `duh threads --category technical` and `duh recall --intent decision` filter by taxonomy
+- [x] Complex queries decompose into 2-7 subtasks automatically
+- [x] Subtask results flow as context to dependent subtasks
+- [x] `duh feedback` records and `duh recall` surfaces outcome data
+- [x] Gemini participates alongside Claude, GPT, and local models
+- [x] Voting mode available via `--mode vote` flag
+- [x] Structured output produces reliable task lists from DECOMPOSE
 
 #### Tasks
 
-1. Tool registry and execution framework (tool definition protocol, sandboxed code runner, web search adapter)
-2. Tool integration into consensus handlers (tool calls during PROPOSE/CHALLENGE/REVISE, result injection, token budget for tool outputs)
-3. Decision taxonomy model and classifier (intent/category/genus schema, lightweight LLM classification at COMMIT, DB migration)
-4. Taxonomy-aware filtering in CLI (`--intent`, `--category`, `--genus` flags on `threads` and `recall`)
-5. Task decomposition engine (DECOMPOSE state handler)
-6. Subtask dependency resolver and execution scheduler
-7. Synthesis phase (roll up subtask commitments)
-8. Outcome model + repository methods
-9. Outcome injection into context builder
-10. Google Gemini provider adapter
-11. Voting decision protocol (parallel to consensus)
-12. Task type classifier (reasoning vs. judgment) for protocol selection
-13. Structured output support in provider interface
-14. Challenge prompt iteration based on v0.1 sycophancy data
-15. Unit tests for every new function (tool registry, tool execution, taxonomy classifier, decomposer, scheduler, synthesis, outcome repo, voting protocol, classifier, Gemini adapter)
-16. Integration tests: tool-augmented consensus loop, taxonomy classification accuracy, full decomposition-to-synthesis loop, outcome feedback round-trip, voting vs consensus comparison
-17. Documentation updates
+1. **Tool registry and execution framework** ~~DONE~~: Tool definition protocol, sandboxed code runner, web search adapter, file read tool
+2. **Tool integration into consensus handlers** ~~DONE~~: Tool calls during PROPOSE/CHALLENGE/REVISE, result injection, token budget for tool outputs
+3. **Decision taxonomy model and classifier** ~~DONE~~: Intent/category/genus schema, lightweight LLM classification at COMMIT, DB migration
+4. **Taxonomy-aware filtering in CLI** ~~DONE~~: `--intent`, `--category`, `--genus` flags on `threads` and `recall`
+5. **Task decomposition engine** ~~DONE~~: DECOMPOSE state handler
+6. **Subtask dependency resolver and execution scheduler** ~~DONE~~: TopologicalSorter-based scheduler with parallel execution
+7. **Synthesis phase** ~~DONE~~: Roll up subtask commitments into final answer
+8. **Outcome model + repository methods** ~~DONE~~: Outcome tracking with feedback recording
+9. **Outcome injection into context builder** ~~DONE~~: Past outcomes surfaced in future threads
+10. **Google Gemini provider adapter** ~~DONE~~: (Shipped post-v0.1, pre-v0.2 development)
+11. **Voting decision protocol** ~~DONE~~: Parallel fan-out + majority/weighted aggregation
+12. **Task type classifier** ~~DONE~~: Reasoning vs. judgment protocol selection
+13. **Structured output support** ~~DONE~~: JSON mode for DECOMPOSE and decision extraction
+14. **Challenge prompt iteration** ~~DONE~~: 4 framing types (flaw/alternative/risk/devils_advocate), round-robin assignment (shipped post-v0.1)
+15. **Unit tests** ~~DONE~~: Full coverage for all new modules (tool registry, tool execution, taxonomy classifier, decomposer, scheduler, synthesis, outcome repo, voting protocol, classifier, Gemini adapter)
+16. **Integration tests** ~~DONE~~: Tool-augmented consensus loop, taxonomy classification, decomposition-to-synthesis, outcome feedback round-trip, voting vs consensus
+17. **Documentation updates** ~~DONE~~: MkDocs site updated with all v0.2 features
+
+> **v0.2.0 shipped 2026-02-16.** 1093 tests, 39 source files, 4 providers (Anthropic, OpenAI, Google Gemini, Ollama). All features delivered. Some items (Gemini adapter, challenge prompt iteration) shipped during late v0.1 development; all others completed in the v0.2 cycle.
 
 ---
 
@@ -854,6 +856,7 @@ Y = yes, N = no, ~ = partial, * = research only, not product
 | 2026-02-15 | 1.0 | Initial roadmap synthesized from agent team |
 | 2026-02-15 | 1.1 | Recalibrated timelines to AI-time. Added Testing Mandate. Added Self-Building Milestone. Elevated testing from afterthought to first-class development constraint. |
 | 2026-02-16 | 1.2 | Added tool-augmented consensus (v0.2) and decision taxonomy (v0.2). Added 3D Decision Space visualization (v0.4). Updated competitive gap analysis. |
+| 2026-02-16 | 1.3 | v0.2.0 complete. All features shipped. Updated acceptance criteria and task status. Added Status column to overview table. |
 
 ---
 

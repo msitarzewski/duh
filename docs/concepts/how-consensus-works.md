@@ -93,15 +93,131 @@ When rounds are exhausted or convergence is detected:
 COMMIT  -->  COMPLETE
 ```
 
+## Voting protocol
+
+The voting protocol is an alternative to the full consensus debate. Instead of iterative propose-challenge-revise rounds, all models answer independently in parallel and a meta-judge aggregates the results.
+
+### When to use voting
+
+- **Judgment questions** -- subjective evaluations, comparisons, opinions
+- **Speed-sensitive queries** -- parallel fan-out is faster than sequential rounds
+- **High model count** -- more models means more diverse perspectives to aggregate
+
+Use `--protocol voting` or set `protocol = "voting"` in config. Use `--protocol auto` to let duh classify the question and route automatically.
+
+### How it works
+
+1. **Fan-out**: The question is sent to all configured models in parallel
+2. **Collection**: Each model's answer is collected as a `VoteResult`
+3. **Meta-judge selection**: The strongest model (highest output cost) is selected as judge
+4. **Aggregation**: The judge picks or synthesizes the best answer
+
+### Aggregation strategies
+
+| Strategy | Behavior |
+|----------|----------|
+| `majority` (default) | Meta-judge reads all answers and picks the best one, improving it if possible |
+| `weighted` | Meta-judge synthesizes all answers, weighting by model capability (output cost as proxy) |
+
+Configure the strategy in `[voting]`:
+
+```toml
+[voting]
+aggregation = "weighted"
+```
+
+### Auto-classification
+
+With `--protocol auto`, duh uses the cheapest model to classify the question:
+
+- **Reasoning** (logic, math, code, step-by-step) -- routes to consensus
+- **Judgment** (opinions, evaluations, comparisons) -- routes to voting
+
+## Query decomposition
+
+For complex questions that span multiple domains, duh can decompose the question into a directed acyclic graph (DAG) of subtasks.
+
+### When to use decomposition
+
+- **Multi-part questions** -- "Design a complete CI/CD pipeline" has research, tooling, and architecture components
+- **Questions with dependencies** -- Some parts must be answered before others
+- **Broad-scope queries** -- Better to solve focused subproblems and merge results
+
+Use `--decompose` or set `decompose = true` in config.
+
+### How it works
+
+1. **DECOMPOSE phase**: The cheapest model breaks the question into 2-7 subtasks with dependency relationships, returned as JSON
+2. **DAG validation**: Labels are checked for uniqueness, dependencies are resolved, and the graph is verified acyclic (Kahn's algorithm)
+3. **Scheduling**: Subtasks are scheduled using `TopologicalSorter` -- independent subtasks run in parallel, dependent subtasks wait for their prerequisites
+4. **Per-subtask consensus**: Each subtask runs the full consensus protocol independently
+5. **Synthesis**: A meta-model merges all subtask results into a single coherent answer
+
+### Synthesis strategies
+
+| Strategy | Behavior |
+|----------|----------|
+| `merge` | Combine all subtask answers into one comprehensive response |
+| `prioritize` | Weight subtask answers by their confidence scores |
+
+### Single-subtask optimization
+
+If decomposition produces only one subtask (the question is already focused enough), duh skips synthesis and runs normal consensus directly. This avoids unnecessary overhead.
+
+## Tool-augmented consensus
+
+Models can use tools during the PROPOSE and CHALLENGE phases to access external information and capabilities.
+
+### Available tools
+
+| Tool | Description | Config key |
+|------|-------------|------------|
+| **Web search** | Search the web using DuckDuckGo (or custom backend) | `tools.web_search` |
+| **Code execution** | Run Python code in a sandboxed environment | `tools.code_execution` |
+| **File read** | Read local files for context | Always available when tools enabled |
+
+### How tools work
+
+1. The model receives tool definitions alongside the consensus prompt
+2. If the model requests a tool call, duh executes it and returns the result
+3. The model incorporates tool results into its response
+4. Tool calls are logged and displayed in the TOOLS panel after the decision
+
+Enable tools globally in config:
+
+```toml
+[tools]
+enabled = true
+
+[tools.web_search]
+backend = "duckduckgo"
+max_results = 5
+
+[tools.code_execution]
+enabled = true
+timeout = 30
+```
+
+Or per-query via CLI:
+
+```bash
+duh ask --tools "What is the current price of Bitcoin?"
+```
+
+!!! note "Tool call loop"
+    The tool-augmented send loop runs up to `tools.max_rounds` iterations (default: 5) per phase, allowing models to make multiple sequential tool calls if needed.
+
 ## State machine
 
 ```
-IDLE --> PROPOSE --> CHALLENGE --> REVISE --> COMMIT --> COMPLETE
-                                               |
-                                               +--> PROPOSE (next round)
-                                               |
-                                               +--> FAILED (on error)
+IDLE --> DECOMPOSE --> PROPOSE --> CHALLENGE --> REVISE --> COMMIT --> COMPLETE
+             |                                                |
+             |                                                +--> PROPOSE (next round)
+             |                                                |
+             +--> (subtask scheduling + synthesis)            +--> FAILED (on error)
 ```
+
+The DECOMPOSE state is optional -- it is entered only when `--decompose` is used. The voting protocol bypasses the state machine entirely (parallel fan-out + aggregation).
 
 Any non-terminal state can transition to FAILED on errors. COMPLETE and FAILED are terminal states.
 

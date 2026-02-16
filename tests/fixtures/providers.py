@@ -69,6 +69,8 @@ class MockProvider:
         max_tokens: int = 4096,
         temperature: float = 0.7,
         stop_sequences: list[str] | None = None,
+        response_format: str | None = None,
+        tools: list[dict[str, object]] | None = None,
     ) -> ModelResponse:
         self.call_log.append(
             {
@@ -77,6 +79,8 @@ class MockProvider:
                 "messages": messages,
                 "max_tokens": max_tokens,
                 "temperature": temperature,
+                "response_format": response_format,
+                "tools": tools,
             }
         )
         content = self._responses.get(model_id, "Mock response")

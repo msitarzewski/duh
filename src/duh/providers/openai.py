@@ -21,6 +21,7 @@ from duh.providers.base import (
     ModelResponse,
     StreamChunk,
     TokenUsage,
+    ToolCallData,
 )
 
 if TYPE_CHECKING:
@@ -154,6 +155,8 @@ class OpenAIProvider:
         max_tokens: int = 4096,
         temperature: float = 0.7,
         stop_sequences: list[str] | None = None,
+        response_format: str | None = None,
+        tools: list[dict[str, object]] | None = None,
     ) -> ModelResponse:
         api_messages = _build_messages(messages)
 
@@ -165,6 +168,10 @@ class OpenAIProvider:
         }
         if stop_sequences:
             kwargs["stop"] = stop_sequences
+        if response_format == "json":
+            kwargs["response_format"] = {"type": "json_object"}
+        if tools:
+            kwargs["tools"] = tools
 
         start = time.monotonic()
         try:
@@ -174,9 +181,21 @@ class OpenAIProvider:
 
         latency_ms = (time.monotonic() - start) * 1000
 
+        tool_calls_data: list[ToolCallData] | None = None
         if response.choices:
             content = response.choices[0].message.content or ""
             finish_reason = response.choices[0].finish_reason or "stop"
+            # Parse tool calls from response
+            msg_tool_calls = response.choices[0].message.tool_calls
+            if msg_tool_calls:
+                tool_calls_data = [
+                    ToolCallData(
+                        id=tc.id,
+                        name=tc.function.name,
+                        arguments=tc.function.arguments,
+                    )
+                    for tc in msg_tool_calls
+                ]
         else:
             content = ""
             finish_reason = "stop"
@@ -198,6 +217,7 @@ class OpenAIProvider:
             finish_reason=finish_reason,
             latency_ms=latency_ms,
             raw_response=response,
+            tool_calls=tool_calls_data,
         )
 
     async def stream(

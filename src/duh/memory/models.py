@@ -155,7 +155,73 @@ class Decision(Base):
     content: Mapped[str] = mapped_column(Text)
     confidence: Mapped[float] = mapped_column(Float, default=0.0)
     dissent: Mapped[str | None] = mapped_column(Text, nullable=True, default=None)
+    intent: Mapped[str | None] = mapped_column(String(50), nullable=True, default=None)
+    category: Mapped[str | None] = mapped_column(
+        String(50), nullable=True, default=None
+    )
+    genus: Mapped[str | None] = mapped_column(String(50), nullable=True, default=None)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
 
     turn: Mapped[Turn] = relationship(back_populates="decision")
+    thread: Mapped[Thread] = relationship()
+    outcome: Mapped[Outcome | None] = relationship(
+        back_populates="decision",
+        uselist=False,
+    )
+
+
+class Outcome(Base):
+    """Tracked outcome of a decision."""
+
+    __tablename__ = "outcomes"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    decision_id: Mapped[str] = mapped_column(ForeignKey("decisions.id"), unique=True)
+    thread_id: Mapped[str] = mapped_column(ForeignKey("threads.id"), index=True)
+    result: Mapped[str] = mapped_column(String(20))
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True, default=None)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=_utcnow, onupdate=_utcnow
+    )
+
+    decision: Mapped[Decision] = relationship(back_populates="outcome")
+    thread: Mapped[Thread] = relationship()
+
+
+class Subtask(Base):
+    """A decomposed subtask linked to a parent thread."""
+
+    __tablename__ = "subtasks"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    parent_thread_id: Mapped[str] = mapped_column(ForeignKey("threads.id"), index=True)
+    child_thread_id: Mapped[str | None] = mapped_column(
+        ForeignKey("threads.id"), nullable=True, default=None
+    )
+    label: Mapped[str] = mapped_column(String(200))
+    description: Mapped[str] = mapped_column(Text)
+    dependencies: Mapped[str] = mapped_column(Text, default="[]")
+    status: Mapped[str] = mapped_column(String(20), default="pending")
+    sequence_order: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=_utcnow, onupdate=_utcnow
+    )
+
+    parent_thread: Mapped[Thread] = relationship(foreign_keys=[parent_thread_id])
+    child_thread: Mapped[Thread | None] = relationship(foreign_keys=[child_thread_id])
+
+
+class Vote(Base):
+    """A single model's vote in the voting protocol."""
+
+    __tablename__ = "votes"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    thread_id: Mapped[str] = mapped_column(ForeignKey("threads.id"), index=True)
+    model_ref: Mapped[str] = mapped_column(String(100))
+    content: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+
     thread: Mapped[Thread] = relationship()

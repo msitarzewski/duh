@@ -24,12 +24,16 @@ class _FakeThread:
 
 
 class _FakeDecision:
+    _counter = 0
+
     def __init__(
         self,
         content: str,
         confidence: float = 1.0,
         dissent: str | None = None,
     ) -> None:
+        _FakeDecision._counter += 1
+        self.id = f"fake-decision-{_FakeDecision._counter}"
         self.content = content
         self.confidence = confidence
         self.dissent = dissent
