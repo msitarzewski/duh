@@ -1,16 +1,18 @@
 # Active Context
 
 **Last Updated**: 2026-02-16
-**Current Phase**: v0.1 in progress.
-**Next Action**: v0.1 task 25 — Documentation.
+**Current Phase**: v0.1 COMPLETE. Preparing v0.2.
+**Next Action**: Plan v0.2 task breakdown.
 
 ---
 
 ## Current State
 
-- **v0.1 Tasks 1-24 COMPLETE.** Through Docker.
-- 681 tests passing, ruff clean, mypy strict clean (25 source files).
-- Next: task 25 (Documentation) — final v0.1 task.
+- **v0.1 Tasks 1-25 COMPLETE.** All tasks including documentation.
+- **Google Gemini provider added** (post-v0.1) — 4 models: Gemini 3 Pro/Flash (preview), Gemini 2.5 Pro/Flash.
+- 703 tests passing, ruff clean, mypy strict clean (26 source files, 3 providers).
+- MkDocs docs site live at https://msitarzewski.github.io/duh/
+- GitHub repo: https://github.com/msitarzewski/duh
 
 ## Phase 0 Benchmark Results (Summary)
 
@@ -58,7 +60,8 @@ When Phase 0 exits with PROCEED, v0.1 implementation starts. Key references:
 22. ~~CLI app~~ DONE (Click commands)
 23. ~~CLI display (Rich Live panels)~~ DONE
 24. ~~Docker~~ DONE
-25. Documentation
+25. ~~Documentation~~ DONE
+26. ~~Google Gemini adapter~~ DONE (added post-v0.1, 22 tests)
 
 ### Phase 0 Artifacts That Feed v0.1
 

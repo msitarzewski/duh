@@ -90,7 +90,7 @@ async def _setup_providers(config: DuhConfig) -> ProviderManager:
     for name, prov_config in config.providers.items():
         if not prov_config.enabled:
             continue
-        if prov_config.api_key is None and name in ("anthropic", "openai"):
+        if prov_config.api_key is None and name in ("anthropic", "openai", "google"):
             continue  # Skip providers without API keys
 
         if name == "anthropic":
@@ -106,6 +106,11 @@ async def _setup_providers(config: DuhConfig) -> ProviderManager:
                 base_url=prov_config.base_url,
             )
             await pm.register(openai_prov)  # type: ignore[arg-type]
+        elif name == "google":
+            from duh.providers.google import GoogleProvider
+
+            google_prov = GoogleProvider(api_key=prov_config.api_key)
+            await pm.register(google_prov)  # type: ignore[arg-type]
 
     return pm
 

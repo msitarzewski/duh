@@ -4,7 +4,7 @@
 
 ---
 
-## Current State: Phase 0 COMPLETE — Exit Decision PROCEED — Starting v0.1
+## Current State: v0.1 COMPLETE — 3 Providers, 703 Tests, Docs Live
 
 ### What's Built
 
@@ -68,4 +68,8 @@ Phase 0 benchmark framework — fully functional, pilot-tested on 5 questions.
 | 2026-02-15 | v0.1 Task 6: Anthropic adapter | Done |
 | 2026-02-15 | v0.1 Task 7: OpenAI adapter (GPT + Ollama) | Done |
 | 2026-02-15 | v0.1 Task 8: Retry with backoff utility | Done |
-| TBD | v0.1.0 — "It Works & Remembers" | In Progress |
+| 2026-02-16 | v0.1 Tasks 9-25: Full implementation + docs | Done |
+| 2026-02-16 | v0.1.0 — "It Works & Remembers" | **Complete** |
+| 2026-02-16 | Google Gemini adapter (Gemini 3 + 2.5) | Done |
+| 2026-02-16 | MkDocs site + GitHub Pages deployment | Done |
+| 2026-02-16 | GitHub repo created: msitarzewski/duh | Done |

@@ -69,6 +69,7 @@ class DuhConfig(BaseModel):
         default_factory=lambda: {
             "anthropic": ProviderConfig(api_key_env="ANTHROPIC_API_KEY"),
             "openai": ProviderConfig(api_key_env="OPENAI_API_KEY"),
+            "google": ProviderConfig(api_key_env="GOOGLE_API_KEY"),
         }
     )
     consensus: ConsensusConfig = Field(default_factory=ConsensusConfig)
