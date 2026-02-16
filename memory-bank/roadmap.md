@@ -239,19 +239,19 @@ Tests are written alongside each module, not after. Every task below includes it
 10. **SQLAlchemy models** ~~DONE~~: Thread, Turn, Contribution, TurnSummary, ThreadSummary, Decision. Tests: model creation, relationships, constraints, indexes, round-trip persistence (in-memory SQLite)
 11. **Memory repository** ~~DONE~~: CRUD operations, keyword search, thread listing, eager loading, upsert summaries. Tests: save/load cycles, search relevance, empty results, pagination
 12. **Consensus state machine** ~~DONE~~: States enum, transitions, ConsensusContext dataclass, guard conditions, round archival. Tests: every valid transition, every invalid transition rejected, context mutation
-13. **PROPOSE handler + tests**: Model selection, prompt building, streaming integration. Tests: prompt construction, model selection strategies, streaming accumulation
-14. **CHALLENGE handler + tests**: Parallel fan-out, forced disagreement prompts, sycophancy detection. Tests: parallel execution, provider failure graceful degradation, sycophancy flagging with known-mild challenges
-15. **REVISE handler + tests**: Synthesis prompt, addressing challenges. Tests: prompt includes all challenges, revision references specific critiques
-16. **COMMIT handler + tests** ~~DONE~~: Decision extraction, persistence, dissent preservation. Tests: decision record completeness, dissent captured, DB round-trip
-17. **Convergence detection + tests** ~~DONE~~: Compare challenges across rounds, early stopping logic. Tests: identical challenges trigger early stop, different challenges continue, threshold behavior
+13. **PROPOSE handler + tests** ~~DONE~~: Model selection (by output cost), prompt building (grounding + system + user), handle_propose. Tests: prompt construction, model selection strategies, handler execution, e2e flow
+14. **CHALLENGE handler + tests** ~~DONE~~: Parallel fan-out (asyncio.gather), forced disagreement prompts, sycophancy detection (14 markers). Tests: parallel execution, provider failure graceful degradation, sycophancy flagging with known-mild challenges
+15. **REVISE handler + tests** ~~DONE~~: Synthesis prompt with all challenges, proposer-revises-own-work default. Tests: prompt includes all challenges, handler execution, model defaulting, validation
+16. **COMMIT handler + tests** ~~DONE~~: Decision extraction (decision=revision), confidence scoring from challenge quality, dissent preservation. No model call — pure extraction. Tests: confidence computation, dissent extraction, handler execution, e2e, DB round-trip
+17. **Convergence detection + tests** ~~DONE~~: Jaccard word-overlap similarity, cross-round comparison, threshold 0.7. Tests: identical challenges trigger early stop, different challenges continue, threshold behavior
 18. **Context builder + tests** ~~DONE~~: Thread summary + recent turns + past decisions assembled for model context. Tests: context fits within token budget, past decisions included when relevant, empty history handled
-19. **Summary generator + tests** ~~DONE~~: Turn and thread summaries via fast model. Tests: summary produced, model selection (cheapest), regeneration-not-append behavior
-20. **Consensus engine integration tests** ~~DONE~~: Full loop with mock providers — PROPOSE through COMMIT. Multi-round tests. Provider failure mid-loop. Cost accumulation. Same-model ensemble mode
-21. **Sycophancy test suite**: Known-flaw proposals paired with expected challenge behaviors. Verifies challenge prompts produce genuine disagreement, not "great point, and also..."
-22. **CLI app + tests**: Click commands (ask, recall, threads, show, models, cost). Tests: argument parsing, output formatting, error display
-23. **CLI display**: Rich Live panels for consensus visualization. Tests: panel rendering with mock event data
-24. **Docker**: Dockerfile, docker-compose, volume mounts
-25. **Documentation**: README, quickstart, configuration reference
+19. **Summary generator + tests** ~~DONE~~: Turn and thread summaries via cheapest model (by input cost), temp 0.3. Tests: summary produced, model selection (cheapest), regeneration-not-append behavior
+20. **Consensus engine integration tests** ~~DONE~~: Full loop with mock providers — PROPOSE through COMMIT. 14 scenarios: single/multi-round, convergence, failure, cost, ensemble, sycophancy, cross-round context
+21. **Sycophancy test suite** ~~DONE~~: 98 tests, 3 known-flaw fixtures (eval() security, MD5 passwords, rsync deploy). Exhaustive marker coverage, boundary tests, false-positive resistance, confidence impact scoring
+22. **CLI app + tests** ~~DONE~~: 6 Click commands (ask, recall, threads, show, models, cost). Async wrappers, config loading, DB setup, prefix matching on show. 30 tests via CliRunner
+23. **CLI display** ~~DONE~~: ConsensusDisplay with Rich panels (green/yellow/blue), spinners, sycophancy warnings, round stats. Integrated into _run_consensus + ask. 32 tests with captured Console
+24. **Docker** ~~DONE~~: Multi-stage Dockerfile, docker-compose.yml, .dockerignore, docker/config.toml. OCI labels, non-root user, /data volume
+25. **Documentation** ~~DONE~~: MkDocs Material site (19 pages), new README, GitHub Pages deployment. Installation, quickstart, config, concepts, CLI reference, guides, Python API, troubleshooting
 
 #### Dependencies Between Tasks
 
@@ -277,6 +277,8 @@ All -> 24 (Docker) -> 25 (docs)
 
 #### What Ships
 
+- **Tool-augmented consensus**: Models can invoke tools during PROPOSE and CHALLENGE phases to ground answers in real-time data. Tool types: web search (verify claims, get current data), code execution (test assumptions, run calculations), file reading (analyze documents). Tool calls happen within the consensus loop -- a proposer can search before answering, a challenger can run code to disprove a claim. Tool results are injected into context for subsequent phases. Requires: tool registry, sandboxed execution, tool result formatting, token budget management for tool outputs.
+- **Decision taxonomy**: Auto-classify every committed decision along three dimensions -- intent (question, decision, analysis, comparison), category (technical, strategic, creative, factual), and genus (domain-specific tags extracted from content). Classification happens during COMMIT via a lightweight model call. Stored as structured metadata on Decision records. Enables filtering, grouping, and the 3D Decision Space visualization in v0.4.
 - **DECOMPOSE phase**: Strong model breaks complex queries into subtasks with dependencies
 - **Sequential + parallel subtask consensus**: Each subtask runs its own debate loop, subtask results flow as context to dependents
 - **Synthesis phase**: Final rollup of all subtask decisions
@@ -289,6 +291,11 @@ All -> 24 (Docker) -> 25 (docs)
 
 #### Acceptance Criteria
 
+- [ ] Models can invoke web search during PROPOSE/CHALLENGE to ground claims in current data
+- [ ] Code execution tool available in sandboxed environment for verifying calculations/assumptions
+- [ ] Tool results visible in thread history (who searched what, what code ran, what results came back)
+- [ ] Every committed decision is auto-classified with intent, category, and genus tags
+- [ ] `duh threads --category technical` and `duh recall --intent decision` filter by taxonomy
 - [ ] Complex queries decompose into 2-7 subtasks automatically
 - [ ] Subtask results flow as context to dependent subtasks
 - [ ] `duh feedback` records and `duh recall` surfaces outcome data
@@ -298,19 +305,23 @@ All -> 24 (Docker) -> 25 (docs)
 
 #### Tasks
 
-1. Task decomposition engine (DECOMPOSE state handler)
-2. Subtask dependency resolver and execution scheduler
-3. Synthesis phase (roll up subtask commitments)
-4. Outcome model + repository methods
-5. Outcome injection into context builder
-6. Google Gemini provider adapter
-7. Voting decision protocol (parallel to consensus)
-8. Task type classifier (reasoning vs. judgment) for protocol selection
-9. Structured output support in provider interface
-10. Challenge prompt iteration based on v0.1 sycophancy data
-11. Unit tests for every new function (decomposer, scheduler, synthesis, outcome repo, voting protocol, classifier, Gemini adapter)
-12. Integration tests: full decomposition-to-synthesis loop, outcome feedback round-trip, voting vs consensus comparison
-13. Documentation updates
+1. Tool registry and execution framework (tool definition protocol, sandboxed code runner, web search adapter)
+2. Tool integration into consensus handlers (tool calls during PROPOSE/CHALLENGE/REVISE, result injection, token budget for tool outputs)
+3. Decision taxonomy model and classifier (intent/category/genus schema, lightweight LLM classification at COMMIT, DB migration)
+4. Taxonomy-aware filtering in CLI (`--intent`, `--category`, `--genus` flags on `threads` and `recall`)
+5. Task decomposition engine (DECOMPOSE state handler)
+6. Subtask dependency resolver and execution scheduler
+7. Synthesis phase (roll up subtask commitments)
+8. Outcome model + repository methods
+9. Outcome injection into context builder
+10. Google Gemini provider adapter
+11. Voting decision protocol (parallel to consensus)
+12. Task type classifier (reasoning vs. judgment) for protocol selection
+13. Structured output support in provider interface
+14. Challenge prompt iteration based on v0.1 sycophancy data
+15. Unit tests for every new function (tool registry, tool execution, taxonomy classifier, decomposer, scheduler, synthesis, outcome repo, voting protocol, classifier, Gemini adapter)
+16. Integration tests: tool-augmented consensus loop, taxonomy classification accuracy, full decomposition-to-synthesis loop, outcome feedback round-trip, voting vs consensus comparison
+17. Documentation updates
 
 ---
 
@@ -367,6 +378,7 @@ All -> 24 (Docker) -> 25 (docs)
 - **Web UI**: Real-time consensus visualization (the flagship demo experience)
 - **Thread browser**: Search, filter, browse past threads and decisions
 - **Decision explorer**: Drill into any decision's reasoning, dissent, outcome history
+- **3D Decision Space**: Interactive 3D visualization plotting all decisions across three axes -- time (when), category (what kind), and genus (what domain). Renders as a navigable point cloud where each node is a decision. Click to drill in. Zoom to see clusters. Rotate to discover patterns. Reveals how your thinking evolves over time, which domains you revisit most, and where your blind spots are. Built with Three.js or similar WebGL library. Filter by intent, category, genus, confidence, cost. Color-code by outcome (if tracked). Animated timeline mode shows decisions appearing chronologically.
 - **Share links**: Read-only links to specific threads/decisions
 - **User preferences**: Default models, cost thresholds, consensus depth
 - **Mobile-responsive design**
@@ -378,6 +390,8 @@ All -> 24 (Docker) -> 25 (docs)
 - [ ] Web UI shows real-time consensus with streaming from each model
 - [ ] Thread history browsable and searchable
 - [ ] Decisions show full provenance (who proposed, who challenged, how resolved, dissent)
+- [ ] 3D Decision Space renders all decisions with time, category, and genus axes
+- [ ] Decision Space is interactive: click nodes, filter by taxonomy, animate timeline
 - [ ] Share links work without authentication (read-only)
 - [ ] `docker compose up` serves web UI + API in under 2 minutes
 - [ ] `try.duh.dev` live and rate-limited
@@ -388,14 +402,17 @@ All -> 24 (Docker) -> 25 (docs)
 2. Real-time consensus display component (WebSocket-driven)
 3. Thread browser with search and filtering
 4. Decision detail view with debate provenance
-5. Share link generation and read-only viewer
-6. User preferences UI and persistence
-7. Responsive layout for mobile
-8. Docker Compose configuration for web + API + optional Postgres
-9. Hosted demo deployment (try.duh.dev)
-10. Unit tests for all frontend components, WebSocket handlers, share link logic
-11. E2E tests: full flow from question input to consensus display to share link
-12. Documentation: self-hosting guide
+5. 3D Decision Space renderer (Three.js/WebGL point cloud, axis mapping, camera controls)
+6. Decision Space interaction layer (click-to-detail, taxonomy filtering, timeline animation, confidence/outcome coloring)
+7. Decision Space API endpoint (aggregated decision data with taxonomy, optimized for rendering)
+8. Share link generation and read-only viewer
+9. User preferences UI and persistence
+10. Responsive layout for mobile (Decision Space degrades to 2D scatter on small screens)
+11. Docker Compose configuration for web + API + optional Postgres
+12. Hosted demo deployment (try.duh.dev)
+13. Unit tests for all frontend components, WebSocket handlers, share link logic, Decision Space data transforms
+14. E2E tests: full flow from question input to consensus display to share link, Decision Space renders with real data
+15. Documentation: self-hosting guide
 
 ---
 
@@ -477,7 +494,7 @@ These features were deliberately deferred from 1.0 per the devil's advocate's ch
 | Feature | Description | AI-Time |
 |---------|-------------|---------|
 | **Federated Knowledge Sharing** | Navigator protocol, peer-to-peer decision sharing, privacy controls, trust signals | 10-15 days |
-| **Browsable Knowledge Base** | Web interface over accumulated decisions, category/tag system, quality indicators | 6-10 days |
+| **Browsable Knowledge Base** | Web interface over accumulated decisions, extends 3D Decision Space with full-text search and quality indicators | 6-10 days |
 | **Fact-Checking Mode** | Structured claim decomposition, multi-model verification, citation tracking | 5-8 days |
 | **Research Mode** | Extended multi-model investigation, iterative deepening, exportable reports | 5-8 days |
 | **Navigator Auto-Discovery** | Automatic discovery of navigator nodes on the network | 3-5 days |
@@ -787,6 +804,9 @@ Surfaced by the team and not yet resolved:
 |---------|--------------|-------|
 | Dissent preservation as structured data | **Novel** | v0.1 |
 | Persistent knowledge accumulation from consensus | **Novel** | v0.1 |
+| Tool-augmented consensus (models search/execute during debate) | **Novel** | v0.2 |
+| Decision taxonomy (auto-classified intent/category/genus) | **Novel** | v0.2 |
+| 3D Decision Space visualization (time x category x genus) | **Strongly novel** | v0.4 |
 | Federated knowledge sharing (navigator protocol) | **Strongly novel** | Post-1.0 |
 | Browsable debate-as-content knowledge base | **Novel** | Post-1.0 |
 | Outcome tracking on AI consensus decisions | **Novel** | v0.2 |
@@ -811,7 +831,10 @@ Surfaced by the team and not yet resolved:
 ```
                     duh   LangGraph  CrewAI  AutoGen  MoA   Perplexity
 Multi-model debate   Y      N         N       N       Y*      N
+Tool-augmented       0.2    ~         ~       ~       N       Y
 Persistent memory    Y      ~         ~       ~       N       ~
+Decision taxonomy    0.2    N         N       N       N       N
+3D Decision Space    0.4    N         N       N       N       N
 Dissent preserved    Y      N         N       N       N       N
 Federated sharing    2.0    N         N       N       N       N
 Outcome tracking     Y      N         N       N       N       N
@@ -830,6 +853,7 @@ Y = yes, N = no, ~ = partial, * = research only, not product
 |------|---------|---------|
 | 2026-02-15 | 1.0 | Initial roadmap synthesized from agent team |
 | 2026-02-15 | 1.1 | Recalibrated timelines to AI-time. Added Testing Mandate. Added Self-Building Milestone. Elevated testing from afterthought to first-class development constraint. |
+| 2026-02-16 | 1.2 | Added tool-augmented consensus (v0.2) and decision taxonomy (v0.2). Added 3D Decision Space visualization (v0.4). Updated competitive gap analysis. |
 
 ---
 
