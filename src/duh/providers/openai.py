@@ -67,6 +67,19 @@ _DEFAULT_CAPS = (
     | ModelCapability.JSON_MODE
 )
 
+# Reasoning models that don't support temperature, top_p, or
+# presence/frequency penalty.  Only temperature=1 (the default) is accepted.
+# Chat-class models (gpt-5.2, gpt-5-chat-latest, gpt-4.1) DO support these.
+# See: https://community.openai.com/t/temperature-in-gpt-5-models/1337133
+_NO_TEMPERATURE_MODELS = {
+    "o3",
+    "o3-mini",
+    "o4-mini",
+    "gpt-5",
+    "gpt-5-mini",
+    "gpt-5-nano",
+}
+
 
 def _map_error(e: openai.APIError) -> Exception:
     """Map OpenAI SDK errors to duh error hierarchy."""
@@ -162,10 +175,11 @@ class OpenAIProvider:
 
         kwargs: dict[str, Any] = {
             "model": model_id,
-            "max_tokens": max_tokens,
-            "temperature": temperature,
+            "max_completion_tokens": max_tokens,
             "messages": api_messages,
         }
+        if model_id not in _NO_TEMPERATURE_MODELS:
+            kwargs["temperature"] = temperature
         if stop_sequences:
             kwargs["stop"] = stop_sequences
         if response_format == "json":
@@ -233,11 +247,12 @@ class OpenAIProvider:
 
         kwargs: dict[str, Any] = {
             "model": model_id,
-            "max_tokens": max_tokens,
-            "temperature": temperature,
+            "max_completion_tokens": max_tokens,
             "messages": api_messages,
             "stream_options": {"include_usage": True},
         }
+        if model_id not in _NO_TEMPERATURE_MODELS:
+            kwargs["temperature"] = temperature
         if stop_sequences:
             kwargs["stop"] = stop_sequences
 
@@ -269,7 +284,7 @@ class OpenAIProvider:
         try:
             await self._client.chat.completions.create(
                 model="gpt-5-mini",
-                max_tokens=1,
+                max_completion_tokens=1,
                 messages=[{"role": "user", "content": "ping"}],
             )
         except Exception:

@@ -246,7 +246,7 @@ class TestSend:
         )
         call_kwargs = client.chat.completions.create.call_args.kwargs
         assert call_kwargs["model"] == "gpt-5.2"
-        assert call_kwargs["max_tokens"] == 1000
+        assert call_kwargs["max_completion_tokens"] == 1000
         assert call_kwargs["temperature"] == 0.3
         assert call_kwargs["stop"] == ["STOP"]
         # System message stays in messages array for OpenAI

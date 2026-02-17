@@ -270,3 +270,15 @@
 - README and MkDocs documentation updated
 - Version bumped to 0.2.0
 - **Final count: 1093 tests, 39 source files, 4 providers**
+
+---
+
+## Post-v0.2 Polish
+
+### 2026-02-16: Subtask Progress Display
+- Threaded `ConsensusDisplay` through the decompose scheduler for real-time subtask progress
+- Added `subtask_header()` and `subtask_footer()` to `ConsensusDisplay`
+- Added `display` param to `_run_mini_consensus()`, `_execute_subtask()`, `schedule_subtasks()`
+- Each subtask now shows PROPOSE/CHALLENGE/REVISE/COMMIT panels with model names and spinners
+- Added `cost: float` field to `SubtaskResult` for per-subtask cost tracking
+- Files: `src/duh/consensus/scheduler.py`, `src/duh/cli/display.py`, `src/duh/cli/app.py`

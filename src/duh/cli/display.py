@@ -210,6 +210,36 @@ class ConsensusDisplay:
 
     # ── Decomposition ─────────────────────────────────────────
 
+    def subtask_header(
+        self,
+        label: str,
+        index: int,
+        total: int,
+        deps: Sequence[str],
+    ) -> None:
+        """Print a header for a subtask about to execute."""
+        title = f"[bold]Subtask {index}/{total}: {label}[/bold]"
+        if deps:
+            title += f" (needs: {', '.join(deps)})"
+        self._console.print()
+        self._console.rule(title, style="magenta")
+
+    def subtask_footer(
+        self,
+        label: str,
+        index: int,
+        total: int,
+        cost: float,
+    ) -> None:
+        """Print a footer after a subtask completes."""
+        elapsed = self.elapsed
+        parts = [
+            f"Subtask {index}/{total}",
+            f"${cost:.4f}",
+            f"{elapsed:.1f}s",
+        ]
+        self._console.print(" | ".join(parts), style="dim")
+
     def show_decompose(self, subtask_specs: Sequence[SubtaskSpec]) -> None:
         """Display the decomposition plan showing subtasks and deps."""
         parts: list[str] = []
