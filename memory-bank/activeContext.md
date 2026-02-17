@@ -1,112 +1,96 @@
 # Active Context
 
 **Last Updated**: 2026-02-16
-**Current Phase**: v0.2 COMPLETE. Post-v0.2 polish done. Preparing v0.3.
-**Next Action**: Plan v0.3 task breakdown (REST API, MCP server, Python client).
+**Current Phase**: v0.3 — "It's Accessible"
+**Next Action**: Begin Phase 1 tasks (Mistral adapter, export, batch mode).
 
 ---
 
 ## Current State
 
-- **v0.2 Tasks 1-22 COMPLETE.** All tasks including integration tests, docs, version bump.
+- **v0.2 COMPLETE + post-v0.2 polish merged.** Subtask progress display shipped.
 - **4 providers shipping**: Anthropic (3 models), OpenAI (3 models), Google (4 models) — 10 total.
 - 1093 tests passing, ruff clean, mypy strict clean (39 source files, 4 providers).
 - MkDocs docs site live at https://msitarzewski.github.io/duh/
 - GitHub repo: https://github.com/msitarzewski/duh
+- Branch: `v0.3.0` created from `main`
 
-### v0.2 Features
+## v0.3 Task List
 
-- **Voting protocol** — `duh ask --protocol voting|consensus|auto`, parallel fan-out + majority/weighted aggregation
-- **Decomposition** — `duh ask --decompose`, DECOMPOSE state, topological scheduler, synthesis
-- **Tool-augmented reasoning** — `duh ask --tools`, web search, code execution, file read
-- **Decision taxonomy** — automatic classification at COMMIT time via lightweight model call
-- **Outcome tracking** — `duh feedback <thread_id> --result --notes`, outcome context in future rounds
-- **Feedback CLI** — record real-world outcomes for knowledge accumulation
+### Phase 1: Foundation (independent, parallelizable)
 
-### Post-v0.2 Polish
+1. **Mistral provider adapter** — `src/duh/providers/mistral.py`. Follow OpenAI adapter pattern. Known models: mistral-large, mistral-medium, mistral-small, codestral. Dep: `mistralai>=1.0`. Tests: send, stream, health_check, error mapping, model listing.
+2. **Export formatters + CLI** — `duh export <thread-id> --format json|markdown`. Export full thread with debate history. `src/duh/cli/export.py` or extend `app.py`. Tests: JSON output structure, markdown rendering, missing thread handling.
+3. **Batch mode CLI** — `duh batch questions.txt`. Read questions from file (one per line or JSONL), run consensus on each, output results. `src/duh/cli/batch.py` or extend `app.py`. Tests: file parsing, sequential execution, error handling, output formatting.
 
-- **Subtask progress display** — `ConsensusDisplay` threaded through scheduler; each subtask shows real-time PROPOSE/CHALLENGE/REVISE/COMMIT phases with model names, spinners, and per-subtask cost tracking. Fixes silent execution during `--decompose` runs.
+### Phase 2: API Core
 
-## Phase 0 Benchmark Results (Summary)
+4. **API config schema** — Add `APIConfig` to `src/duh/config/schema.py`: host, port, api_keys list, cors_origins, rate_limit. Extend TOML config with `[api]` section. Tests: defaults, validation, TOML loading.
+5. **FastAPI app + serve command** — `src/duh/api/app.py` (FastAPI app factory), `duh serve` CLI command (runs uvicorn). Deps: `fastapi>=0.115`, `uvicorn[standard]>=0.30`. Lifespan handler for DB + provider setup. Tests: app creation, lifespan, serve command.
+6. **API key model + repository** — `APIKey` SQLAlchemy model (id, key_hash, name, created_at, revoked_at). Repository methods: create_api_key, validate_api_key, revoke_api_key, list_api_keys. Migration `004_v03_api_keys.py`. Tests: CRUD, hash validation, revocation.
+7. **Auth + rate-limit middleware** — API key validation middleware (header `X-API-Key`), rate limiting (per-key, configurable). CORS middleware from config. Tests: valid key, invalid key, revoked key, rate limit enforcement, CORS headers.
 
-- **Consensus vs Direct (head-to-head)**: 47% vs 41% (GPT judge), 88% vs 6% (Opus judge) — consensus wins
-- **Consensus vs Self-Debate**: 76.5% wins (GPT), 52.9% wins (Opus) — cross-model challenge beats self-critique
-- **Dimension scores**: Consensus higher than Direct on all 5 dimensions (accuracy 8.06 vs 7.53, completeness 8.41 vs 7.65, nuance 8.12 vs 7.24, specificity 8.41 vs 7.71, overall 8.06 vs 7.53)
-- **Ensemble** scored slightly higher than Consensus but costs 50% more ($2.34 vs $1.57) and lacks dissent reasoning
-- **Auto-decision said ITERATE** (33% win rate on J/S, below 60% threshold) but that metric measures "ranked #1 out of 4 methods" — head-to-head clearly favors consensus
-- **Manual decision: PROCEED** — the method works, prompts will improve in v0.1
+### Phase 3: REST Endpoints
 
-## v0.1 Task List (ALL DONE)
+8. **POST /api/ask** — Consensus, voting, and decompose protocols via REST. Request body: question, protocol, rounds, decompose, tools. Response: decision, confidence, dissent, cost, thread_id. Reuses `_run_consensus`, `_ask_voting_async`, `_ask_decompose_async` logic. Tests: all three protocols, error responses, cost tracking.
+9. **GET /api/threads + /api/threads/{id}** — List and detail endpoints. Query params: status, limit, offset. Detail includes full debate history (turns, contributions, decisions). Tests: listing, filtering, pagination, prefix matching, 404.
+10. **GET /api/recall + POST /api/feedback + GET /api/models + GET /api/cost** — Remaining CRUD endpoints mirroring CLI. Tests: search, feedback recording, model listing, cost aggregation.
 
-1. ~~Project scaffolding~~ DONE
-2. ~~Core error hierarchy + base types~~ DONE
-3. ~~Provider adapter interface + data classes~~ DONE
-4. ~~Configuration (TOML + Pydantic)~~ DONE
-5. ~~Mock provider + test fixtures~~ DONE
-6. ~~Anthropic adapter~~ DONE
-7. ~~OpenAI adapter (GPT + Ollama via base_url)~~ DONE
-8. ~~Retry with backoff utility~~ DONE
-9. ~~Provider manager~~ DONE
-10. ~~SQLAlchemy models~~ DONE
-11. ~~Memory repository~~ DONE
-12. ~~Consensus state machine~~ DONE
-13. ~~PROPOSE handler~~ DONE
-14. ~~CHALLENGE handler~~ DONE
-15. ~~REVISE handler~~ DONE
-16. ~~COMMIT handler~~ DONE
-17. ~~Convergence detection~~ DONE
-18. ~~Context builder~~ DONE
-19. ~~Summary generator~~ DONE
-20. ~~Integration tests (full loop with mock providers)~~ DONE
-21. ~~Sycophancy test suite~~ DONE
-22. ~~CLI app~~ DONE (Click commands)
-23. ~~CLI display (Rich Live panels)~~ DONE
-24. ~~Docker~~ DONE
-25. ~~Documentation~~ DONE
-26. ~~Google Gemini adapter~~ DONE (added post-v0.1, 22 tests)
+### Phase 4: Streaming
 
-## v0.2 Task List (ALL DONE)
+11. **WebSocket /ws/ask** — Real-time streaming of consensus phases. Client sends question, server streams phase events (propose_start, propose_content, challenge_start, etc.) as JSON messages. Uses existing `stream()` provider methods. Tests: connection lifecycle, message format, error handling, disconnect.
 
-1. ~~Alembic migrations (001 baseline, 002 v0.2 schema)~~ DONE
-2. ~~Structured output (response_format, tools, tool_calls on providers)~~ DONE
-3. ~~JSON extract~~ DONE
-4. ~~Challenge framings (4 types, round-robin)~~ DONE
-5. ~~Tool framework (Tool protocol, ToolRegistry)~~ DONE
-6. ~~Tool-augmented send~~ DONE
-7. ~~Config schema (ToolsConfig, VotingConfig, DecomposeConfig, TaxonomyConfig)~~ DONE
-8. ~~Models + repo (Outcome, Subtask, Vote, taxonomy fields)~~ DONE
-9. ~~Taxonomy at COMMIT~~ DONE
-10. ~~Feedback CLI~~ DONE
-11. ~~Outcome context~~ DONE
-12. ~~Display (show_taxonomy, show_outcome)~~ DONE
-13. ~~DECOMPOSE state + handler~~ DONE
-14. ~~Scheduler (TopologicalSorter)~~ DONE
-15. ~~Synthesis~~ DONE
-16. ~~Decomposition CLI integration~~ DONE
-17. ~~Voting + classifier~~ DONE
-18. ~~Voting CLI + persistence + display~~ DONE
-19. ~~Tool implementations (web_search, code_exec, file_read)~~ DONE
-20. ~~Provider tool call parsing~~ DONE
-21. ~~Tool integration in handlers~~ DONE
-22. ~~Tool CLI setup~~ DONE
-23. ~~Integration tests (Phase 6)~~ DONE
-24. ~~README + docs update~~ DONE
-25. ~~Version bump to 0.2.0~~ DONE
+### Phase 5: MCP Server
 
-## Ready for v0.3
+12. **MCP server implementation** — `src/duh/mcp/server.py`. Expose as MCP tools: `duh_ask` (question, protocol, rounds), `duh_recall` (query, limit), `duh_threads` (status, limit). Direct Python calls (no REST dependency). `duh mcp` CLI command starts the server. Dep: `mcp>=1.0`. Tests: tool schemas, tool execution, error handling.
 
-Key references:
-- **v0.3 scope**: REST API, MCP server, Python client library
-- **Tech stack**: `techContext.md` — FastAPI (likely), MCP SDK
-- **Architecture**: `decisions.md` — all foundational decisions documented
-- **Patterns**: Handler pattern, Tool protocol, provider adapter pattern all established in v0.1/v0.2
+### Phase 6: Python Client
 
-### Phase 0 Artifacts That Feed v0.1
+13. **Python client library** — `duh-client` package (separate `pyproject.toml` in `client/` or top-level). Wraps REST API. `DuhClient` class: ask(), recall(), threads(), show(), feedback(), models(), cost(). Async and sync interfaces. Dep: `httpx>=0.27`. Tests: all methods, error handling, auth header.
 
-- **Validated prompts** from `phase0/prompts.py` — especially the forced disagreement challenger prompt, will seed `src/duh/consensus/` challenge framings
-- **Question corpus** from `phase0/questions.json` — reusable for sycophancy test suite in v0.1
-- **Model client patterns** from `phase0/models.py` — async wrapper, retry, cost tracking patterns inform provider adapter design
-- **Cost data** from benchmark — informs default cost thresholds and warnings
+### Phase 7: Quality + Ship
+
+14. **Integration tests** — API end-to-end (full consensus via REST), WebSocket streaming, MCP tool invocation, client library against test server, batch processing, export round-trip.
+15. **Documentation** — MkDocs pages: API reference (OpenAPI), Python client quickstart, MCP server guide, batch mode guide, export guide. Update README.
+16. **Alembic migration for API keys** — `004_v03_api_keys.py` (if not done in T6).
+17. **Version bump to 0.3.0** — `pyproject.toml`, `__init__.py`, CHANGELOG, README badge.
+
+### Dependency Graph
+
+```
+Phase 1 (independent):  T1, T2, T3
+
+Phase 2 (sequential):   T4 → T5 → T6 → T7
+
+Phase 3 (after T5+T7):  T8, T9, T10
+
+Phase 4 (after T5+T7):  T11
+
+Phase 5 (after T1):     T12
+
+Phase 6 (after T8-T10): T13
+
+Phase 7 (after all):    T14 → T15 → T17
+```
+
+### New Dependencies
+
+| Package | Version | Purpose |
+|---------|---------|---------|
+| `fastapi` | `>=0.115` | REST API framework |
+| `uvicorn[standard]` | `>=0.30` | ASGI server |
+| `httpx` | `>=0.27` | Python client HTTP |
+| `mistralai` | `>=1.0` | Mistral provider SDK |
+| `mcp` | `>=1.0` | MCP server SDK |
+
+## Key Architecture Decisions for v0.3
+
+- **MCP server calls Python directly** — no REST dependency. `duh mcp` starts standalone.
+- **REST API reuses existing async functions** — `_run_consensus`, `_ask_voting_async`, etc. are already protocol-agnostic. FastAPI endpoints wrap them.
+- **WebSocket uses existing `stream()` methods** — all 4 providers already implement streaming. WS endpoint orchestrates phase-level events.
+- **API keys are local-only** — hashed in SQLite/Postgres, no external auth service. Simple `X-API-Key` header.
+- **Mistral adapter follows OpenAI pattern** — both are chat completion APIs with similar shapes.
+- **Client library is a thin REST wrapper** — async httpx under the hood, sync convenience wrappers.
 
 ## Open Questions (Still Unresolved)
 
@@ -114,5 +98,5 @@ Key references:
 - Output licensing for multi-provider synthesized content
 - Vector search solution for SQLite (sqlite-vss vs ChromaDB vs FAISS) — v1.0 decision
 - Hosted demo economics — v0.4 decision
-- ~~Whether DECOMPOSE should itself be a consensus operation~~ RESOLVED: No, decomposition is single-model (simpler, sufficient)
-- ~~Testing framework~~ RESOLVED: pytest + pytest-asyncio, asyncio_mode=auto
+- Client library packaging: monorepo `client/` dir vs separate repo?
+- MCP server transport: stdio vs SSE vs streamable HTTP?

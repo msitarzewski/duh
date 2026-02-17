@@ -4,7 +4,7 @@
 - [projectbrief.md](./projectbrief.md) — Vision, tenets, architecture, build sequence
 - [techContext.md](./techContext.md) — Tech stack decisions with rationale (Python, Docker, SQLAlchemy, tools, etc.)
 - [decisions.md](./decisions.md) — Architectural decisions with context, alternatives, and consequences (15 ADRs)
-- [activeContext.md](./activeContext.md) — Current state, v0.2 complete, preparing v0.3
+- [activeContext.md](./activeContext.md) — Current state, v0.3 in progress, 17 tasks across 7 phases
 - [progress.md](./progress.md) — Milestone tracking, what's built, what's next
 - [competitive-landscape.md](./competitive-landscape.md) — Research on existing tools, frameworks, and academic work
 - [quick-start.md](./quick-start.md) — Session entry point, v0.3 readiness, key file references

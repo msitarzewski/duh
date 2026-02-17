@@ -127,8 +127,26 @@ Pass thread summary + recent raw turns + current task context to models each rou
 
 - `duckduckgo-search>=7.0` — web search tool implementation
 
+## Planned Dependencies (v0.3)
+
+- `fastapi>=0.115` — REST API framework, OpenAPI spec auto-generation
+- `uvicorn[standard]>=0.30` — ASGI server for `duh serve`
+- `httpx>=0.27` — async HTTP client for Python client library
+- `mistralai>=1.0` — Mistral provider SDK (5th cloud provider)
+- `mcp>=1.0` — MCP server SDK for AI agent integration
+
+## v0.3 Architecture
+
+- **REST API**: FastAPI app factory at `src/duh/api/app.py`, reuses existing async consensus functions
+- **WebSocket**: Phase-level streaming events during consensus for web clients
+- **API auth**: Local API keys, hashed in SQLite/Postgres, `X-API-Key` header
+- **MCP server**: Direct Python calls (no REST dependency), `duh mcp` CLI command
+- **Python client**: `duh-client` package wrapping REST API, async httpx + sync wrappers
+- **Mistral adapter**: Follows OpenAI adapter pattern at `src/duh/providers/mistral.py`
+
 ## Not Yet Decided
 
-- API design for web/MCP/A2A interfaces (v0.3)
 - Network protocol for federated sharing (post-1.0)
 - Vector search solution for SQLite (v1.0)
+- Client library packaging: monorepo `client/` dir vs separate repo
+- MCP server transport: stdio vs SSE vs streamable HTTP

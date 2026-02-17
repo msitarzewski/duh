@@ -4,7 +4,7 @@
 
 ---
 
-## Current State: v0.2 COMPLETE — 4 Providers, 1093 Tests, 39 Source Files
+## Current State: v0.3 IN PROGRESS — 5 Providers, REST API + MCP + Client
 
 ### What's Built
 
@@ -81,3 +81,5 @@ Phase 0 benchmark framework — fully functional, pilot-tested on 5 questions.
 | 2026-02-16 | v0.2 Phase 6 — Integration tests, README, version bump to 0.2.0 | Done |
 | 2026-02-16 | v0.2.0 — "It Thinks Deeper" | **Complete** |
 | 2026-02-16 | Subtask progress display (decompose scheduler) | Done |
+| 2026-02-16 | v0.3 task breakdown planned (17 tasks, 7 phases) | Done |
+| 2026-02-16 | v0.3.0 branch created from main | Done |

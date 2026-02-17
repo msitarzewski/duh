@@ -6,28 +6,41 @@
 
 ## Where We Are
 
-**v0.2 COMPLETE** — Voting, decomposition, tool-augmented reasoning, taxonomy, outcome tracking all shipped.
+**v0.3 IN PROGRESS** — "It's Accessible". REST API, MCP server, Python client, Mistral adapter.
 
 - 1093 tests, 39 source files, 4 providers (Anthropic, OpenAI, Google, local via Ollama)
-- Version 0.2.0, mypy strict clean, ruff clean
+- Version 0.2.0 shipping, v0.3 branch active
 - MkDocs docs live at https://msitarzewski.github.io/duh/
 - GitHub repo: https://github.com/msitarzewski/duh
+- Branch: `v0.3.0`
 
-## Starting v0.3
+## Starting a v0.3 Session
 
 Load these files:
-1. `activeContext.md` — current state, v0.2 feature list, open questions
-2. `roadmap.md:267+` — v0.3 spec (REST API, MCP server, Python client)
-3. `techContext.md` — tech stack + v0.2 additions
-4. `decisions.md` — 15 ADRs, all foundational + v0.2 decisions documented
-5. `progress.md` — milestone history through v0.2
+1. `activeContext.md` — v0.3 task list (17 tasks, 7 phases), dependency graph, architecture decisions
+2. `roadmap.md:330+` — v0.3 spec (REST API, MCP server, Python client)
+3. `techContext.md` — tech stack + v0.2 additions + v0.3 new deps
+4. `decisions.md` — 15 ADRs, all foundational + v0.2 decisions
 
-### v0.3 Likely Scope
+### v0.3 Task Phases
 
-- REST API (FastAPI)
-- MCP server
-- Python client library
-- Possibly: WebSocket streaming, API auth
+| Phase | Tasks | Status |
+|-------|-------|--------|
+| Phase 1: Foundation | T1 Mistral, T2 Export, T3 Batch | Pending |
+| Phase 2: API Core | T4 Config, T5 FastAPI, T6 API Keys, T7 Auth | Pending |
+| Phase 3: REST Endpoints | T8 /ask, T9 /threads, T10 /recall+more | Pending |
+| Phase 4: Streaming | T11 WebSocket | Pending |
+| Phase 5: MCP | T12 MCP Server | Pending |
+| Phase 6: Client | T13 duh-client | Pending |
+| Phase 7: Ship | T14 Integration tests, T15 Docs, T17 Version bump | Pending |
+
+### Key Architecture Patterns to Follow
+
+- **Provider adapter**: `src/duh/providers/openai.py` — template for Mistral adapter
+- **CLI command**: `src/duh/cli/app.py` — Click commands, async wrappers
+- **Config schema**: `src/duh/config/schema.py` — Pydantic models with defaults
+- **Repository**: `src/duh/memory/repository.py` — async CRUD, flush-not-commit
+- **Consensus loop**: `src/duh/cli/app.py:150-252` — `_run_consensus()` reusable for REST
 
 ## Project Commands
 
@@ -45,6 +58,12 @@ duh show <thread_id>                       # show thread details
 duh models                                 # list available models
 duh cost                                   # show cost summary
 
+# v0.3 CLI (planned)
+duh serve                                  # start REST API server
+duh mcp                                    # start MCP server
+duh batch questions.txt                    # batch mode
+duh export <thread_id> --format json       # export thread
+
 # Development
 uv sync                                    # install deps
 uv run pytest tests/ -v                    # run all tests
@@ -52,15 +71,9 @@ uv run mypy src/duh/                       # type check
 uv run ruff check --fix src/ tests/        # lint + fix
 uv run ruff format src/ tests/             # format
 uv run alembic upgrade head                # run migrations
-
-# Phase 0 (benchmark — already built)
-uv run python -m phase0.runner --pilot --budget small
-uv run python -m phase0.runner --budget full
-uv run python -m phase0.judge --budget full
-uv run python -m phase0.analyze
 ```
 
-## Key Files (v0.2)
+## Key Files (v0.2 — extend for v0.3)
 
 | Area | Files |
 |------|-------|
@@ -76,15 +89,11 @@ uv run python -m phase0.analyze
 | Core | `src/duh/core/errors.py`, `src/duh/core/retry.py` |
 | Migrations | `alembic/versions/001_v01_baseline.py`, `002_v02_schema.py`, `003_v02_votes.py` |
 
-### Key Patterns From Phase 0 to Reuse
+### v0.3 New File Areas
 
-- `phase0/models.py` — async client pattern, retry with backoff, normalized response
-- `phase0/prompts.py` — forced disagreement challenger prompt (seed for consensus challenge framings)
-- `phase0/config.py` — Pydantic config, cost tracking per model
-- `phase0/questions.json` — reusable as sycophancy test corpus
-
-### Things NOT to Carry Forward From Phase 0
-
-- Phase 0 is a benchmark script, not product code. Don't extend it — build from `src/duh/` layout.
-- Phase 0's `ModelClient` is a monolith. v0.1+ uses per-provider adapters behind a `Protocol`.
-- Phase 0 has no tests. v0.1+ has test-alongside mandate.
+| Area | Files (planned) |
+|------|-------|
+| REST API | `src/duh/api/app.py`, `src/duh/api/routes/`, `src/duh/api/middleware.py` |
+| MCP Server | `src/duh/mcp/server.py` |
+| Mistral | `src/duh/providers/mistral.py` |
+| Client | `client/` or `src/duh_client/` |
