@@ -1,0 +1,5 @@
+export { api } from './client'
+export { ConsensusWebSocket } from './websocket'
+export type { WSStatus, ConsensusWSOptions } from './websocket'
+export { ApiError } from './types'
+export type * from './types'

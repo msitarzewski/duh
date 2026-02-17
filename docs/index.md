@@ -34,6 +34,7 @@ If challenges in consecutive rounds are too similar (Jaccard similarity >= 0.7),
 - **Voting protocol** -- Fan out a question to all models in parallel and aggregate the best answer (majority or weighted)
 - **Query decomposition** -- Break complex questions into subtask DAGs, solve each with consensus, and synthesize a final answer
 - **Tool-augmented reasoning** -- Models can use web search, code execution, and file read during PROPOSE and CHALLENGE phases
+- **Web UI** -- Browser-based interface with real-time WebSocket streaming, thread browser, and 3D Decision Space visualization
 - **REST API** -- Full HTTP API via `duh serve` with authentication, rate limiting, and WebSocket streaming
 - **MCP server** -- Run as a Model Context Protocol server for AI agent integration via `duh mcp`
 - **Python client** -- Async and sync client library for the REST API (`pip install duh-client`)
@@ -64,6 +65,7 @@ duh ask "What database should I use for a new SaaS product?"
 - [How Consensus Works](concepts/how-consensus-works.md) -- The 4-phase protocol explained
 - [CLI Reference](cli/index.md) -- All commands and options
 - [REST API](api-reference.md) -- HTTP API reference
+- [Web UI](web-quickstart.md) -- Browser interface with real-time streaming and 3D visualization
 - [Python Client](python-client.md) -- Client library for the REST API
 - [MCP Server](mcp-server.md) -- AI agent integration
 - [Python API](python-api/library-usage.md) -- Use duh as a library

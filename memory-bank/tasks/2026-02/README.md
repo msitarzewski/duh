@@ -366,3 +366,99 @@
 ### 2026-02-16: Version Bump to 0.3.0 (T17)
 - Updated `pyproject.toml` version to 0.3.0
 - **Final count: 1318 tests, 50 source files, 5 providers**
+
+---
+
+## v0.4 Development — "It Has a Face"
+
+### 2026-02-17: Web UI Implementation (Full)
+- React 19 + Vite 6 + Tailwind 4 + TypeScript frontend in `web/`
+- 66 frontend source files across theme, API, stores, components, pages
+- See: [170217_v04-web-ui.md](./170217_v04-web-ui.md) for full file listing
+
+### 2026-02-17: Design System
+- CSS custom properties in `web/src/theme/duh-theme.css` (colors, glass, typography, transitions)
+- 9+ animation keyframes in `web/src/theme/animations.css`
+- Glassmorphism components: GlassPanel, GlowButton, Badge, Skeleton, ErrorBoundary
+- ParticleField (canvas), GridOverlay (SVG circuit board)
+
+### 2026-02-17: API Client + Stores
+- Typed fetch client (`web/src/api/client.ts`) for all REST endpoints
+- ConsensusWebSocket class (`web/src/api/websocket.ts`) with event callbacks
+- 4 Zustand stores: consensus (WebSocket state machine), threads (list/detail/search), decision-space (filters/hover/timeline), preferences (localStorage persist)
+
+### 2026-02-17: Pages + Components
+- **Consensus**: QuestionInput, PhaseCard, StreamingText, ConfidenceMeter, DissentBanner, ConsensusComplete, ModelBadge, CostTicker
+- **Threads**: ThreadBrowser, ThreadCard, ThreadSearch, ThreadFilters, ThreadDetail, TurnCard
+- **Decision Space**: DecisionSpace (3D/2D switch), Scene3D (lazy R3F), DecisionCloud (InstancedMesh), GridFloor, FilterPanel, TimelineSlider, ScatterFallback (2D SVG)
+- **Preferences**: PreferencesPanel (rounds, protocol, cost, sound)
+- **Layout**: Shell (sidebar + content), Sidebar (nav + mobile), TopBar (health indicator)
+- **Shared**: GlassPanel, GlowButton, Badge, Skeleton, ErrorBoundary, GridOverlay, ParticleField, PageTransition
+
+### 2026-02-17: Backend Additions
+- `GET /api/decisions/space` — filtered decision data for 3D viz (category, genus, outcome, confidence, date range, search)
+- `GET /api/share/{share_token}` — public share link (no auth required)
+- `_mount_frontend()` in api/app.py — serves web/dist/ with SPA fallback
+- Auth middleware: non-API path bypass for frontend static files
+- Repository: `get_all_decisions_for_space()` with join/filter/eager loading
+
+### 2026-02-17: Docker
+- Multi-stage Dockerfile with Node.js 22 frontend build
+- Copies web/dist/ into runtime image
+- docker-compose.yml: port 8080, GOOGLE_API_KEY + MISTRAL_API_KEY env vars
+- Default CMD: `serve --host 0.0.0.0 --port 8080`
+
+### 2026-02-17: Animations + Polish (T14)
+- PageTransition wrapper component (fade-in-up on mount)
+- GlowButton: hover scale(1.02), active scale(0.98)
+- GlassPanel: hover glow intensification
+- ThreadCard: hover lift (-translate-y-0.5)
+- Badge: scale-in entrance animation
+- Sidebar: active state glow, hover transitions
+- Skeleton: shimmer gradient animation
+- ConfidenceMeter: animated stroke-dashoffset fill-in on mount
+- DecisionCloud: smooth lerp scale transitions on hover/select
+- FilterPanel: active:scale-95 + glow on toggle buttons
+- TimelineSlider: hover scale + glow on thumb
+
+### 2026-02-17: Vitest Unit Tests (T17)
+- `web/vitest.config.ts` — happy-dom environment, React plugin, path aliases
+- `web/src/test-setup.ts` — jest-dom matchers + localStorage polyfill
+- 5 test files, 117 tests:
+  - `shared-components.test.tsx` (34) — GlassPanel, GlowButton, Badge, Skeleton, ErrorBoundary
+  - `stores.test.ts` (29) — consensus, threads, preferences, decision-space stores
+  - `api-client.test.ts` (15) — all API endpoints + error handling
+  - `websocket.test.ts` (13) — ConsensusWebSocket lifecycle, events, reconnection
+  - `consensus-components.test.tsx` (26) — ModelBadge, ConfidenceMeter, CostTicker, StreamingText
+
+### 2026-02-17: Documentation (T19)
+- `docs/web-ui.md` — full web UI reference (architecture, pages, design system, 3D viz)
+- `docs/web-quickstart.md` — getting started (prerequisites, quick start, dev setup, Docker)
+- Updated `mkdocs.yml` — added "Web UI" nav section
+- Updated `docs/index.md` — added web UI feature mention
+
+### 2026-02-17: Version Bump to 0.4.0 (T21)
+- Updated pyproject.toml, src/duh/__init__.py, src/duh/api/app.py
+- **Final count: 1318 Python tests + 117 Vitest tests = 1435 total, 50 Python + 66 frontend = 116 source files**
+
+---
+
+## Post-v0.4 Polish
+
+### 2026-02-17: Markdown Rendering
+- Created `web/src/components/shared/Markdown.tsx` — shared markdown renderer
+- react-markdown + remark-gfm (GFM tables, task lists, strikethrough)
+- rehype-highlight + highlight.js (github-dark-dimmed theme, 180+ languages)
+- Mermaid diagram support — lazy-loaded via dynamic `import('mermaid')` (498KB separate chunk)
+- Custom renderers: inline code (cyan on glass), pre blocks (dark glass panel), tables (styled borders)
+- `.duh-prose` CSS typography class in `animations.css`
+- Updated 5 components to render LLM content as markdown: ConsensusComplete, PhaseCard, TurnCard, DissentBanner
+- Main bundle: 617KB (up from 278KB due to react-markdown + highlight.js)
+
+### 2026-02-17: Light/Dark Mode Theme System
+- Defined all 22 CSS custom properties in `web/src/theme/duh-theme.css`
+- Dark theme (default) in `:root`
+- Light theme via `@media (prefers-color-scheme: light)` — automatic OS detection
+- Manual override classes: `.theme-dark` / `.theme-light` on any ancestor element
+- Light mode code block overrides in `animations.css`
+- Variables: backgrounds (5), text (3), primary accent, semantic colors (3), borders (3), glass (2), layout (3), typography (1)

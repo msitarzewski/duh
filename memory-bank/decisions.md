@@ -1,6 +1,6 @@
 # Architectural Decisions
 
-**Last Updated**: 2026-02-16
+**Last Updated**: 2026-02-17
 
 ---
 
@@ -212,3 +212,101 @@
 - Post-hoc batch classification (delayed, loses real-time value)
 **Consequences**: Taxonomy is automatic and accurate. One additional cheap model call per decision. Structured metadata enables filtering, analytics, and outcome correlation.
 **References**: `src/duh/consensus/handlers.py` (`handle_commit(classify=True)`, `_classify_decision()`)
+
+---
+
+## 2026-02-16: MCP Server Calls Python Directly (No REST Dependency)
+
+**Status**: Approved
+**Context**: v0.3 adds both a REST API and an MCP server. The MCP server could either call the REST API or import Python functions directly.
+**Decision**: MCP server imports and calls Python functions directly (e.g., `_run_consensus`, `_ask_voting_async`). No REST dependency. `duh mcp` starts standalone without needing `duh serve`.
+**Alternatives**:
+- MCP wraps REST API (simpler, but adds network hop and requires running server)
+- Shared library extracted (premature abstraction at this stage)
+**Consequences**: MCP server is independently deployable. No latency overhead from REST round-trip. Both REST and MCP share the same underlying async functions. One fewer failure mode.
+**References**: `src/duh/mcp/server.py`, `src/duh/cli/app.py`
+
+---
+
+## 2026-02-16: API Keys Local-Only (Hashed in SQLite/Postgres)
+
+**Status**: Approved
+**Context**: v0.3 REST API needs authentication. Options: JWT tokens, OAuth, or simple API keys.
+**Decision**: Local API keys hashed with SHA-256, stored in the same database (SQLite/Postgres). `X-API-Key` header. No external auth provider. Keys created/revoked via CLI or API.
+**Alternatives**:
+- JWT tokens (more complex, needs secret management, overkill for single-instance)
+- OAuth (requires external provider, adds significant complexity)
+- No auth (insecure for any non-localhost deployment)
+**Consequences**: Simple, self-contained auth. No external dependencies. Works with SQLite and Postgres. Rate limiting per key. Migration `004_v03_api_keys.py` adds the table.
+**References**: `src/duh/api/middleware.py`, `src/duh/memory/models.py` (APIKey model)
+
+---
+
+## 2026-02-17: React Embedded in FastAPI (Single Origin)
+
+**Status**: Approved
+**Context**: v0.4 adds a web UI. Options: separate frontend service, or embed the built frontend in FastAPI.
+**Decision**: Vite builds to `web/dist/`, FastAPI mounts as static files with SPA fallback. Single origin in production — no CORS issues, no separate deployment. Dev mode uses Vite's proxy to forward /api and /ws to FastAPI on :8080.
+**Alternatives**:
+- Separate frontend service (adds deployment complexity, CORS configuration, two processes)
+- Server-side rendering with Jinja2 (loses React ecosystem, harder real-time updates)
+- HTMX (simpler but insufficient for 3D visualization and complex interactivity)
+**Consequences**: Single `duh serve` command serves everything. Docker deployment is one container. No CORS in production. Dev experience: two terminals (Vite :3000 + FastAPI :8080) with proxy.
+**References**: `src/duh/api/app.py` (`_mount_frontend()`), `web/vite.config.ts` (proxy config)
+
+---
+
+## 2026-02-17: Three.js via React Three Fiber (Code-Split)
+
+**Status**: Approved
+**Context**: The 3D Decision Space visualization needs WebGL. Options: Three.js directly, React Three Fiber, D3.js with WebGL, or a 2D-only approach.
+**Decision**: React Three Fiber (R3F) wraps Three.js in React components. Scene3D component is lazy-loaded via `React.lazy()`, keeping the 873KB Three.js chunk out of the main bundle. Mobile devices get a 2D SVG scatter fallback via `useMediaQuery` hook.
+**Alternatives**:
+- Raw Three.js (imperative, harder to integrate with React state)
+- D3.js + WebGL (less 3D ecosystem support)
+- 2D only (misses the flagship visualization experience)
+- deck.gl (heavier, designed for maps not point clouds)
+**Consequences**: 873KB lazy chunk only loads on Decision Space page. Main bundle stays at 278KB. InstancedMesh handles thousands of points efficiently. Mobile fallback ensures accessibility.
+**References**: `web/src/components/decision-space/Scene3D.tsx`, `DecisionCloud.tsx`, `ScatterFallback.tsx`
+
+---
+
+## 2026-02-17: Zustand for Frontend State (Not Redux)
+
+**Status**: Approved
+**Context**: The web UI needs state management for WebSocket-driven consensus, thread lists, decision space filters, and user preferences.
+**Decision**: Zustand 5 with 4 stores (consensus, threads, decision-space, preferences). Preferences store uses `zustand/persist` middleware for localStorage persistence.
+**Alternatives**:
+- Redux Toolkit (more boilerplate, overkill for this scale)
+- React Context (insufficient for complex async state like WebSocket events)
+- Jotai/Recoil (atomic, but stores are more natural for this domain)
+**Consequences**: Minimal boilerplate. Stores are plain functions — easy to test without React rendering. Persist middleware gives free preferences persistence. No provider wrappers needed.
+**References**: `web/src/stores/consensus.ts`, `threads.ts`, `decision-space.ts`, `preferences.ts`
+
+---
+
+## 2026-02-17: CSS Custom Properties with prefers-color-scheme (Not Tailwind Dark Mode)
+
+**Status**: Approved
+**Context**: The web UI uses 22 CSS custom properties for colors, glass, borders, radii. Need light/dark mode support.
+**Decision**: Define all variables in `:root` (dark default) + `@media (prefers-color-scheme: light)` override. Also provide `.theme-dark`/`.theme-light` classes for manual override. No Tailwind `dark:` classes — all theming via CSS variables.
+**Alternatives**:
+- Tailwind `dark:` prefix (would require duplicating every color class, bloats HTML)
+- JavaScript theme toggle with class swap (more code, flash on load)
+- Dark-only (excludes light mode users)
+**Consequences**: Automatic OS preference detection. Zero JS for theme switching. Manual override possible via class on any ancestor. All components automatically adapt — no per-component dark/light logic needed.
+**References**: `web/src/theme/duh-theme.css`
+
+---
+
+## 2026-02-17: Markdown Rendering with Lazy Mermaid
+
+**Status**: Approved
+**Context**: LLM responses contain markdown (headers, lists, code, tables) that was rendered as raw text. Need full markdown parsing with code highlighting and diagram support.
+**Decision**: Shared `<Markdown>` component using react-markdown + remark-gfm + rehype-highlight. Mermaid diagrams lazy-loaded via dynamic `import('mermaid')` — keeps the 498KB mermaid bundle out of the main chunk. highlight.js with github-dark-dimmed theme + light mode CSS overrides.
+**Alternatives**:
+- marked + DOMPurify (lighter but no React integration, manual sanitization)
+- MDX (overkill, runtime compilation unnecessary)
+- Bundling mermaid eagerly (bloats main bundle from 278KB to 1.1MB)
+**Consequences**: Main bundle: 617KB (up from 278KB — react-markdown + highlight.js needed on all pages). Mermaid: 498KB lazy chunk only when mermaid blocks exist. Full GFM support (tables, task lists, strikethrough). Code syntax highlighting in 180+ languages. 5 components updated to use `<Markdown>` for LLM content.
+**References**: `web/src/components/shared/Markdown.tsx`, used in ConsensusComplete, PhaseCard, TurnCard, DissentBanner

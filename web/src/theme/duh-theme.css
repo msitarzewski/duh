@@ -1,0 +1,149 @@
+@import "tailwindcss";
+
+/* ── Dark theme (default) ────────────────────────────── */
+
+:root {
+  color-scheme: dark;
+
+  /* Backgrounds */
+  --color-bg: #0a0a0f;
+  --color-bg-raised: #12121a;
+  --color-surface: rgba(255, 255, 255, 0.03);
+  --color-surface-solid: #14141e;
+  --color-surface-hover: rgba(255, 255, 255, 0.06);
+
+  /* Text */
+  --color-text: #e4e4e7;
+  --color-text-secondary: #a1a1aa;
+  --color-text-dim: #52525b;
+
+  /* Primary accent (cyan) */
+  --color-primary: #00d4ff;
+  --color-primary-glow: rgba(0, 212, 255, 0.06);
+
+  /* Semantic colors */
+  --color-green: #22c55e;
+  --color-amber: #f59e0b;
+  --color-red: #ef4444;
+
+  /* Borders */
+  --color-border: rgba(255, 255, 255, 0.08);
+  --color-border-hover: rgba(255, 255, 255, 0.14);
+  --color-border-active: rgba(0, 212, 255, 0.3);
+
+  /* Glass */
+  --glass-bg: rgba(255, 255, 255, 0.03);
+  --glass-blur: 12px;
+
+  /* Layout */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --transition-fast: 150ms ease-out;
+
+  /* Typography */
+  --font-ui: 'Inter', system-ui, -apple-system, sans-serif;
+}
+
+/* ── Light theme ─────────────────────────────────────── */
+
+@media (prefers-color-scheme: light) {
+  :root {
+    color-scheme: light;
+
+    /* Backgrounds */
+    --color-bg: #f8f8fa;
+    --color-bg-raised: #ffffff;
+    --color-surface: rgba(0, 0, 0, 0.02);
+    --color-surface-solid: #ffffff;
+    --color-surface-hover: rgba(0, 0, 0, 0.04);
+
+    /* Text */
+    --color-text: #18181b;
+    --color-text-secondary: #52525b;
+    --color-text-dim: #a1a1aa;
+
+    /* Primary accent (darker cyan for contrast) */
+    --color-primary: #0891b2;
+    --color-primary-glow: rgba(8, 145, 178, 0.08);
+
+    /* Semantic colors */
+    --color-green: #16a34a;
+    --color-amber: #d97706;
+    --color-red: #dc2626;
+
+    /* Borders */
+    --color-border: rgba(0, 0, 0, 0.08);
+    --color-border-hover: rgba(0, 0, 0, 0.14);
+    --color-border-active: rgba(8, 145, 178, 0.3);
+
+    /* Glass */
+    --glass-bg: rgba(255, 255, 255, 0.7);
+    --glass-blur: 12px;
+  }
+}
+
+/* ── Manual theme override classes ───────────────────── */
+
+.theme-dark {
+  color-scheme: dark;
+
+  --color-bg: #0a0a0f;
+  --color-bg-raised: #12121a;
+  --color-surface: rgba(255, 255, 255, 0.03);
+  --color-surface-solid: #14141e;
+  --color-surface-hover: rgba(255, 255, 255, 0.06);
+
+  --color-text: #e4e4e7;
+  --color-text-secondary: #a1a1aa;
+  --color-text-dim: #52525b;
+
+  --color-primary: #00d4ff;
+  --color-primary-glow: rgba(0, 212, 255, 0.06);
+
+  --color-green: #22c55e;
+  --color-amber: #f59e0b;
+  --color-red: #ef4444;
+
+  --color-border: rgba(255, 255, 255, 0.08);
+  --color-border-hover: rgba(255, 255, 255, 0.14);
+  --color-border-active: rgba(0, 212, 255, 0.3);
+
+  --glass-bg: rgba(255, 255, 255, 0.03);
+}
+
+.theme-light {
+  color-scheme: light;
+
+  --color-bg: #f8f8fa;
+  --color-bg-raised: #ffffff;
+  --color-surface: rgba(0, 0, 0, 0.02);
+  --color-surface-solid: #ffffff;
+  --color-surface-hover: rgba(0, 0, 0, 0.04);
+
+  --color-text: #18181b;
+  --color-text-secondary: #52525b;
+  --color-text-dim: #a1a1aa;
+
+  --color-primary: #0891b2;
+  --color-primary-glow: rgba(8, 145, 178, 0.08);
+
+  --color-green: #16a34a;
+  --color-amber: #d97706;
+  --color-red: #dc2626;
+
+  --color-border: rgba(0, 0, 0, 0.08);
+  --color-border-hover: rgba(0, 0, 0, 0.14);
+  --color-border-active: rgba(8, 145, 178, 0.3);
+
+  --glass-bg: rgba(255, 255, 255, 0.7);
+}
+
+/* ── Base styles ─────────────────────────────────────── */
+
+body {
+  font-family: var(--font-ui);
+  background: var(--color-bg);
+  color: var(--color-text);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}

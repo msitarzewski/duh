@@ -41,6 +41,8 @@ async def ask(body: AskRequest, request: Request) -> AskResponse | JSONResponse:
     # Override config from request
     config.general.max_rounds = body.rounds
 
+    db_factory = getattr(request.app.state, "db_factory", None)
+
     try:
         if body.decompose:
             return await _handle_decompose(body, config, pm)
@@ -49,7 +51,7 @@ async def ask(body: AskRequest, request: Request) -> AskResponse | JSONResponse:
             return await _handle_voting(body, config, pm)
 
         # Default: consensus
-        return await _handle_consensus(body, config, pm)
+        return await _handle_consensus(body, config, pm, db_factory)
 
     except ProviderError as exc:
         logger.exception("Provider error during /api/ask")
@@ -71,18 +73,31 @@ async def ask(body: AskRequest, request: Request) -> AskResponse | JSONResponse:
         )
 
 
-async def _handle_consensus(body: AskRequest, config, pm) -> AskResponse:  # type: ignore[no-untyped-def]
+async def _handle_consensus(  # type: ignore[no-untyped-def]
+    body: AskRequest, config, pm, db_factory=None
+) -> AskResponse:
     """Run the consensus protocol."""
     from duh.cli.app import _run_consensus
 
     decision, confidence, dissent, cost = await _run_consensus(
         body.question, config, pm
     )
+
+    thread_id: str | None = None
+    if db_factory is not None:
+        try:
+            thread_id = await _persist_result(
+                db_factory, body.question, decision, confidence, dissent
+            )
+        except Exception:
+            logger.exception("Failed to persist consensus thread")
+
     return AskResponse(
         decision=decision,
         confidence=confidence,
         dissent=dissent,
         cost=cost,
+        thread_id=thread_id,
         protocol_used="consensus",
     )
 
@@ -148,3 +163,28 @@ async def _handle_decompose(body: AskRequest, config, pm) -> AskResponse:  # typ
         cost=pm.total_cost,
         protocol_used="decompose",
     )
+
+
+async def _persist_result(
+    db_factory: object,
+    question: str,
+    decision: str,
+    confidence: float,
+    dissent: str | None,
+) -> str:
+    """Persist a consensus result to the database.
+
+    Returns the new thread ID.
+    """
+    from duh.memory.repository import MemoryRepository
+
+    async with db_factory() as session:  # type: ignore[operator]
+        repo = MemoryRepository(session)
+        thread = await repo.create_thread(question)
+        thread.status = "complete"
+        turn = await repo.create_turn(thread.id, 1, "COMMIT")
+        await repo.save_decision(
+            turn.id, thread.id, decision, confidence, dissent=dissent
+        )
+        await session.commit()
+        return str(thread.id)

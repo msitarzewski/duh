@@ -1133,7 +1133,7 @@ async def _cost_async(config: DuhConfig) -> None:
 )
 @click.pass_context
 def serve(ctx: click.Context, host: str | None, port: int | None, reload: bool) -> None:
-    """Start the REST API server."""
+    """Start the REST API server with web UI."""
     import uvicorn
 
     from duh.api.app import create_app
@@ -1142,6 +1142,16 @@ def serve(ctx: click.Context, host: str | None, port: int | None, reload: bool) 
 
     effective_host = host or config.api.host
     effective_port = port or config.api.port
+
+    # Check for frontend build
+    from pathlib import Path
+
+    dist_dir = Path(__file__).resolve().parents[2].parent / "web" / "dist"
+    if dist_dir.is_dir():
+        url = f"http://{effective_host}:{effective_port}"
+        click.echo(f"Web UI: {url}")
+    else:
+        click.echo("Web UI not built. Run: cd web && npm run build")
 
     app = create_app(config)
     uvicorn.run(

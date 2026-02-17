@@ -13,6 +13,9 @@ phase0/
 memory-bank/
 docker/
 
+web/node_modules
+web/dist
+
 .dockerignore
 .gitignore
 AGENTS.md
