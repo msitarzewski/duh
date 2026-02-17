@@ -262,17 +262,19 @@ async def decision_space(
             if d.genus:
                 all_genera.add(d.genus)
 
-            results.append(SpaceDecisionResponse(
-                id=d.id,
-                thread_id=d.thread_id,
-                question=question,
-                confidence=d.confidence,
-                intent=d.intent,
-                category=d.category,
-                genus=d.genus,
-                outcome=outcome_str,
-                created_at=d.created_at.isoformat(),
-            ))
+            results.append(
+                SpaceDecisionResponse(
+                    id=d.id,
+                    thread_id=d.thread_id,
+                    question=question,
+                    confidence=d.confidence,
+                    intent=d.intent,
+                    category=d.category,
+                    genus=d.genus,
+                    outcome=outcome_str,
+                    created_at=d.created_at.isoformat(),
+                )
+            )
 
     return DecisionSpaceResponse(
         decisions=results,
