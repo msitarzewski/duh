@@ -67,7 +67,27 @@ async def _create_db(
         if db_path and db_path != ":memory:":
             Path(db_path).parent.mkdir(parents=True, exist_ok=True)
 
-    engine = create_async_engine(url)
+    engine_kwargs: dict[str, object] = {}
+    if url.startswith("sqlite"):
+        if ":memory:" in url:
+            # In-memory SQLite needs StaticPool so all queries share
+            # the same connection (and thus the same in-memory DB).
+            from sqlalchemy.pool import StaticPool
+
+            engine_kwargs["poolclass"] = StaticPool
+            engine_kwargs["connect_args"] = {"check_same_thread": False}
+        else:
+            from sqlalchemy.pool import NullPool
+
+            engine_kwargs["poolclass"] = NullPool
+    else:
+        engine_kwargs["pool_size"] = config.database.pool_size
+        engine_kwargs["max_overflow"] = config.database.max_overflow
+        engine_kwargs["pool_timeout"] = config.database.pool_timeout
+        engine_kwargs["pool_recycle"] = config.database.pool_recycle
+        engine_kwargs["pool_pre_ping"] = True
+
+    engine = create_async_engine(url, **engine_kwargs)
 
     # Enable foreign keys for SQLite
     if url.startswith("sqlite"):
@@ -78,8 +98,12 @@ async def _create_db(
             cursor.execute("PRAGMA foreign_keys=ON")
             cursor.close()
 
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+    # Only use create_all for in-memory SQLite (tests/dev).
+    # File-based SQLite and PostgreSQL are managed by alembic migrations.
+    is_memory = url.startswith("sqlite") and ":memory:" in url
+    if is_memory:
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
 
     factory = async_sessionmaker(engine, expire_on_commit=False)
     return factory, engine
@@ -99,8 +123,13 @@ async def _setup_providers(config: DuhConfig) -> ProviderManager:
             "openai",
             "google",
             "mistral",
+            "perplexity",
         ):
             continue  # Skip providers without API keys
+
+        # Set provider rate limit if configured
+        if prov_config.rate_limit > 0:
+            pm.set_provider_rate_limit(name, prov_config.rate_limit)
 
         if name == "anthropic":
             from duh.providers.anthropic import AnthropicProvider
@@ -125,6 +154,11 @@ async def _setup_providers(config: DuhConfig) -> ProviderManager:
 
             mistral_prov = MistralProvider(api_key=prov_config.api_key)
             await pm.register(mistral_prov)  # type: ignore[arg-type]
+        elif name == "perplexity":
+            from duh.providers.perplexity import PerplexityProvider
+
+            perplexity_prov = PerplexityProvider(api_key=prov_config.api_key)
+            await pm.register(perplexity_prov)  # type: ignore[arg-type]
 
     return pm
 
@@ -1120,6 +1154,122 @@ async def _cost_async(config: DuhConfig) -> None:
             click.echo(f"  {model_ref}: ${model_cost:.4f} ({call_count} calls)")
 
 
+# ── backup ───────────────────────────────────────────────────────
+
+
+@cli.command()
+@click.argument("path", type=click.Path())
+@click.option(
+    "--format",
+    "fmt",
+    type=click.Choice(["auto", "sqlite", "json"]),
+    default="auto",
+    help="Backup format (auto detects from db type).",
+)
+@click.option("--config", "config_path", default=None, help="Config file path.")
+def backup(path: str, fmt: str, config_path: str | None) -> None:
+    """Backup the duh database to PATH."""
+    config = _load_config(config_path)
+    try:
+        asyncio.run(_backup_async(config, path, fmt))
+    except (DuhError, ValueError, FileNotFoundError, OSError) as e:
+        _error(str(e))
+
+
+async def _backup_async(config: DuhConfig, path: str, fmt: str) -> None:
+    """Async implementation for the backup command."""
+    from duh.memory.backup import backup_json, backup_sqlite, detect_db_type
+
+    db_url = config.database.url
+    if "~" in db_url:
+        db_url = db_url.replace("~", str(Path.home()))
+
+    db_type = detect_db_type(db_url)
+    dest = Path(path)
+
+    if fmt == "auto":
+        fmt = "sqlite" if db_type == "sqlite" else "json"
+
+    if fmt == "sqlite" and db_type != "sqlite":
+        _error("Cannot use sqlite backup format for a PostgreSQL database.")
+
+    if fmt == "sqlite":
+        result_path = await backup_sqlite(db_url, dest)
+    else:
+        factory, engine = await _create_db(config)
+        async with factory() as session:
+            result_path = await backup_json(session, dest)
+        await engine.dispose()
+
+    size = result_path.stat().st_size
+    if size < 1024:
+        size_str = f"{size} B"
+    elif size < 1024 * 1024:
+        size_str = f"{size / 1024:.1f} KB"
+    else:
+        size_str = f"{size / (1024 * 1024):.1f} MB"
+
+    click.echo(f"Backup saved to {result_path} ({size_str})")
+
+
+# ── restore ─────────────────────────────────────────────────────
+
+
+@cli.command()
+@click.argument("path", type=click.Path(exists=True))
+@click.option(
+    "--merge",
+    is_flag=True,
+    default=False,
+    help="Merge with existing data instead of replacing.",
+)
+@click.option("--config", "config_path", default=None, help="Config file path.")
+def restore(path: str, merge: bool, config_path: str | None) -> None:
+    """Restore the duh database from PATH."""
+    config = _load_config(config_path)
+    try:
+        asyncio.run(_restore_async(config, path, merge))
+    except (DuhError, ValueError, FileNotFoundError, OSError) as e:
+        _error(str(e))
+
+
+async def _restore_async(config: DuhConfig, path: str, merge: bool) -> None:
+    """Async implementation for the restore command."""
+    from duh.memory.backup import (
+        detect_backup_format,
+        detect_db_type,
+        restore_json,
+        restore_sqlite,
+    )
+
+    db_url = config.database.url
+    if "~" in db_url:
+        db_url = db_url.replace("~", str(Path.home()))
+
+    source = Path(path)
+    fmt = detect_backup_format(source)
+    db_type = detect_db_type(db_url)
+
+    if fmt == "sqlite" and db_type != "sqlite":
+        _error("Cannot restore a SQLite backup into a PostgreSQL database.")
+
+    if fmt == "sqlite":
+        await restore_sqlite(source, db_url)
+        click.echo(f"Restored SQLite database from {source}")
+    else:
+        factory, engine = await _create_db(config)
+        async with factory() as session:
+            counts = await restore_json(session, source, merge=merge)
+        await engine.dispose()
+
+        total = sum(counts.values())
+        mode = "Merged" if merge else "Restored"
+        click.echo(f"{mode} {total} records from {source}")
+        for table_name, count in counts.items():
+            if count > 0:
+                click.echo(f"  {table_name}: {count}")
+
+
 # ── serve ────────────────────────────────────────────────────────
 
 
@@ -1392,4 +1542,108 @@ async def _batch_async(
         click.echo(
             f"{total} questions | Total cost: ${total_cost:.4f} "
             f"| Elapsed: {elapsed:.1f}s"
+        )
+
+
+# ── user-create ─────────────────────────────────────────────
+
+
+@cli.command("user-create")
+@click.option("--email", required=True)
+@click.option("--password", required=True)
+@click.option("--name", "display_name", required=True)
+@click.option(
+    "--role",
+    type=click.Choice(["admin", "contributor", "viewer"]),
+    default="contributor",
+)
+@click.option("--config", "config_path", default=None)
+def user_create(
+    email: str,
+    password: str,
+    display_name: str,
+    role: str,
+    config_path: str | None,
+) -> None:
+    """Create a new user."""
+    config = _load_config(config_path)
+    try:
+        asyncio.run(_user_create_async(config, email, password, display_name, role))
+    except DuhError as e:
+        _error(str(e))
+
+
+async def _user_create_async(
+    config: DuhConfig,
+    email: str,
+    password: str,
+    display_name: str,
+    role: str,
+) -> None:
+    """Async implementation for the user-create command."""
+    from sqlalchemy import select
+
+    from duh.api.auth import hash_password
+    from duh.memory.models import User
+
+    factory, engine = await _create_db(config)
+    async with factory() as session:
+        # Check email uniqueness
+        stmt = select(User).where(User.email == email)
+        result = await session.execute(stmt)
+        if result.scalar_one_or_none() is not None:
+            await engine.dispose()
+            _error(f"Email already registered: {email}")
+
+        user = User(
+            email=email,
+            password_hash=hash_password(password),
+            display_name=display_name,
+            role=role,
+        )
+        session.add(user)
+        await session.commit()
+        await session.refresh(user)
+
+    await engine.dispose()
+    click.echo(f"User created: {user.id} ({user.email}) role={user.role}")
+
+
+# ── user-list ───────────────────────────────────────────────
+
+
+@cli.command("user-list")
+@click.option("--config", "config_path", default=None)
+def user_list(config_path: str | None) -> None:
+    """List all users."""
+    config = _load_config(config_path)
+    try:
+        asyncio.run(_user_list_async(config))
+    except DuhError as e:
+        _error(str(e))
+
+
+async def _user_list_async(config: DuhConfig) -> None:
+    """Async implementation for the user-list command."""
+    from sqlalchemy import select
+
+    from duh.memory.models import User
+
+    factory, engine = await _create_db(config)
+    async with factory() as session:
+        stmt = select(User).order_by(User.created_at)
+        result = await session.execute(stmt)
+        users = result.scalars().all()
+
+    await engine.dispose()
+
+    if not users:
+        click.echo("No users found.")
+        return
+
+    for user in users:
+        active = "active" if user.is_active else "disabled"
+        click.echo(
+            f"  {user.id[:8]}  {user.email}  {user.display_name}  "
+            f"role={user.role}  {active}"
         )

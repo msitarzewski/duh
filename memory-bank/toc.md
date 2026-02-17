@@ -4,17 +4,17 @@
 - [projectbrief.md](./projectbrief.md) — Vision, tenets, architecture, build sequence
 - [techContext.md](./techContext.md) — Tech stack decisions with rationale (Python, Docker, SQLAlchemy, frontend, tools, etc.)
 - [decisions.md](./decisions.md) — Architectural decisions with context, alternatives, and consequences (18 ADRs)
-- [activeContext.md](./activeContext.md) — Current state, v0.4 complete, ready for commit/merge
+- [activeContext.md](./activeContext.md) — Current state, v0.5 complete, ready to merge to main
 - [progress.md](./progress.md) — Milestone tracking, what's built, what's next
 - [competitive-landscape.md](./competitive-landscape.md) — Research on existing tools, frameworks, and academic work
-- [quick-start.md](./quick-start.md) — Session entry point, v0.4 complete, key file references
+- [quick-start.md](./quick-start.md) — Session entry point, v0.5 complete, key file references
 - [v03-build-status.md](./v03-build-status.md) — v0.3 build status, all 17 tasks complete
 
 ## Context Files
 - [setup.md](./setup.md) — Original GPT-5.2 conversation that sparked the project
 
 ## Roadmap
-- [roadmap.md](./roadmap.md) — Full versioned roadmap v1.4 (Phase 0 through 1.0, AI-time estimates, testing mandate, self-building milestone)
+- [roadmap.md](./roadmap.md) — Full versioned roadmap v1.5 (Phase 0 through 1.0, AI-time estimates, testing mandate, self-building milestone)
 
 ## Agent Team Analyses (Supporting Material)
 - [tmp-product-strategy.md](./tmp-product-strategy.md) — Product strategist: releases, go-to-market, pricing

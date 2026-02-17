@@ -26,6 +26,10 @@ class APIKeyMiddleware(BaseHTTPMiddleware):
 
     EXEMPT_PATHS: ClassVar[set[str]] = {
         "/api/health",
+        "/api/health/detailed",
+        "/api/metrics",
+        "/api/auth/register",
+        "/api/auth/login",
         "/docs",
         "/openapi.json",
         "/redoc",
@@ -49,6 +53,23 @@ class APIKeyMiddleware(BaseHTTPMiddleware):
 
         # Skip auth for non-API paths (frontend static files)
         if not path.startswith("/api/") and not path.startswith("/ws/"):
+            return await call_next(request)
+
+        # Accept JWT Bearer token as alternative to API key
+        auth_header = request.headers.get("Authorization")
+        if auth_header and auth_header.startswith("Bearer "):
+            # Decode JWT and set user_id on request.state for rate limiting
+            token = auth_header.split(" ", 1)[1]
+            try:
+                config = request.app.state.config
+                from duh.api.auth import decode_token
+
+                payload = decode_token(token, config.auth.jwt_secret)
+                request.state.user_id = payload.get("sub")
+            except Exception:
+                # Let the auth dependency handle full validation;
+                # middleware just extracts user_id if possible.
+                pass
             return await call_next(request)
 
         # Skip auth if no API keys are configured (dev mode)
@@ -100,10 +121,11 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
     async def dispatch(
         self, request: Request, call_next: Callable[[Request], Awaitable[Response]]
     ) -> Response:
-        # Get key identifier (API key ID or IP for unauthenticated)
-        key_id = getattr(request.state, "api_key_id", None) or (
-            request.client.host if request.client else "unknown"
-        )
+        # Get key identifier: prefer user_id (JWT), then api_key_id, then IP
+        user_id = getattr(request.state, "user_id", None)
+        api_key_id = getattr(request.state, "api_key_id", None)
+        ip_addr = request.client.host if request.client else "unknown"
+        key_id = user_id or api_key_id or ip_addr
 
         now = time.monotonic()
         # Clean old entries
@@ -125,5 +147,13 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         remaining = self.rate_limit - len(self._requests[key_id])
         response.headers["X-RateLimit-Limit"] = str(self.rate_limit)
         response.headers["X-RateLimit-Remaining"] = str(remaining)
+
+        # Add rate limit identity headers
+        if user_id:
+            response.headers["X-RateLimit-Key"] = f"user:{user_id}"
+        elif api_key_id:
+            response.headers["X-RateLimit-Key"] = f"api_key:{api_key_id}"
+        else:
+            response.headers["X-RateLimit-Key"] = f"ip:{ip_addr}"
 
         return response

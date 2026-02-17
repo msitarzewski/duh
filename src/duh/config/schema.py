@@ -15,6 +15,7 @@ class ProviderConfig(BaseModel):
     default_model: str | None = None
     models: list[str] = Field(default_factory=list)
     display_name: str | None = None
+    rate_limit: int = 0  # 0 = unlimited, >0 = requests per minute
 
 
 class ConsensusConfig(BaseModel):
@@ -40,6 +41,10 @@ class DatabaseConfig(BaseModel):
     """Database connection settings."""
 
     url: str = "sqlite+aiosqlite:///~/.local/share/duh/duh.db"
+    pool_size: int = 5
+    max_overflow: int = 10
+    pool_timeout: int = 30
+    pool_recycle: int = 3600
 
 
 class LoggingConfig(BaseModel):
@@ -96,6 +101,14 @@ class TaxonomyConfig(BaseModel):
     model_ref: str = ""
 
 
+class AuthConfig(BaseModel):
+    """Authentication configuration."""
+
+    jwt_secret: str = ""  # must be set in production
+    token_expiry_hours: int = 24
+    registration_enabled: bool = True
+
+
 class APIConfig(BaseModel):
     """REST API server configuration."""
 
@@ -129,6 +142,7 @@ class DuhConfig(BaseModel):
             "openai": ProviderConfig(api_key_env="OPENAI_API_KEY"),
             "google": ProviderConfig(api_key_env="GOOGLE_API_KEY"),
             "mistral": ProviderConfig(api_key_env="MISTRAL_API_KEY"),
+            "perplexity": ProviderConfig(api_key_env="PERPLEXITY_API_KEY"),
         }
     )
     consensus: ConsensusConfig = Field(default_factory=ConsensusConfig)
@@ -138,3 +152,4 @@ class DuhConfig(BaseModel):
     decompose: DecomposeConfig = Field(default_factory=DecomposeConfig)
     taxonomy: TaxonomyConfig = Field(default_factory=TaxonomyConfig)
     api: APIConfig = Field(default_factory=APIConfig)
+    auth: AuthConfig = Field(default_factory=AuthConfig)

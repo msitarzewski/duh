@@ -2,12 +2,29 @@
 
 from __future__ import annotations
 
+import time
 from typing import TYPE_CHECKING
 
-from duh.core.errors import CostLimitExceededError, ModelNotFoundError
+from duh.core.errors import CostLimitExceededError, ModelNotFoundError, ProviderError
 
 if TYPE_CHECKING:
     from duh.providers.base import ModelInfo, ModelProvider, TokenUsage
+
+
+class ProviderQuotaExceededError(ProviderError):
+    """Raised when a provider's configured rate limit is exceeded.
+
+    Distinct from ``ProviderRateLimitError`` in ``core.errors`` which
+    represents rate limits returned by the external provider API.
+    This error represents *our* configured per-provider quota.
+    """
+
+    def __init__(self, provider_id: str, rate_limit: int) -> None:
+        super().__init__(
+            provider_id,
+            f"Provider quota exceeded: {rate_limit} requests per minute",
+        )
+        self.rate_limit = rate_limit
 
 
 class ProviderManager:
@@ -29,6 +46,8 @@ class ProviderManager:
         self._cost_hard_limit = cost_hard_limit
         self._total_cost: float = 0.0
         self._cost_by_provider: dict[str, float] = {}
+        self._provider_rate_limits: dict[str, int] = {}  # provider_id -> rpm
+        self._provider_requests: dict[str, list[float]] = {}  # pid -> ts
 
     # ── Registration ─────────────────────────────────────────────
 
@@ -92,13 +111,17 @@ class ProviderManager:
     def get_provider(self, model_ref: str) -> tuple[ModelProvider, str]:
         """Resolve a model_ref to its provider and model_id.
 
+        Also checks provider-level rate limits before returning.
+
         Returns:
             (provider, model_id) tuple for direct send/stream calls.
 
         Raises:
             ModelNotFoundError: If the model_ref is not in the index.
+            ProviderQuotaExceededError: If the provider's rate limit is exceeded.
         """
         info = self.get_model_info(model_ref)
+        self.check_provider_rate_limit(info.provider_id)
         provider = self._providers[info.provider_id]
         return provider, info.model_id
 
@@ -150,3 +173,59 @@ class ProviderManager:
         """Reset the cost accumulator to zero."""
         self._total_cost = 0.0
         self._cost_by_provider.clear()
+
+    # ── Provider rate limiting ───────────────────────────────────
+
+    def set_provider_rate_limit(self, provider_id: str, rpm: int) -> None:
+        """Set a per-minute rate limit for a provider.
+
+        Args:
+            provider_id: The provider identifier.
+            rpm: Requests per minute. 0 = unlimited.
+        """
+        self._provider_rate_limits[provider_id] = rpm
+        if provider_id not in self._provider_requests:
+            self._provider_requests[provider_id] = []
+
+    def check_provider_rate_limit(self, provider_id: str) -> None:
+        """Check if a provider's rate limit has been exceeded.
+
+        Raises:
+            ProviderQuotaExceededError: If the provider's rate limit is exceeded.
+        """
+        rpm = self._provider_rate_limits.get(provider_id, 0)
+        if rpm <= 0:
+            return  # unlimited
+
+        now = time.monotonic()
+        window = 60.0  # 1 minute
+
+        # Clean old entries
+        self._provider_requests.setdefault(provider_id, [])
+        self._provider_requests[provider_id] = [
+            t for t in self._provider_requests[provider_id] if now - t < window
+        ]
+
+        if len(self._provider_requests[provider_id]) >= rpm:
+            raise ProviderQuotaExceededError(provider_id, rpm)
+
+        # Record this request
+        self._provider_requests[provider_id].append(now)
+
+    def get_provider_rate_limit_remaining(self, provider_id: str) -> int | None:
+        """Get remaining requests for a provider in the current window.
+
+        Returns:
+            Number of remaining requests, or None if no limit is set.
+        """
+        rpm = self._provider_rate_limits.get(provider_id, 0)
+        if rpm <= 0:
+            return None
+
+        now = time.monotonic()
+        window = 60.0
+        self._provider_requests.setdefault(provider_id, [])
+        current = [
+            t for t in self._provider_requests[provider_id] if now - t < window
+        ]
+        return max(0, rpm - len(current))

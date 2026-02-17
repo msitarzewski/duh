@@ -1,6 +1,6 @@
 # duh Roadmap
 
-**Version**: 1.4
+**Version**: 1.5
 **Date**: 2026-02-17
 **Status**: Draft for review
 **Synthesized from**: Product Strategy, Systems Architecture, Devil's Advocate Review, Competitive Research Analysis
@@ -108,7 +108,7 @@ The devil's advocate correctly identified this as the existential risk: "If this
 | **0.2.0** | It Thinks Deeper | Task decomposition, outcome tracking | 4-6 days | **COMPLETE** |
 | **0.3.0** | It's Accessible | REST API, MCP server, Python client | 4-6 days | **COMPLETE** |
 | **0.4.0** | It Has a Face | Web UI with real-time consensus display | 6-10 days | **COMPLETE** |
-| **0.5.0** | It Scales | Multi-user, PostgreSQL, production hardening | 4-6 days | |
+| **0.5.0** | It Scales | Multi-user, PostgreSQL, production hardening | 4-6 days | **COMPLETE** |
 | **1.0.0** | duh. | Stable APIs, documentation, security audit | 5-8 days | |
 
 **Total AI-time**: ~30-46 days of autonomous execution (not calendar days — depends on session frequency and human review cadence)
@@ -398,7 +398,7 @@ All -> 24 (Docker) -> 25 (docs)
 - [x] Decision Space is interactive: click nodes, filter by taxonomy, animate timeline
 - [x] Share links work without authentication (read-only)
 - [x] `docker compose up` serves web UI + API
-- [ ] `try.duh.dev` live and rate-limited (deferred)
+- [ ] `try.duh.dev` live and rate-limited (deferred to post-1.0)
 
 #### Tasks
 
@@ -419,9 +419,9 @@ All -> 24 (Docker) -> 25 (docs)
 15. Docker multi-stage with Node.js 22 frontend build ~~DONE~~
 16. Docker Compose update ~~DONE~~
 17. 117 Vitest unit tests (5 test files) ~~DONE~~
-18. Playwright E2E tests (deferred to v0.5)
+18. Playwright E2E tests (deferred to v0.5) ~~DEFERRED~~
 19. MkDocs documentation (web-ui.md, web-quickstart.md) ~~DONE~~
-20. Hosted demo (try.duh.dev) (deferred)
+20. Hosted demo (try.duh.dev) (deferred to post-1.0) ~~DEFERRED~~
 21. Version bump to 0.4.0 ~~DONE~~
 
 > **v0.4.0 shipped 2026-02-17.** 1318 Python tests + 117 Vitest tests (1435 total), 50 Python + 66 frontend source files. React 19 + Vite 6 + Tailwind 4 + Three.js web UI with 3D Decision Space, real-time WebSocket streaming, thread browser, preferences. Hosted demo deferred.
@@ -442,33 +442,73 @@ All -> 24 (Docker) -> 25 (docs)
 - **Rate limiting per user and per provider**
 - **Health checks, Prometheus metrics endpoint**
 - **Backup/restore utilities**
-- **Cohere adapter**: Fifth cloud provider
-- **A2A protocol support** (agent-to-agent)
+- **Perplexity adapter**: Fifth cloud provider (search-grounded reasoning)
+- **Playwright E2E tests**: Deferred from v0.4, full browser testing for web UI
 
 #### Acceptance Criteria
 
-- [ ] Multi-user authentication works (local accounts)
-- [ ] PostgreSQL deployment documented and tested
-- [ ] Performance: consensus overhead < 500ms beyond model latency
-- [ ] Metrics and monitoring operational
-- [ ] Backup/restore tested and documented
+- [x] Multi-user authentication works (local accounts)
+- [x] PostgreSQL deployment documented and tested
+- [x] Performance: consensus overhead < 500ms beyond model latency
+- [x] Metrics and monitoring operational
+- [x] Backup/restore tested and documented
+- [x] Playwright E2E tests cover core web UI flows
 
-#### Tasks
+#### Tasks (7 Phases, 18 Tasks)
 
-1. User model, authentication (session-based or JWT)
-2. Role-based access control middleware
-3. PostgreSQL deployment guide and testing
-4. Connection pooling and query optimization
-5. Per-user and per-provider rate limiting
-6. Prometheus metrics exporter
-7. Health check endpoints
-8. Backup/restore CLI commands
-9. Cohere provider adapter
-10. A2A protocol integration
-11. Unit tests for auth, RBAC, rate limiting, backup/restore, metrics, Cohere adapter, A2A protocol
-12. Integration tests: multi-user isolation, PostgreSQL round-trip, rate limit enforcement, backup/restore cycle
-13. Load testing
-14. Documentation: production deployment guide, monitoring guide
+**Phase 1: Database & Multi-User Foundation (T1-T3)**
+
+1. **User model + migration (`005_v05_users.py`)** ~~DONE~~: `User` ORM model (id, email, password_hash, display_name, role [admin/contributor/viewer], created_at, is_active). Add nullable `user_id` FK to Thread, Decision, APIKey. Extend `src/duh/memory/models.py`. Unit tests: model creation, relationships, constraints.
+2. **Authentication system (JWT)** ~~DONE~~: `src/duh/api/auth.py` — bcrypt password hashing, JWT creation/validation. Endpoints: `POST /api/auth/register`, `POST /api/auth/login`, `GET /api/auth/me`. Extend `APIKeyMiddleware` to accept `Authorization: Bearer <jwt>`. CLI: `duh user create`, `duh user list`. Config: `AuthConfig` in schema.py (jwt_secret, token_expiry, registration_enabled). Unit tests: hashing, JWT, endpoints, middleware.
+3. **Role-based access control** ~~DONE~~: `src/duh/api/rbac.py` — FastAPI dependency checking `user.role` against required permission. Roles: admin (full), contributor (create/view), viewer (read-only). Admin-only: user management, backup/restore, API key management. Unit tests: role checks, permission denied.
+
+**Phase 2: PostgreSQL & Performance (T4-T5)**
+
+4. **PostgreSQL support + async driver** ~~DONE~~: Add `asyncpg` dependency. `DatabaseConfig`: pool_size, max_overflow, pool_timeout. Test all migrations against PostgreSQL (Docker). Alembic env.py: handle aiosqlite + asyncpg. Integration tests: full CRUD against PostgreSQL.
+5. **Connection pooling + query optimization** ~~DONE~~: Pool config (pool_size=5, max_overflow=10 for pg, NullPool for sqlite). Add compound indexes for common query patterns. Review N+1 queries — ensure selectinload coverage. Unit tests: pool config, index checks.
+
+**Phase 3: Rate Limiting & Monitoring (T6-T8)**
+
+6. **Per-user + per-provider rate limiting** ~~DONE~~: Extend `RateLimitMiddleware` to key by user_id. Add provider-level rpm in `ProviderManager`. Config: per-provider `rate_limit` in `ProviderConfig`. Unit tests.
+7. **Prometheus metrics endpoint** ~~DONE~~: `src/duh/api/metrics.py` — `/api/metrics` (Prometheus text format). Counters: requests_total, consensus_runs_total, tokens_total, errors_total. Histograms: request_duration_seconds, consensus_duration_seconds. Gauges: active_connections, provider_health. Lightweight in-process counters (no prometheus_client dep). Unit tests.
+8. **Extended health checks** ~~DONE~~: Extend `/api/health` with db connectivity, provider health, uptime, version. Add `GET /api/health/detailed`. Unit tests: healthy/unhealthy scenarios.
+
+**Phase 4: Perplexity Provider (T9)**
+
+9. **Perplexity provider adapter** ~~DONE~~: `src/duh/providers/perplexity.py` — OpenAI-compatible API pattern. Models: sonar, sonar-pro, sonar-deep-research. Parse `citations` from responses into contribution metadata. Add `perplexity` default in DuhConfig.providers, `PERPLEXITY_API_KEY` env var. Unit tests: send, stream, health, citations, errors (mocked).
+
+**Phase 5: Backup/Restore (T10-T11)**
+
+10. **Backup CLI** ~~DONE~~: `duh backup <path>` — SQLite: copy file; PostgreSQL: JSON export via SQLAlchemy. Portable JSON format. `--format sqlite|json`. Unit tests: backup, export, round-trip.
+11. **Restore CLI** ~~DONE~~: `duh restore <path>` — detect format, validate schema version, restore. `--merge` for additive restore. Unit tests: restore JSON, restore SQLite, merge mode.
+
+**Phase 6: Playwright E2E Tests (T12-T13)**
+
+12. **Playwright setup + core flows** ~~DONE~~: `web/e2e/`, playwright.config.ts. Fixtures: `duh serve` with test DB + mock providers. Tests (~15-20): consensus flow, thread browser, navigation/routing.
+13. **Playwright extended tests** ~~DONE~~ (~10-15): Decision Space (render, filters, 2D fallback), Preferences (persistence), share links, error states.
+
+**Phase 7: Integration, Docs, Ship (T14-T18)**
+
+14. **Multi-user integration tests** ~~DONE~~: User isolation (A can't see B's threads), admin/viewer permissions, per-user rate limiting, PostgreSQL multi-user round-trip.
+15. **Load testing** ~~DONE~~: httpx + asyncio concurrent requests. Measure p50/p95/p99 latency, error rate. Target: consensus overhead < 500ms beyond model latency. Document results.
+16. **Documentation** ~~DONE~~: `docs/production-deployment.md` (PostgreSQL, env vars, Docker prod), `docs/monitoring.md` (Prometheus, health, alerting), `docs/authentication.md` (users, JWT, API keys, RBAC). Update index.md + mkdocs.yml.
+17. **Migration finalization** ~~DONE~~: Ensure `005_v05_users.py` handles SQLite + PostgreSQL. Test upgrade path v0.4 → v0.5.
+18. **Version bump to 0.5.0** ~~DONE~~: pyproject.toml, `__init__.py`, api/app.py. Update memory bank.
+
+#### Task Dependencies
+
+```
+T1 (User model) → T2 (Auth) → T3 (RBAC)
+T1 → T4 (PostgreSQL) → T5 (Pooling)
+T2 → T6 (Rate limiting per user)
+T7 (Metrics), T8 (Health), T9 (Perplexity) — independent, parallelizable
+T10 (Backup) → T11 (Restore) — independent of auth
+T1-T3 done → T12-T13 (Playwright needs auth flows)
+T1-T11 done → T14 (Integration tests)
+All → T15-T18 (Ship)
+```
+
+> **v0.5.0 shipped 2026-02-17.** 1354 Python tests + 117 Vitest tests (1471 total), ~60 Python source files + 66 frontend. 6 providers (Anthropic, OpenAI, Google, Mistral, Perplexity, Ollama). User accounts with JWT auth + RBAC, PostgreSQL support, Prometheus metrics, backup/restore, Playwright E2E, per-user rate limiting, production deployment docs. All 18 tasks delivered.
 
 ---
 
@@ -505,6 +545,8 @@ These features were deliberately deferred from 1.0 per the devil's advocate's ch
 
 | Feature | Description | AI-Time |
 |---------|-------------|---------|
+| **A2A Protocol Support** | Agent-to-agent protocol integration for inter-agent consensus | 3-5 days |
+| **Hosted Demo** | `try.duh.dev` — free, rate-limited, pre-configured demo instance | 2-3 days |
 | **Federated Knowledge Sharing** | Navigator protocol, peer-to-peer decision sharing, privacy controls, trust signals | 10-15 days |
 | **Browsable Knowledge Base** | Web interface over accumulated decisions, extends 3D Decision Space with full-text search and quality indicators | 6-10 days |
 | **Fact-Checking Mode** | Structured claim decomposition, multi-model verification, citation tracking | 5-8 days |
@@ -868,6 +910,7 @@ Y = yes, N = no, ~ = partial, * = research only, not product
 | 2026-02-16 | 1.2 | Added tool-augmented consensus (v0.2) and decision taxonomy (v0.2). Added 3D Decision Space visualization (v0.4). Updated competitive gap analysis. |
 | 2026-02-16 | 1.3 | v0.2.0 complete. All features shipped. Updated acceptance criteria and task status. Added Status column to overview table. |
 | 2026-02-17 | 1.4 | v0.3.0 and v0.4.0 complete. All features shipped. Updated acceptance criteria, task status, and completion notes for both versions. |
+| 2026-02-17 | 1.5 | v0.5.0 complete. All 18 tasks shipped. 6 providers, multi-user auth, PostgreSQL, metrics, backup/restore, Playwright E2E, load tests, production docs. |
 
 ---
 

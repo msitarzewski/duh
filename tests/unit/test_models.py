@@ -330,6 +330,7 @@ class TestIndexes:
 
     def test_all_tables_created(self) -> None:
         expected = {
+            "users",
             "threads",
             "turns",
             "contributions",
