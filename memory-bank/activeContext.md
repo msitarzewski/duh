@@ -1,112 +1,44 @@
 # Active Context
 
 **Last Updated**: 2026-02-16
-**Current Phase**: v0.2 COMPLETE. Post-v0.2 polish done. Preparing v0.3.
-**Next Action**: Plan v0.3 task breakdown (REST API, MCP server, Python client).
+**Current Phase**: v0.3 COMPLETE — "It's Accessible"
+**Next Action**: Merge v0.3.0 branch to main, deploy docs, begin v0.4 planning.
 
 ---
 
 ## Current State
 
-- **v0.2 Tasks 1-22 COMPLETE.** All tasks including integration tests, docs, version bump.
-- **4 providers shipping**: Anthropic (3 models), OpenAI (3 models), Google (4 models) — 10 total.
-- 1093 tests passing, ruff clean, mypy strict clean (39 source files, 4 providers).
+- **v0.3 COMPLETE.** All 17 tasks done across 7 phases.
+- **5 providers shipping**: Anthropic (3 models), OpenAI (3 models), Google (4 models), Mistral (4 models) — 14 total.
+- 1318 tests passing, ruff clean, mypy strict clean (50 source files, 5 providers).
+- REST API (FastAPI + uvicorn), WebSocket streaming, MCP server, Python client library all built.
+- New CLI commands: `duh serve`, `duh mcp`, `duh batch`, `duh export`.
 - MkDocs docs site live at https://msitarzewski.github.io/duh/
 - GitHub repo: https://github.com/msitarzewski/duh
+- Branch: `v0.3.0` (ready to merge)
 
-### v0.2 Features
+## v0.3 Completed Tasks (17/17)
 
-- **Voting protocol** — `duh ask --protocol voting|consensus|auto`, parallel fan-out + majority/weighted aggregation
-- **Decomposition** — `duh ask --decompose`, DECOMPOSE state, topological scheduler, synthesis
-- **Tool-augmented reasoning** — `duh ask --tools`, web search, code execution, file read
-- **Decision taxonomy** — automatic classification at COMMIT time via lightweight model call
-- **Outcome tracking** — `duh feedback <thread_id> --result --notes`, outcome context in future rounds
-- **Feedback CLI** — record real-world outcomes for knowledge accumulation
+All phases complete. See `v03-build-status.md` for per-task detail.
 
-### Post-v0.2 Polish
+| Phase | Tasks | Status |
+|-------|-------|--------|
+| Phase 1: Foundation | T1 Mistral, T2 Export, T3 Batch | Done |
+| Phase 2: API Core | T4 Config, T5 FastAPI, T6 API Keys, T7 Auth | Done |
+| Phase 3: REST Endpoints | T8 /ask, T9 /threads, T10 /recall+more | Done |
+| Phase 4: Streaming | T11 WebSocket | Done |
+| Phase 5: MCP | T12 MCP Server | Done |
+| Phase 6: Client | T13 duh-client | Done |
+| Phase 7: Ship | T14 Integration tests, T15 Docs, T17 Version bump | Done |
 
-- **Subtask progress display** — `ConsensusDisplay` threaded through scheduler; each subtask shows real-time PROPOSE/CHALLENGE/REVISE/COMMIT phases with model names, spinners, and per-subtask cost tracking. Fixes silent execution during `--decompose` runs.
+## v0.3 Architecture (Decided)
 
-## Phase 0 Benchmark Results (Summary)
-
-- **Consensus vs Direct (head-to-head)**: 47% vs 41% (GPT judge), 88% vs 6% (Opus judge) — consensus wins
-- **Consensus vs Self-Debate**: 76.5% wins (GPT), 52.9% wins (Opus) — cross-model challenge beats self-critique
-- **Dimension scores**: Consensus higher than Direct on all 5 dimensions (accuracy 8.06 vs 7.53, completeness 8.41 vs 7.65, nuance 8.12 vs 7.24, specificity 8.41 vs 7.71, overall 8.06 vs 7.53)
-- **Ensemble** scored slightly higher than Consensus but costs 50% more ($2.34 vs $1.57) and lacks dissent reasoning
-- **Auto-decision said ITERATE** (33% win rate on J/S, below 60% threshold) but that metric measures "ranked #1 out of 4 methods" — head-to-head clearly favors consensus
-- **Manual decision: PROCEED** — the method works, prompts will improve in v0.1
-
-## v0.1 Task List (ALL DONE)
-
-1. ~~Project scaffolding~~ DONE
-2. ~~Core error hierarchy + base types~~ DONE
-3. ~~Provider adapter interface + data classes~~ DONE
-4. ~~Configuration (TOML + Pydantic)~~ DONE
-5. ~~Mock provider + test fixtures~~ DONE
-6. ~~Anthropic adapter~~ DONE
-7. ~~OpenAI adapter (GPT + Ollama via base_url)~~ DONE
-8. ~~Retry with backoff utility~~ DONE
-9. ~~Provider manager~~ DONE
-10. ~~SQLAlchemy models~~ DONE
-11. ~~Memory repository~~ DONE
-12. ~~Consensus state machine~~ DONE
-13. ~~PROPOSE handler~~ DONE
-14. ~~CHALLENGE handler~~ DONE
-15. ~~REVISE handler~~ DONE
-16. ~~COMMIT handler~~ DONE
-17. ~~Convergence detection~~ DONE
-18. ~~Context builder~~ DONE
-19. ~~Summary generator~~ DONE
-20. ~~Integration tests (full loop with mock providers)~~ DONE
-21. ~~Sycophancy test suite~~ DONE
-22. ~~CLI app~~ DONE (Click commands)
-23. ~~CLI display (Rich Live panels)~~ DONE
-24. ~~Docker~~ DONE
-25. ~~Documentation~~ DONE
-26. ~~Google Gemini adapter~~ DONE (added post-v0.1, 22 tests)
-
-## v0.2 Task List (ALL DONE)
-
-1. ~~Alembic migrations (001 baseline, 002 v0.2 schema)~~ DONE
-2. ~~Structured output (response_format, tools, tool_calls on providers)~~ DONE
-3. ~~JSON extract~~ DONE
-4. ~~Challenge framings (4 types, round-robin)~~ DONE
-5. ~~Tool framework (Tool protocol, ToolRegistry)~~ DONE
-6. ~~Tool-augmented send~~ DONE
-7. ~~Config schema (ToolsConfig, VotingConfig, DecomposeConfig, TaxonomyConfig)~~ DONE
-8. ~~Models + repo (Outcome, Subtask, Vote, taxonomy fields)~~ DONE
-9. ~~Taxonomy at COMMIT~~ DONE
-10. ~~Feedback CLI~~ DONE
-11. ~~Outcome context~~ DONE
-12. ~~Display (show_taxonomy, show_outcome)~~ DONE
-13. ~~DECOMPOSE state + handler~~ DONE
-14. ~~Scheduler (TopologicalSorter)~~ DONE
-15. ~~Synthesis~~ DONE
-16. ~~Decomposition CLI integration~~ DONE
-17. ~~Voting + classifier~~ DONE
-18. ~~Voting CLI + persistence + display~~ DONE
-19. ~~Tool implementations (web_search, code_exec, file_read)~~ DONE
-20. ~~Provider tool call parsing~~ DONE
-21. ~~Tool integration in handlers~~ DONE
-22. ~~Tool CLI setup~~ DONE
-23. ~~Integration tests (Phase 6)~~ DONE
-24. ~~README + docs update~~ DONE
-25. ~~Version bump to 0.2.0~~ DONE
-
-## Ready for v0.3
-
-Key references:
-- **v0.3 scope**: REST API, MCP server, Python client library
-- **Tech stack**: `techContext.md` — FastAPI (likely), MCP SDK
-- **Architecture**: `decisions.md` — all foundational decisions documented
-- **Patterns**: Handler pattern, Tool protocol, provider adapter pattern all established in v0.1/v0.2
-
-### Phase 0 Artifacts That Feed v0.1
-
-- **Validated prompts** from `phase0/prompts.py` — especially the forced disagreement challenger prompt, will seed `src/duh/consensus/` challenge framings
-- **Question corpus** from `phase0/questions.json` — reusable for sycophancy test suite in v0.1
-- **Model client patterns** from `phase0/models.py` — async wrapper, retry, cost tracking patterns inform provider adapter design
-- **Cost data** from benchmark — informs default cost thresholds and warnings
+- **MCP server calls Python directly** — no REST dependency. `duh mcp` starts standalone.
+- **REST API reuses existing async functions** — FastAPI endpoints wrap `_run_consensus`, `_ask_voting_async`, etc.
+- **WebSocket uses existing `stream()` methods** — phase-level events during consensus.
+- **API keys are local-only** — hashed in SQLite/Postgres, `X-API-Key` header.
+- **Mistral adapter follows OpenAI pattern** — chat completion API with similar shapes.
+- **Client library is a thin REST wrapper** — async httpx + sync convenience wrappers in `client/`.
 
 ## Open Questions (Still Unresolved)
 
@@ -114,5 +46,5 @@ Key references:
 - Output licensing for multi-provider synthesized content
 - Vector search solution for SQLite (sqlite-vss vs ChromaDB vs FAISS) — v1.0 decision
 - Hosted demo economics — v0.4 decision
-- ~~Whether DECOMPOSE should itself be a consensus operation~~ RESOLVED: No, decomposition is single-model (simpler, sufficient)
-- ~~Testing framework~~ RESOLVED: pytest + pytest-asyncio, asyncio_mode=auto
+- Client library packaging: monorepo `client/` dir vs separate repo?
+- MCP server transport: stdio vs SSE vs streamable HTTP?

@@ -282,3 +282,87 @@
 - Each subtask now shows PROPOSE/CHALLENGE/REVISE/COMMIT panels with model names and spinners
 - Added `cost: float` field to `SubtaskResult` for per-subtask cost tracking
 - Files: `src/duh/consensus/scheduler.py`, `src/duh/cli/display.py`, `src/duh/cli/app.py`
+
+---
+
+## v0.3 Development — "It's Accessible"
+
+### 2026-02-16: Mistral Provider Adapter (T1)
+- Created `src/duh/providers/mistral.py` — 4 models (mistral-large, mistral-medium, mistral-small, codestral)
+- Follows OpenAI adapter pattern. send, stream, health_check, error mapping, model listing
+- 29 tests
+
+### 2026-02-16: Export Formatters + CLI (T2)
+- `duh export <thread-id> --format json|markdown` command
+- Full thread export with debate history
+- 13 tests
+
+### 2026-02-16: Batch Mode CLI (T3)
+- `duh batch questions.txt` — read questions from file, run consensus on each
+- Supports one-per-line and JSONL formats, sequential execution
+- 29 tests
+
+### 2026-02-16: API Config Schema (T4)
+- Added `APIConfig` to `src/duh/config/schema.py` — host, port, api_keys, cors_origins, rate_limit
+- Extended TOML config with `[api]` section, added Mistral provider default
+- 21 tests
+
+### 2026-02-16: FastAPI App + Serve Command (T5)
+- Created `src/duh/api/app.py` — FastAPI factory, lifespan handler, middleware, route registration
+- `duh serve --host --port --reload` CLI command runs uvicorn
+- 4 tests
+
+### 2026-02-16: API Key Model + Repository (T6)
+- Added `APIKey` model to `src/duh/memory/models.py` — id, key_hash, name, created_at, revoked_at
+- Repository methods: create_api_key, validate_api_key, revoke_api_key, list_api_keys
+- Migration `004_v03_api_keys.py`
+- 10 tests
+
+### 2026-02-16: Auth + Rate-Limit Middleware (T7)
+- Created `src/duh/api/middleware.py` — APIKeyMiddleware, RateLimitMiddleware, hash_api_key()
+- API key validation via `X-API-Key` header, per-key rate limiting, CORS from config
+- 16 tests
+
+### 2026-02-16: POST /api/ask Endpoint (T8)
+- Created `src/duh/api/routes/ask.py` — consensus, voting, decompose protocols via REST
+- Request: question, protocol, rounds, decompose, tools. Response: decision, confidence, dissent, cost, thread_id
+- 10 tests
+
+### 2026-02-16: GET /api/threads Endpoints (T9)
+- Created `src/duh/api/routes/threads.py` — list and detail endpoints
+- Query params: status, limit, offset. Detail includes full debate history
+- 13 tests
+
+### 2026-02-16: Remaining CRUD Endpoints (T10)
+- Created `src/duh/api/routes/crud.py` — /api/recall, /api/feedback, /api/models, /api/cost
+- Mirrors CLI functionality via REST
+- 15 tests
+
+### 2026-02-16: WebSocket /ws/ask Streaming (T11)
+- Created `src/duh/api/routes/ws.py` — real-time streaming of consensus phases
+- JSON message events: propose_start, propose_content, challenge_start, etc.
+- 11 tests
+
+### 2026-02-16: MCP Server Implementation (T12)
+- Created `src/duh/mcp/server.py` — duh_ask, duh_recall, duh_threads tools
+- Direct Python calls (no REST dependency). `duh mcp` CLI command
+- 18 tests
+
+### 2026-02-16: Python Client Library (T13)
+- Created `client/` package with `DuhClient` class
+- ask(), recall(), threads(), show(), feedback(), models(), cost() — async + sync interfaces
+- Files: `client/pyproject.toml`, `client/src/duh_client/client.py`, `client/tests/test_client.py`
+
+### 2026-02-16: v0.3 Integration Tests (T14)
+- Created `tests/integration/test_v03_api.py` — API end-to-end tests
+- Coverage: REST consensus, WebSocket streaming, batch processing, export round-trip
+
+### 2026-02-16: v0.3 Documentation (T15)
+- MkDocs pages: api-reference.md, python-client.md, mcp-server.md, batch-mode.md, export.md
+- CLI docs: serve.md, mcp.md, batch.md, export.md
+- Config reference: config-reference.md
+- Updated index.md and README.md
+
+### 2026-02-16: Version Bump to 0.3.0 (T17)
+- Updated `pyproject.toml` version to 0.3.0
+- **Final count: 1318 tests, 50 source files, 5 providers**

@@ -4,7 +4,7 @@
 
 ---
 
-## Current State: v0.2 COMPLETE — 4 Providers, 1093 Tests, 39 Source Files
+## Current State: v0.3 COMPLETE — 5 Providers, REST API + MCP + Client
 
 ### What's Built
 
@@ -81,3 +81,13 @@ Phase 0 benchmark framework — fully functional, pilot-tested on 5 questions.
 | 2026-02-16 | v0.2 Phase 6 — Integration tests, README, version bump to 0.2.0 | Done |
 | 2026-02-16 | v0.2.0 — "It Thinks Deeper" | **Complete** |
 | 2026-02-16 | Subtask progress display (decompose scheduler) | Done |
+| 2026-02-16 | v0.3 task breakdown planned (17 tasks, 7 phases) | Done |
+| 2026-02-16 | v0.3.0 branch created from main | Done |
+| 2026-02-16 | v0.3 T1-T3 (Phase 1: Foundation) — Mistral adapter, export CLI, batch mode CLI | Done |
+| 2026-02-16 | v0.3 T4-T7 (Phase 2: API Core) — API config, FastAPI app, API keys, auth middleware | Done |
+| 2026-02-16 | v0.3 T8-T10 (Phase 3: REST Endpoints) — /api/ask, /api/threads, /api/recall+more | Done |
+| 2026-02-16 | v0.3 T11 (Phase 4: Streaming) — WebSocket /ws/ask | Done |
+| 2026-02-16 | v0.3 T12 (Phase 5: MCP) — MCP server (duh_ask, duh_recall, duh_threads) | Done |
+| 2026-02-16 | v0.3 T13 (Phase 6: Client) — Python client library (duh-client) | Done |
+| 2026-02-16 | v0.3 T14-T17 (Phase 7: Ship) — Integration tests, docs, version bump | Done |
+| 2026-02-16 | v0.3.0 — "It's Accessible" | **Complete** |

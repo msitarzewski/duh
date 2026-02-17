@@ -339,6 +339,7 @@ class TestIndexes:
             "outcomes",
             "subtasks",
             "votes",
+            "api_keys",
         }
         assert expected == set(Base.metadata.tables.keys())
 

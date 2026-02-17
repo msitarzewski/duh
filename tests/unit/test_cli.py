@@ -30,7 +30,7 @@ class TestCliGroup:
         result = runner.invoke(cli, ["--version"])
         assert result.exit_code == 0
         assert "duh" in result.output
-        assert "0.2.0" in result.output
+        assert "0.3.0" in result.output
 
     def test_help(self, runner: CliRunner) -> None:
         result = runner.invoke(cli, ["--help"])
