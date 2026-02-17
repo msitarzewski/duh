@@ -548,7 +548,9 @@ async def _ask_decompose_async(
         return
 
     # Schedule subtasks
-    subtask_results = await schedule_subtasks(subtask_specs, question, config, pm)
+    subtask_results = await schedule_subtasks(
+        subtask_specs, question, config, pm, display=display
+    )
 
     for sr in subtask_results:
         display.show_subtask_progress(sr)

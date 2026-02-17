@@ -80,3 +80,4 @@ Phase 0 benchmark framework — fully functional, pilot-tested on 5 questions.
 | 2026-02-16 | v0.2 T18-T22 (Phase 5: Tools + Voting CLI) — voting CLI, tool implementations, provider tool parsing, tool handler integration, tool CLI setup | Done |
 | 2026-02-16 | v0.2 Phase 6 — Integration tests, README, version bump to 0.2.0 | Done |
 | 2026-02-16 | v0.2.0 — "It Thinks Deeper" | **Complete** |
+| 2026-02-16 | Subtask progress display (decompose scheduler) | Done |

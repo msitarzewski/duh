@@ -30,6 +30,7 @@ from duh.consensus.machine import (
 from duh.core.errors import ConsensusError
 
 if TYPE_CHECKING:
+    from duh.cli.display import ConsensusDisplay
     from duh.config.schema import DuhConfig
     from duh.consensus.machine import SubtaskSpec
     from duh.providers.manager import ProviderManager
@@ -42,6 +43,7 @@ class SubtaskResult:
     label: str
     decision: str
     confidence: float
+    cost: float = 0.0
 
 
 async def _run_mini_consensus(
@@ -49,6 +51,7 @@ async def _run_mini_consensus(
     provider_manager: ProviderManager,
     *,
     max_rounds: int = 1,
+    display: ConsensusDisplay | None = None,
 ) -> tuple[str, float]:
     """Run a simplified single-round consensus for one subtask.
 
@@ -59,6 +62,7 @@ async def _run_mini_consensus(
         question: The subtask question/description.
         provider_manager: For model calls and cost tracking.
         max_rounds: Maximum consensus rounds (default 1 for subtasks).
+        display: Optional display for real-time progress output.
 
     Returns:
         (decision, confidence) tuple.
@@ -76,20 +80,39 @@ async def _run_mini_consensus(
     # PROPOSE
     sm.transition(ConsensusState.PROPOSE)
     proposer_ref = select_proposer(provider_manager)
-    await handle_propose(ctx, provider_manager, proposer_ref)
+    if display:
+        with display.phase_status("PROPOSE", proposer_ref):
+            await handle_propose(ctx, provider_manager, proposer_ref)
+        display.show_propose(proposer_ref, ctx.proposal or "")
+    else:
+        await handle_propose(ctx, provider_manager, proposer_ref)
 
     # CHALLENGE
     sm.transition(ConsensusState.CHALLENGE)
     challenger_refs = select_challengers(provider_manager, proposer_ref, count=2)
-    await handle_challenge(ctx, provider_manager, challenger_refs)
+    if display:
+        detail = f"{len(challenger_refs)} models"
+        with display.phase_status("CHALLENGE", detail):
+            await handle_challenge(ctx, provider_manager, challenger_refs)
+        display.show_challenges(ctx.challenges)
+    else:
+        await handle_challenge(ctx, provider_manager, challenger_refs)
 
     # REVISE
     sm.transition(ConsensusState.REVISE)
-    await handle_revise(ctx, provider_manager)
+    reviser = ctx.proposal_model or proposer_ref
+    if display:
+        with display.phase_status("REVISE", reviser):
+            await handle_revise(ctx, provider_manager)
+        display.show_revise(ctx.revision_model or reviser, ctx.revision or "")
+    else:
+        await handle_revise(ctx, provider_manager)
 
     # COMMIT
     sm.transition(ConsensusState.COMMIT)
     await handle_commit(ctx)
+    if display:
+        display.show_commit(ctx.confidence, ctx.dissent)
 
     return ctx.decision or "", ctx.confidence
 
@@ -99,6 +122,8 @@ async def _execute_subtask(
     question: str,
     provider_manager: ProviderManager,
     prior_results: dict[str, SubtaskResult],
+    *,
+    display: ConsensusDisplay | None = None,
 ) -> SubtaskResult:
     """Execute a single subtask with context from dependencies.
 
@@ -110,6 +135,7 @@ async def _execute_subtask(
         question: The original top-level question.
         provider_manager: For model calls.
         prior_results: Results from already-completed subtasks.
+        display: Optional display for real-time progress output.
 
     Returns:
         SubtaskResult for this subtask.
@@ -128,14 +154,17 @@ async def _execute_subtask(
         dep_text = "\n".join(dep_context_parts)
         augmented_question += f"\n\nContext from prior subtasks:\n{dep_text}"
 
+    cost_before = provider_manager.total_cost
     decision, confidence = await _run_mini_consensus(
-        augmented_question, provider_manager
+        augmented_question, provider_manager, display=display
     )
+    subtask_cost = provider_manager.total_cost - cost_before
 
     return SubtaskResult(
         label=subtask.label,
         decision=decision,
         confidence=confidence,
+        cost=subtask_cost,
     )
 
 
@@ -144,6 +173,8 @@ async def schedule_subtasks(
     question: str,
     config: DuhConfig,
     provider_manager: ProviderManager,
+    *,
+    display: ConsensusDisplay | None = None,
 ) -> list[SubtaskResult]:
     """Schedule and execute subtasks respecting dependency ordering.
 
@@ -156,6 +187,7 @@ async def schedule_subtasks(
         question: The original top-level question.
         config: Configuration (for parallel execution setting).
         provider_manager: For model calls and cost tracking.
+        display: Optional display for real-time progress output.
 
     Returns:
         List of SubtaskResult in completion order.
@@ -181,6 +213,8 @@ async def schedule_subtasks(
     results: list[SubtaskResult] = []
     prior_results: dict[str, SubtaskResult] = {}
     parallel = config.decompose.parallel
+    total = len(subtasks)
+    completed = 0
 
     while sorter.is_active():
         ready = list(sorter.get_ready())
@@ -189,6 +223,8 @@ async def schedule_subtasks(
 
         if parallel and len(ready) > 1:
             # Execute independent subtasks concurrently
+            # Display headers for each (display is not used during parallel
+            # execution to avoid interleaved output)
             coros = [
                 _execute_subtask(
                     subtask_map[label],
@@ -200,18 +236,33 @@ async def schedule_subtasks(
             ]
             batch_results = await asyncio.gather(*coros)
             for result in batch_results:
+                completed += 1
+                if display:
+                    display.subtask_footer(result.label, completed, total, result.cost)
                 results.append(result)
                 prior_results[result.label] = result
                 sorter.done(result.label)
         else:
-            # Execute sequentially
+            # Execute sequentially with full display
             for label in ready:
+                completed += 1
+                subtask = subtask_map[label]
+                if display:
+                    display.subtask_header(
+                        subtask.label,
+                        completed,
+                        total,
+                        subtask.dependencies,
+                    )
                 result = await _execute_subtask(
-                    subtask_map[label],
+                    subtask,
                     question,
                     provider_manager,
                     prior_results,
+                    display=display,
                 )
+                if display:
+                    display.subtask_footer(result.label, completed, total, result.cost)
                 results.append(result)
                 prior_results[result.label] = result
                 sorter.done(label)

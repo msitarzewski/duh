@@ -1,7 +1,7 @@
 # Active Context
 
 **Last Updated**: 2026-02-16
-**Current Phase**: v0.2 COMPLETE. Preparing v0.3.
+**Current Phase**: v0.2 COMPLETE. Post-v0.2 polish done. Preparing v0.3.
 **Next Action**: Plan v0.3 task breakdown (REST API, MCP server, Python client).
 
 ---
@@ -22,6 +22,10 @@
 - **Decision taxonomy** — automatic classification at COMMIT time via lightweight model call
 - **Outcome tracking** — `duh feedback <thread_id> --result --notes`, outcome context in future rounds
 - **Feedback CLI** — record real-world outcomes for knowledge accumulation
+
+### Post-v0.2 Polish
+
+- **Subtask progress display** — `ConsensusDisplay` threaded through scheduler; each subtask shows real-time PROPOSE/CHALLENGE/REVISE/COMMIT phases with model names, spinners, and per-subtask cost tracking. Fixes silent execution during `--decompose` runs.
 
 ## Phase 0 Benchmark Results (Summary)
 
