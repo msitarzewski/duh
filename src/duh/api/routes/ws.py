@@ -9,6 +9,7 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 if TYPE_CHECKING:
     from duh.config.schema import DuhConfig
+    from duh.consensus.machine import RoundResult
     from duh.providers.manager import ProviderManager
 
 logger = logging.getLogger(__name__)
@@ -180,6 +181,18 @@ async def _stream_consensus(
             break
 
     sm.transition(ConsensusState.COMPLETE)
+
+    # Persist to DB if available
+    thread_id: str | None = None
+    db_factory = getattr(ws.app.state, "db_factory", None)
+    if db_factory is not None:
+        try:
+            thread_id = await _persist_consensus(
+                db_factory, question, ctx.round_history
+            )
+        except Exception:
+            logger.exception("Failed to persist consensus thread")
+
     await ws.send_json(
         {
             "type": "complete",
@@ -187,6 +200,47 @@ async def _stream_consensus(
             "confidence": ctx.confidence,
             "dissent": ctx.dissent,
             "cost": pm.total_cost,
+            "thread_id": thread_id,
         }
     )
     await ws.close()
+
+
+async def _persist_consensus(
+    db_factory: object,
+    question: str,
+    round_history: list[RoundResult],
+) -> str:
+    """Persist consensus round history to the database.
+
+    Returns the new thread ID.
+    """
+    from duh.memory.repository import MemoryRepository
+
+    async with db_factory() as session:  # type: ignore[operator]
+        repo = MemoryRepository(session)
+        thread = await repo.create_thread(question)
+        thread.status = "complete"
+
+        for rr in round_history:
+            turn = await repo.create_turn(thread.id, rr.round_number, "COMMIT")
+            await repo.add_contribution(
+                turn.id, rr.proposal_model, "proposer", rr.proposal
+            )
+            for ch in rr.challenges:
+                await repo.add_contribution(
+                    turn.id, ch.model_ref, "challenger", ch.content
+                )
+            await repo.add_contribution(
+                turn.id, rr.proposal_model, "reviser", rr.revision
+            )
+            await repo.save_decision(
+                turn.id,
+                thread.id,
+                rr.decision,
+                rr.confidence,
+                dissent=rr.dissent,
+            )
+
+        await session.commit()
+        return str(thread.id)

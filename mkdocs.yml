@@ -75,6 +75,9 @@ nav:
       - duh batch: cli/batch.md
       - duh export: cli/export.md
   - REST API: api-reference.md
+  - Web UI:
+      - Quickstart: web-quickstart.md
+      - Reference: web-ui.md
   - Python Client: python-client.md
   - MCP Server: mcp-server.md
   - Guides:

@@ -1,0 +1,250 @@
+/* ── Keyframes ─────────────────────────────────────────── */
+
+@keyframes pulse-glow {
+  0%, 100% { opacity: 0.6; }
+  50% { opacity: 1; }
+}
+
+@keyframes scan-line {
+  0% { transform: translateY(-100%); }
+  100% { transform: translateY(100vh); }
+}
+
+@keyframes fade-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes text-reveal {
+  from { max-width: 0; }
+  to { max-width: 100%; }
+}
+
+@keyframes data-flow {
+  0% { stroke-dashoffset: 20; }
+  100% { stroke-dashoffset: 0; }
+}
+
+@keyframes cursor-blink {
+  0%, 50% { opacity: 1; }
+  51%, 100% { opacity: 0; }
+}
+
+@keyframes spin-slow {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@keyframes slide-in-left {
+  from {
+    opacity: 0;
+    transform: translateX(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes slide-in-right {
+  from {
+    opacity: 0;
+    transform: translateX(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+@keyframes scale-in {
+  from {
+    opacity: 0;
+    transform: scale(0.85);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* ── Utility classes ───────────────────────────────────── */
+
+.animate-pulse-glow {
+  animation: pulse-glow 2s ease-in-out infinite;
+}
+
+.animate-fade-in-up {
+  animation: fade-in-up 0.4s ease-out forwards;
+}
+
+.animate-slide-in-left {
+  animation: slide-in-left 0.3s ease-out forwards;
+}
+
+.animate-slide-in-right {
+  animation: slide-in-right 0.3s ease-out forwards;
+}
+
+.animate-cursor-blink {
+  animation: cursor-blink 1s step-end infinite;
+}
+
+.animate-data-flow {
+  animation: data-flow 1s linear infinite;
+}
+
+.animate-shimmer {
+  background: linear-gradient(
+    90deg,
+    var(--color-surface) 25%,
+    var(--color-surface-hover, rgba(255,255,255,0.06)) 50%,
+    var(--color-surface) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s ease-in-out infinite;
+}
+
+.animate-scale-in {
+  animation: scale-in 0.25s ease-out forwards;
+}
+
+/* ── Markdown prose ──────────────────────────────────── */
+
+.duh-prose {
+  line-height: 1.7;
+  color: var(--color-text, #e4e4e7);
+}
+
+.duh-prose h1,
+.duh-prose h2,
+.duh-prose h3,
+.duh-prose h4,
+.duh-prose h5,
+.duh-prose h6 {
+  color: var(--color-text, #e4e4e7);
+  font-weight: 600;
+  margin-top: 1.25em;
+  margin-bottom: 0.5em;
+  line-height: 1.3;
+}
+
+.duh-prose h1 { font-size: 1.4em; }
+.duh-prose h2 { font-size: 1.2em; }
+.duh-prose h3 { font-size: 1.05em; }
+
+.duh-prose p {
+  margin-top: 0.5em;
+  margin-bottom: 0.5em;
+}
+
+.duh-prose ul,
+.duh-prose ol {
+  margin-top: 0.5em;
+  margin-bottom: 0.5em;
+  padding-left: 1.5em;
+}
+
+.duh-prose ul { list-style-type: disc; }
+.duh-prose ol { list-style-type: decimal; }
+
+.duh-prose li {
+  margin-top: 0.2em;
+  margin-bottom: 0.2em;
+}
+
+.duh-prose li::marker {
+  color: var(--color-text-dim, #52525b);
+}
+
+.duh-prose strong {
+  color: var(--color-text, #e4e4e7);
+  font-weight: 600;
+}
+
+.duh-prose em {
+  font-style: italic;
+}
+
+.duh-prose blockquote {
+  margin: 0.75em 0;
+  padding: 0.5em 1em;
+  border-left: 3px solid var(--color-primary, #00d4ff);
+  background: rgba(0, 212, 255, 0.04);
+  color: var(--color-text-secondary, #a1a1aa);
+}
+
+.duh-prose hr {
+  margin: 1em 0;
+  border: none;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.duh-prose a {
+  color: var(--color-primary, #00d4ff);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.duh-prose a:hover {
+  opacity: 0.8;
+}
+
+.duh-prose img {
+  max-width: 100%;
+  border-radius: 0.5rem;
+  margin: 0.75em 0;
+}
+
+.duh-prose > *:first-child {
+  margin-top: 0;
+}
+
+.duh-prose > *:last-child {
+  margin-bottom: 0;
+}
+
+/* ── Code block light mode overrides ─────────────────── */
+
+@media (prefers-color-scheme: light) {
+  .duh-prose pre {
+    background: rgba(0, 0, 0, 0.04) !important;
+    border-color: rgba(0, 0, 0, 0.08) !important;
+  }
+
+  .duh-prose pre code.hljs {
+    background: transparent !important;
+    color: #24292f !important;
+  }
+
+  .duh-prose code:not(pre code) {
+    background: rgba(0, 0, 0, 0.06) !important;
+    color: var(--color-primary) !important;
+  }
+}
+
+.theme-light .duh-prose pre {
+  background: rgba(0, 0, 0, 0.04) !important;
+  border-color: rgba(0, 0, 0, 0.08) !important;
+}
+
+.theme-light .duh-prose pre code.hljs {
+  background: transparent !important;
+  color: #24292f !important;
+}
+
+.theme-light .duh-prose code:not(pre code) {
+  background: rgba(0, 0, 0, 0.06) !important;
+  color: var(--color-primary) !important;
+}

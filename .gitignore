@@ -53,3 +53,7 @@ site/
 # Memory bank setup
 memory-bank/setup.md
 
+# Web UI
+web/node_modules/
+web/dist/
+

@@ -287,6 +287,64 @@ class MemoryRepository:
         result = await self._session.execute(stmt)
         return list(result.scalars().all())
 
+    # ── Decision Space ──────────────────────────────────────────
+
+    async def get_all_decisions_for_space(
+        self,
+        *,
+        category: str | None = None,
+        genus: str | None = None,
+        outcome: str | None = None,
+        confidence_min: float | None = None,
+        confidence_max: float | None = None,
+        since: str | None = None,
+        until: str | None = None,
+        search: str | None = None,
+    ) -> list[Decision]:
+        """Get decisions with outcomes for the Decision Space visualization.
+
+        Returns decisions with eagerly loaded outcomes and thread questions,
+        with optional filtering.
+        """
+        from datetime import datetime
+
+        stmt = (
+            select(Decision)
+            .join(Thread, Decision.thread_id == Thread.id)
+            .outerjoin(Outcome, Outcome.decision_id == Decision.id)
+            .options(
+                selectinload(Decision.outcome),
+                selectinload(Decision.thread),
+            )
+            .order_by(Decision.created_at)
+        )
+
+        if category is not None:
+            stmt = stmt.where(Decision.category == category)
+        if genus is not None:
+            stmt = stmt.where(Decision.genus == genus)
+        if outcome is not None:
+            stmt = stmt.where(Outcome.result == outcome)
+        if confidence_min is not None:
+            stmt = stmt.where(Decision.confidence >= confidence_min)
+        if confidence_max is not None:
+            stmt = stmt.where(Decision.confidence <= confidence_max)
+        if since is not None:
+            stmt = stmt.where(Decision.created_at >= datetime.fromisoformat(since))
+        if until is not None:
+            stmt = stmt.where(Decision.created_at <= datetime.fromisoformat(until))
+        if search is not None:
+            pattern = f"%{search}%"
+            stmt = stmt.where(
+                or_(
+                    Thread.question.ilike(pattern),
+                    Decision.content.ilike(pattern),
+                )
+            )
+
+        result = await self._session.execute(stmt)
+        return list(result.scalars().unique().all())
+
     # ── Subtask ──────────────────────────────────────────────────
 
     async def save_subtask(

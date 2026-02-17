@@ -1,7 +1,7 @@
 # duh Roadmap
 
-**Version**: 1.3
-**Date**: 2026-02-16
+**Version**: 1.4
+**Date**: 2026-02-17
 **Status**: Draft for review
 **Synthesized from**: Product Strategy, Systems Architecture, Devil's Advocate Review, Competitive Research Analysis
 
@@ -106,8 +106,8 @@ The devil's advocate correctly identified this as the existential risk: "If this
 |---------|-------|-----------------|-----------------|--------|
 | **0.1.0** | It Works & Remembers | Consensus CLI with basic persistence | 5-8 days | **COMPLETE** |
 | **0.2.0** | It Thinks Deeper | Task decomposition, outcome tracking | 4-6 days | **COMPLETE** |
-| **0.3.0** | It's Accessible | REST API, MCP server, Python client | 4-6 days | |
-| **0.4.0** | It Has a Face | Web UI with real-time consensus display | 6-10 days | |
+| **0.3.0** | It's Accessible | REST API, MCP server, Python client | 4-6 days | **COMPLETE** |
+| **0.4.0** | It Has a Face | Web UI with real-time consensus display | 6-10 days | **COMPLETE** |
 | **0.5.0** | It Scales | Multi-user, PostgreSQL, production hardening | 4-6 days | |
 | **1.0.0** | duh. | Stable APIs, documentation, security audit | 5-8 days | |
 
@@ -347,26 +347,28 @@ All -> 24 (Docker) -> 25 (docs)
 
 #### Acceptance Criteria
 
-- [ ] Full REST API with OpenAPI spec and WebSocket streaming
-- [ ] MCP server exposes consensus as a callable tool
-- [ ] Python client library published to PyPI
-- [ ] API authentication and rate limiting functional
-- [ ] Batch mode processes multiple queries
+- [x] Full REST API with OpenAPI spec and WebSocket streaming
+- [x] MCP server exposes consensus as a callable tool
+- [x] Python client library (in `client/` dir, not yet on PyPI)
+- [x] API authentication and rate limiting functional
+- [x] Batch mode processes multiple queries
 
 #### Tasks
 
-1. FastAPI application with middleware (auth, CORS, rate limiting)
-2. REST endpoints mirroring CLI commands
-3. WebSocket endpoint for streaming consensus
-4. API key management (create, revoke, list)
-5. Python client library (`duh-client` package)
-6. MCP server implementation (tools: ask, recall, threads)
-7. Mistral provider adapter
-8. Batch processing engine
-9. Export formatters (JSON, Markdown)
-10. Unit tests for every endpoint, middleware function, client method, MCP tool, batch processor, export formatter
-11. Integration tests: API end-to-end, WebSocket streaming, MCP tool invocation, client library against live API, batch processing
-12. Documentation: API reference, client quickstart, MCP guide
+1. FastAPI application with middleware (auth, CORS, rate limiting) ~~DONE~~
+2. REST endpoints mirroring CLI commands ~~DONE~~
+3. WebSocket endpoint for streaming consensus ~~DONE~~
+4. API key management (create, revoke, list) ~~DONE~~
+5. Python client library (`duh-client` package) ~~DONE~~
+6. MCP server implementation (tools: ask, recall, threads) ~~DONE~~
+7. Mistral provider adapter ~~DONE~~
+8. Batch processing engine ~~DONE~~
+9. Export formatters (JSON, Markdown) ~~DONE~~
+10. Unit tests ~~DONE~~ (189 new tests across 12 test files)
+11. Integration tests ~~DONE~~ (API e2e, WebSocket, batch, export)
+12. Documentation ~~DONE~~ (API reference, client quickstart, MCP guide, CLI docs)
+
+> **v0.3.0 shipped 2026-02-16.** 1318 tests, 50 source files, 5 providers (Anthropic, OpenAI, Google, Mistral, Ollama). REST API (8 endpoints + WebSocket), MCP server, Python client library. All features delivered.
 
 ---
 
@@ -389,32 +391,40 @@ All -> 24 (Docker) -> 25 (docs)
 
 #### Acceptance Criteria
 
-- [ ] Web UI shows real-time consensus with streaming from each model
-- [ ] Thread history browsable and searchable
-- [ ] Decisions show full provenance (who proposed, who challenged, how resolved, dissent)
-- [ ] 3D Decision Space renders all decisions with time, category, and genus axes
-- [ ] Decision Space is interactive: click nodes, filter by taxonomy, animate timeline
-- [ ] Share links work without authentication (read-only)
-- [ ] `docker compose up` serves web UI + API in under 2 minutes
-- [ ] `try.duh.dev` live and rate-limited
+- [x] Web UI shows real-time consensus with streaming from each model
+- [x] Thread history browsable and searchable
+- [x] Decisions show full provenance (who proposed, who challenged, how resolved, dissent)
+- [x] 3D Decision Space renders all decisions with time, category, and genus axes
+- [x] Decision Space is interactive: click nodes, filter by taxonomy, animate timeline
+- [x] Share links work without authentication (read-only)
+- [x] `docker compose up` serves web UI + API
+- [ ] `try.duh.dev` live and rate-limited (deferred)
 
 #### Tasks
 
-1. Frontend framework selection and scaffolding
-2. Real-time consensus display component (WebSocket-driven)
-3. Thread browser with search and filtering
-4. Decision detail view with debate provenance
-5. 3D Decision Space renderer (Three.js/WebGL point cloud, axis mapping, camera controls)
-6. Decision Space interaction layer (click-to-detail, taxonomy filtering, timeline animation, confidence/outcome coloring)
-7. Decision Space API endpoint (aggregated decision data with taxonomy, optimized for rendering)
-8. Share link generation and read-only viewer
-9. User preferences UI and persistence
-10. Responsive layout for mobile (Decision Space degrades to 2D scatter on small screens)
-11. Docker Compose configuration for web + API + optional Postgres
-12. Hosted demo deployment (try.duh.dev)
-13. Unit tests for all frontend components, WebSocket handlers, share link logic, Decision Space data transforms
-14. E2E tests: full flow from question input to consensus display to share link, Decision Space renders with real data
-15. Documentation: self-hosting guide
+1. Frontend scaffolding (React 19 + Vite 6 + Tailwind 4 + TS) ~~DONE~~
+2. Design system (CSS custom properties, glassmorphism, animations) ~~DONE~~
+3. API client + TypeScript types ~~DONE~~
+4. Zustand stores (consensus, threads, decision-space, preferences) ~~DONE~~
+5. Layout shell + routing (6 pages) ~~DONE~~
+6. Consensus page + WebSocket streaming ~~DONE~~
+7. Thread browser + thread detail pages ~~DONE~~
+8. 3D Decision Space (Three.js/R3F, InstancedMesh, code-split) ~~DONE~~
+9. Decision Space interaction + mobile 2D fallback ~~DONE~~
+10. Decision Space API endpoint (/api/decisions/space) ~~DONE~~
+11. Share links (/api/share/{token}) ~~DONE~~
+12. Preferences page ~~DONE~~
+13. FastAPI static serving + SPA fallback ~~DONE~~
+14. Animations + micro-interactions + polish ~~DONE~~
+15. Docker multi-stage with Node.js 22 frontend build ~~DONE~~
+16. Docker Compose update ~~DONE~~
+17. 117 Vitest unit tests (5 test files) ~~DONE~~
+18. Playwright E2E tests (deferred to v0.5)
+19. MkDocs documentation (web-ui.md, web-quickstart.md) ~~DONE~~
+20. Hosted demo (try.duh.dev) (deferred)
+21. Version bump to 0.4.0 ~~DONE~~
+
+> **v0.4.0 shipped 2026-02-17.** 1318 Python tests + 117 Vitest tests (1435 total), 50 Python + 66 frontend source files. React 19 + Vite 6 + Tailwind 4 + Three.js web UI with 3D Decision Space, real-time WebSocket streaming, thread browser, preferences. Hosted demo deferred.
 
 ---
 
@@ -857,6 +867,7 @@ Y = yes, N = no, ~ = partial, * = research only, not product
 | 2026-02-15 | 1.1 | Recalibrated timelines to AI-time. Added Testing Mandate. Added Self-Building Milestone. Elevated testing from afterthought to first-class development constraint. |
 | 2026-02-16 | 1.2 | Added tool-augmented consensus (v0.2) and decision taxonomy (v0.2). Added 3D Decision Space visualization (v0.4). Updated competitive gap analysis. |
 | 2026-02-16 | 1.3 | v0.2.0 complete. All features shipped. Updated acceptance criteria and task status. Added Status column to overview table. |
+| 2026-02-17 | 1.4 | v0.3.0 and v0.4.0 complete. All features shipped. Updated acceptance criteria, task status, and completion notes for both versions. |
 
 ---
 

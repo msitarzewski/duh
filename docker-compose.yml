@@ -1,15 +1,19 @@
+# docker compose up        -- starts web UI + API on :8080
 # docker compose run duh ask "your question"
 # docker compose run duh recall "topic"
-# docker compose run duh threads
 
 services:
   duh:
     build: .
+    ports:
+      - "8080:8080"
     volumes:
       - duh-data:/data
     environment:
       - ANTHROPIC_API_KEY
       - OPENAI_API_KEY
+      - GOOGLE_API_KEY
+      - MISTRAL_API_KEY
 
 volumes:
   duh-data:

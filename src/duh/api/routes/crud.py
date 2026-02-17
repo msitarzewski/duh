@@ -192,3 +192,95 @@ async def cost(request: Request) -> CostResponse:
             CostByModel(model_ref=ref, cost=c, calls=n) for ref, c, n in by_model
         ],
     )
+
+
+# -- GET /api/decisions/space -----------------------------------------------
+
+
+class SpaceDecisionResponse(BaseModel):
+    id: str
+    thread_id: str
+    question: str
+    confidence: float
+    intent: str | None = None
+    category: str | None = None
+    genus: str | None = None
+    outcome: str | None = None
+    created_at: str
+
+
+class SpaceAxisMeta(BaseModel):
+    categories: list[str]
+    genera: list[str]
+
+
+class DecisionSpaceResponse(BaseModel):
+    decisions: list[SpaceDecisionResponse]
+    axes: SpaceAxisMeta
+    total: int
+
+
+@router.get("/decisions/space", response_model=DecisionSpaceResponse)
+async def decision_space(
+    request: Request,
+    category: str | None = None,
+    genus: str | None = None,
+    outcome: str | None = None,
+    confidence_min: float | None = None,
+    confidence_max: float | None = None,
+    since: str | None = None,
+    until: str | None = None,
+    search: str | None = None,
+) -> DecisionSpaceResponse:
+    """Get decisions for the Decision Space visualization."""
+    from duh.memory.repository import MemoryRepository
+
+    db_factory = request.app.state.db_factory
+    async with db_factory() as session:
+        repo = MemoryRepository(session)
+        decisions = await repo.get_all_decisions_for_space(
+            category=category,
+            genus=genus,
+            outcome=outcome,
+            confidence_min=confidence_min,
+            confidence_max=confidence_max,
+            since=since,
+            until=until,
+            search=search,
+        )
+
+        results = []
+        all_categories: set[str] = set()
+        all_genera: set[str] = set()
+
+        for d in decisions:
+            question = d.thread.question[:100] if d.thread else ""
+            outcome_str = d.outcome.result if d.outcome else None
+
+            if d.category:
+                all_categories.add(d.category)
+            if d.genus:
+                all_genera.add(d.genus)
+
+            results.append(
+                SpaceDecisionResponse(
+                    id=d.id,
+                    thread_id=d.thread_id,
+                    question=question,
+                    confidence=d.confidence,
+                    intent=d.intent,
+                    category=d.category,
+                    genus=d.genus,
+                    outcome=outcome_str,
+                    created_at=d.created_at.isoformat(),
+                )
+            )
+
+    return DecisionSpaceResponse(
+        decisions=results,
+        axes=SpaceAxisMeta(
+            categories=sorted(all_categories),
+            genera=sorted(all_genera),
+        ),
+        total=len(results),
+    )

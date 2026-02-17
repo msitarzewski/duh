@@ -2,19 +2,19 @@
 
 ## Core Files
 - [projectbrief.md](./projectbrief.md) — Vision, tenets, architecture, build sequence
-- [techContext.md](./techContext.md) — Tech stack decisions with rationale (Python, Docker, SQLAlchemy, tools, etc.)
-- [decisions.md](./decisions.md) — Architectural decisions with context, alternatives, and consequences (15 ADRs)
-- [activeContext.md](./activeContext.md) — Current state, v0.3 complete, ready for merge
+- [techContext.md](./techContext.md) — Tech stack decisions with rationale (Python, Docker, SQLAlchemy, frontend, tools, etc.)
+- [decisions.md](./decisions.md) — Architectural decisions with context, alternatives, and consequences (18 ADRs)
+- [activeContext.md](./activeContext.md) — Current state, v0.4 complete, ready for commit/merge
 - [progress.md](./progress.md) — Milestone tracking, what's built, what's next
 - [competitive-landscape.md](./competitive-landscape.md) — Research on existing tools, frameworks, and academic work
-- [quick-start.md](./quick-start.md) — Session entry point, v0.3 complete, key file references
+- [quick-start.md](./quick-start.md) — Session entry point, v0.4 complete, key file references
 - [v03-build-status.md](./v03-build-status.md) — v0.3 build status, all 17 tasks complete
 
 ## Context Files
 - [setup.md](./setup.md) — Original GPT-5.2 conversation that sparked the project
 
 ## Roadmap
-- [roadmap.md](./roadmap.md) — Full versioned roadmap v1.1 (Phase 0 through 1.0, AI-time estimates, testing mandate, self-building milestone)
+- [roadmap.md](./roadmap.md) — Full versioned roadmap v1.4 (Phase 0 through 1.0, AI-time estimates, testing mandate, self-building milestone)
 
 ## Agent Team Analyses (Supporting Material)
 - [tmp-product-strategy.md](./tmp-product-strategy.md) — Product strategist: releases, go-to-market, pricing
@@ -28,6 +28,7 @@
 - [tasks/2026-02/150215_core-errors.md](./tasks/2026-02/150215_core-errors.md) — v0.1 Task 2: core error hierarchy
 - [tasks/2026-02/150215_provider-interface.md](./tasks/2026-02/150215_provider-interface.md) — v0.1 Task 3: provider adapter interface
 - [tasks/2026-02/150215_configuration.md](./tasks/2026-02/150215_configuration.md) — v0.1 Task 4: configuration
+- [tasks/2026-02/170217_v04-web-ui.md](./tasks/2026-02/170217_v04-web-ui.md) — v0.4: Web UI implementation (React, Three.js, WebSocket)
 
 ## Phase 0 Code (not memory bank — in repo root)
 - `phase0/` — Benchmark framework (config, models, prompts, methods, questions, runner, judge, analyze)

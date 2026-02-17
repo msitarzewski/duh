@@ -140,3 +140,57 @@ async def get_thread(thread_id: str, request: Request) -> ThreadDetailResponse:
         created_at=thread.created_at.isoformat(),
         turns=turns,
     )
+
+
+@router.get("/share/{share_token}", response_model=ThreadDetailResponse)
+async def get_shared_thread(share_token: str, request: Request) -> ThreadDetailResponse:
+    """Get a shared thread (no auth required). Token is the thread ID."""
+    from duh.memory.repository import MemoryRepository
+
+    db_factory = request.app.state.db_factory
+    async with db_factory() as session:
+        repo = MemoryRepository(session)
+        thread = await repo.get_thread(share_token)
+
+    if thread is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Shared thread not found: {share_token}",
+        )
+
+    turns = []
+    for turn in thread.turns:
+        contribs = [
+            ContributionResponse(
+                model_ref=c.model_ref,
+                role=c.role,
+                content=c.content,
+                input_tokens=c.input_tokens,
+                output_tokens=c.output_tokens,
+                cost_usd=c.cost_usd,
+            )
+            for c in turn.contributions
+        ]
+        dec = None
+        if turn.decision:
+            dec = DecisionResponse(
+                content=turn.decision.content,
+                confidence=turn.decision.confidence,
+                dissent=turn.decision.dissent,
+            )
+        turns.append(
+            TurnResponse(
+                round_number=turn.round_number,
+                state=turn.state,
+                contributions=contribs,
+                decision=dec,
+            )
+        )
+
+    return ThreadDetailResponse(
+        thread_id=thread.id,
+        question=thread.question,
+        status=thread.status,
+        created_at=thread.created_at.isoformat(),
+        turns=turns,
+    )

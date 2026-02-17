@@ -1,25 +1,26 @@
 # Quick Start — Session Entry Point
 
-**Last Updated**: 2026-02-16
+**Last Updated**: 2026-02-17
 
 ---
 
 ## Where We Are
 
-**v0.3 COMPLETE** — "It's Accessible". REST API, MCP server, Python client, Mistral adapter — all shipped.
+**v0.4 COMPLETE** — "It Has a Face". Web UI with 3D Decision Space, real-time streaming, thread browser.
 
-- 1318 tests, 50 source files, 5 providers (Anthropic, OpenAI, Google, Mistral, local via Ollama)
-- Version 0.3.0, branch `v0.3.0` ready to merge to main
+- 1318 Python tests + 117 Vitest tests (1435 total), 50 Python + 66 frontend source files
+- 5 providers (Anthropic, OpenAI, Google, Mistral, local via Ollama) — 14 models
+- Version 0.4.0, branch `v0.3.0` (v0.4 changes uncommitted on top)
 - MkDocs docs live at https://msitarzewski.github.io/duh/
 - GitHub repo: https://github.com/msitarzewski/duh
 
 ## Starting a Session
 
 Load these files:
-1. `activeContext.md` — current state, v0.3 summary, open questions
+1. `activeContext.md` — current state, v0.4 summary, open questions
 2. `roadmap.md:330+` — future version specs
-3. `techContext.md` — tech stack + all decided patterns
-4. `decisions.md` — 15 ADRs, all foundational + v0.2 decisions
+3. `techContext.md` — tech stack + all decided patterns (Python + frontend)
+4. `decisions.md` — 18 ADRs, all foundational + v0.2 + v0.3 + v0.4 decisions
 
 ## Project Commands
 
@@ -36,18 +37,29 @@ duh threads                                # list threads
 duh show <thread_id>                       # show thread details
 duh models                                 # list available models
 duh cost                                   # show cost summary
-duh serve                                  # start REST API server
+duh serve                                  # start REST API + web UI
+duh serve --reload                         # dev mode with hot reload
 duh mcp                                    # start MCP server
 duh batch questions.txt                    # batch mode
 duh export <thread_id> --format json       # export thread
 
-# Development
+# Backend Development
 uv sync                                    # install deps
 uv run pytest tests/ -v                    # run all tests
 uv run mypy src/duh/                       # type check
 uv run ruff check --fix src/ tests/        # lint + fix
 uv run ruff format src/ tests/             # format
 uv run alembic upgrade head                # run migrations
+
+# Frontend Development
+cd web && npm ci                           # install deps
+cd web && npm run dev                      # Vite dev server (:3000, proxies to :8080)
+cd web && npm run build                    # production build to dist/
+cd web && npm test                         # run Vitest tests
+cd web && npx tsc --noEmit                 # TypeScript check
+
+# Docker
+docker compose up                          # full stack on :8080
 ```
 
 ## Key Files
@@ -67,7 +79,19 @@ uv run alembic upgrade head                # run migrations
 | REST API | `src/duh/api/app.py`, `src/duh/api/middleware.py`, `src/duh/api/routes/` |
 | MCP Server | `src/duh/mcp/server.py` |
 | Client | `client/src/duh_client/client.py` |
-| Migrations | `alembic/versions/001_v01_baseline.py`, `002_v02_schema.py`, `003_v02_votes.py`, `004_v03_api_keys.py` |
+| Migrations | `alembic/versions/001_v01_baseline.py` through `004_v03_api_keys.py` |
+| Frontend theme | `web/src/theme/duh-theme.css` (22 CSS vars, dark/light), `web/src/theme/animations.css` (keyframes + `.duh-prose`) |
+| Markdown | `web/src/components/shared/Markdown.tsx` (react-markdown + highlight.js + mermaid lazy) |
+| Frontend API | `web/src/api/client.ts`, `web/src/api/websocket.ts`, `web/src/api/types.ts` |
+| Frontend stores | `web/src/stores/consensus.ts`, `threads.ts`, `decision-space.ts`, `preferences.ts` |
+| Consensus UI | `web/src/components/consensus/ConsensusPanel.tsx`, `QuestionInput.tsx`, `PhaseCard.tsx`, `StreamingText.tsx` |
+| Threads UI | `web/src/components/threads/ThreadBrowser.tsx`, `ThreadDetail.tsx` |
+| Decision Space | `web/src/components/decision-space/DecisionSpace.tsx`, `Scene3D.tsx`, `DecisionCloud.tsx` |
+| Layout | `web/src/components/layout/Shell.tsx`, `Sidebar.tsx`, `TopBar.tsx` |
+| Shared | `web/src/components/shared/GlassPanel.tsx`, `GlowButton.tsx`, `Badge.tsx`, `PageTransition.tsx`, `Markdown.tsx` |
+| Pages | `web/src/pages/ConsensusPage.tsx`, `ThreadsPage.tsx`, `DecisionSpacePage.tsx`, `PreferencesPage.tsx` |
+| Vitest config | `web/vitest.config.ts`, `web/src/test-setup.ts` |
+| Frontend tests | `web/src/__tests__/shared-components.test.tsx`, `stores.test.ts`, `api-client.test.ts`, `websocket.test.ts`, `consensus-components.test.tsx` |
 
 ### Key Architecture Patterns
 
@@ -78,3 +102,6 @@ uv run alembic upgrade head                # run migrations
 - **Consensus loop**: `src/duh/cli/app.py` — `_run_consensus()` reusable for REST
 - **REST route**: `src/duh/api/routes/ask.py` — FastAPI endpoint wrapping consensus
 - **MCP tool**: `src/duh/mcp/server.py` — direct Python calls, no REST dependency
+- **Frontend component**: `web/src/components/shared/GlassPanel.tsx` — glassmorphism pattern
+- **Zustand store**: `web/src/stores/consensus.ts` — WebSocket-driven state machine
+- **3D visualization**: `web/src/components/decision-space/DecisionCloud.tsx` — InstancedMesh point cloud

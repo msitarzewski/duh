@@ -30,6 +30,9 @@ class APIKeyMiddleware(BaseHTTPMiddleware):
         "/openapi.json",
         "/redoc",
     }
+    EXEMPT_PREFIXES: ClassVar[list[str]] = [
+        "/api/share/",
+    ]
 
     async def dispatch(
         self, request: Request, call_next: Callable[[Request], Awaitable[Response]]
@@ -38,6 +41,14 @@ class APIKeyMiddleware(BaseHTTPMiddleware):
 
         # Skip auth for exempt paths
         if path in self.EXEMPT_PATHS:
+            return await call_next(request)
+
+        # Skip auth for exempt prefixes
+        if any(path.startswith(prefix) for prefix in self.EXEMPT_PREFIXES):
+            return await call_next(request)
+
+        # Skip auth for non-API paths (frontend static files)
+        if not path.startswith("/api/") and not path.startswith("/ws/"):
             return await call_next(request)
 
         # Skip auth if no API keys are configured (dev mode)

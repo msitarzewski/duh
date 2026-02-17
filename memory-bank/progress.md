@@ -1,10 +1,28 @@
 # Progress
 
-**Last Updated**: 2026-02-16
+**Last Updated**: 2026-02-17
 
 ---
 
-## Current State: v0.3 COMPLETE — 5 Providers, REST API + MCP + Client
+## Current State: v0.4 COMPLETE — Web UI with 3D Decision Space
+
+### v0.4 Additions
+
+- React 19 + Vite 6 + Tailwind 4 + TypeScript frontend (66 source files)
+- 3D Decision Space: Three.js point cloud (R3F + drei), lazy-loaded, code-split (873KB)
+- Real-time WebSocket consensus streaming in browser
+- Thread browser with search, filtering, pagination
+- Preferences panel (rounds, protocol, cost threshold)
+- Glassmorphism design system with CSS custom properties, 9+ animation keyframes
+- Page transitions, micro-interactions, ConfidenceMeter animation
+- Mobile-responsive with 2D SVG scatter fallback
+- 117 Vitest tests (shared components, stores, API client, WebSocket, consensus components)
+- Backend: /api/decisions/space endpoint, /api/share/{token}, static file serving + SPA fallback
+- Docker: multi-stage build with Node.js 22 frontend stage
+- Docs: web-ui.md, web-quickstart.md, updated mkdocs.yml
+- Version 0.4.0 across pyproject.toml, __init__.py, api/app.py
+
+### v0.3 Additions (Previously Shipped)
 
 ### What's Built
 
@@ -91,3 +109,19 @@ Phase 0 benchmark framework — fully functional, pilot-tested on 5 questions.
 | 2026-02-16 | v0.3 T13 (Phase 6: Client) — Python client library (duh-client) | Done |
 | 2026-02-16 | v0.3 T14-T17 (Phase 7: Ship) — Integration tests, docs, version bump | Done |
 | 2026-02-16 | v0.3.0 — "It's Accessible" | **Complete** |
+| 2026-02-17 | v0.4 Web UI scaffolding (React 19 + Vite 6 + Tailwind 4 + TS) | Done |
+| 2026-02-17 | v0.4 Design system (CSS vars, glassmorphism, animations) | Done |
+| 2026-02-17 | v0.4 API client + TypeScript types + Zustand stores | Done |
+| 2026-02-17 | v0.4 Layout shell + routing (6 pages) | Done |
+| 2026-02-17 | v0.4 Consensus page + WebSocket streaming | Done |
+| 2026-02-17 | v0.4 Thread browser + thread detail pages | Done |
+| 2026-02-17 | v0.4 3D Decision Space (Three.js/R3F, InstancedMesh, code-split) | Done |
+| 2026-02-17 | v0.4 Decision Space interaction + mobile 2D fallback | Done |
+| 2026-02-17 | v0.4 Share links + preferences page | Done |
+| 2026-02-17 | v0.4 Backend: /api/decisions/space, /api/share, static serving | Done |
+| 2026-02-17 | v0.4 Docker multi-stage with Node.js 22 frontend build | Done |
+| 2026-02-17 | v0.4 Animations + micro-interactions + polish | Done |
+| 2026-02-17 | v0.4 117 Vitest tests (5 test files) | Done |
+| 2026-02-17 | v0.4 MkDocs documentation (web-ui.md, web-quickstart.md) | Done |
+| 2026-02-17 | v0.4 Version bump to 0.4.0 | Done |
+| 2026-02-17 | v0.4.0 — "It Has a Face" | **Complete** |
