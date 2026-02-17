@@ -225,3 +225,17 @@ class Vote(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
 
     thread: Mapped[Thread] = relationship()
+
+
+class APIKey(Base):
+    """API key for REST API authentication."""
+
+    __tablename__ = "api_keys"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    key_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    name: Mapped[str] = mapped_column(String(100))
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+    revoked_at: Mapped[datetime | None] = mapped_column(
+        DateTime, nullable=True, default=None
+    )

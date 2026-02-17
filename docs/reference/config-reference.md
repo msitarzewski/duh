@@ -29,7 +29,7 @@ Complete reference for all configuration fields in duh's TOML config files.
 
 ## `[providers.<name>]`
 
-Provider configuration is a dictionary keyed by provider name. Default providers are `anthropic`, `openai`, and `google`.
+Provider configuration is a dictionary keyed by provider name. Default providers are `anthropic`, `openai`, `google`, and `mistral`.
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
@@ -104,6 +104,16 @@ Provider configuration is a dictionary keyed by provider name. Default providers
 |-----|------|---------|-------------|
 | `enabled` | bool | `false` | Auto-classify decisions with intent, category, and genus during COMMIT. |
 | `model_ref` | str | `""` | Model to use for classification. Empty = cheapest available model. |
+
+## `[api]`
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `host` | str | `"127.0.0.1"` | Host to bind the API server to. Use `"0.0.0.0"` to listen on all interfaces. |
+| `port` | int | `8080` | Port to bind the API server to. |
+| `cors_origins` | list[str] | `["http://localhost:3000"]` | Allowed CORS origins. |
+| `rate_limit` | int | `60` | Max requests per API key per window. |
+| `rate_limit_window` | int | `60` | Rate limit window in seconds. |
 
 ## Config file locations
 

@@ -1,0 +1,15 @@
+[project]
+name = "duh-client"
+version = "0.3.0"
+description = "Python client for the duh consensus engine API"
+requires-python = ">=3.11"
+dependencies = [
+    "httpx>=0.27",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/duh_client"]

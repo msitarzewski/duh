@@ -25,6 +25,10 @@ duh [OPTIONS] COMMAND [ARGS]...
 | [`feedback`](feedback.md) | Record an outcome (success/failure/partial) for a past decision |
 | [`models`](models.md) | List configured providers and available models |
 | [`cost`](cost.md) | Show cumulative cost from stored contributions |
+| [`serve`](serve.md) | Start the REST API server |
+| [`mcp`](mcp.md) | Start the MCP server for AI agent integration |
+| [`batch`](batch.md) | Run consensus on multiple questions from a file |
+| [`export`](export.md) | Export a thread as JSON or Markdown |
 
 ## Common patterns
 
@@ -75,6 +79,31 @@ Check costs:
 
 ```bash
 duh cost
+```
+
+Start the REST API server:
+
+```bash
+duh serve
+duh serve --host 0.0.0.0 --port 9000
+```
+
+Start the MCP server:
+
+```bash
+duh mcp
+```
+
+Process a batch of questions:
+
+```bash
+duh batch questions.txt --format json
+```
+
+Export a thread:
+
+```bash
+duh export a1b2c3d4 --format markdown
 ```
 
 Use a specific config file:

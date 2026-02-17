@@ -14,6 +14,7 @@ from sqlalchemy.orm import selectinload
 
 from duh.core.errors import StorageError
 from duh.memory.models import (
+    APIKey,
     Contribution,
     Decision,
     Outcome,
@@ -23,6 +24,7 @@ from duh.memory.models import (
     Turn,
     TurnSummary,
     Vote,
+    _utcnow,
 )
 
 if TYPE_CHECKING:
@@ -349,5 +351,42 @@ class MemoryRepository:
     async def get_votes(self, thread_id: str) -> list[Vote]:
         """Get all votes for a thread, ordered chronologically."""
         stmt = select(Vote).where(Vote.thread_id == thread_id).order_by(Vote.created_at)
+        result = await self._session.execute(stmt)
+        return list(result.scalars().all())
+
+    # ── API Key ──────────────────────────────────────────────
+
+    async def create_api_key(self, name: str, key_hash: str) -> APIKey:
+        """Create a new API key record."""
+        api_key = APIKey(name=name, key_hash=key_hash)
+        self._session.add(api_key)
+        await self._session.flush()
+        return api_key
+
+    async def validate_api_key(self, key_hash: str) -> APIKey | None:
+        """Look up an API key by hash. Returns None if not found or revoked."""
+        stmt = select(APIKey).where(
+            APIKey.key_hash == key_hash,
+            APIKey.revoked_at.is_(None),
+        )
+        result = await self._session.execute(stmt)
+        return result.scalar_one_or_none()
+
+    async def revoke_api_key(self, key_id: str) -> APIKey:
+        """Revoke an API key by ID.
+
+        Raises StorageError if the key does not exist.
+        """
+        api_key = await self._session.get(APIKey, key_id)
+        if api_key is None:
+            msg = f"API key not found: {key_id}"
+            raise StorageError(msg)
+        api_key.revoked_at = _utcnow()
+        await self._session.flush()
+        return api_key
+
+    async def list_api_keys(self) -> list[APIKey]:
+        """List all API keys ordered by creation date."""
+        stmt = select(APIKey).order_by(APIKey.created_at.desc())
         result = await self._session.execute(stmt)
         return list(result.scalars().all())

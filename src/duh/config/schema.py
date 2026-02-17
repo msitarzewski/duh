@@ -96,6 +96,16 @@ class TaxonomyConfig(BaseModel):
     model_ref: str = ""
 
 
+class APIConfig(BaseModel):
+    """REST API server configuration."""
+
+    host: str = "127.0.0.1"
+    port: int = 8080
+    cors_origins: list[str] = Field(default_factory=lambda: ["http://localhost:3000"])
+    rate_limit: int = 60  # requests per minute per API key
+    rate_limit_window: int = 60  # window in seconds
+
+
 class GeneralConfig(BaseModel):
     """General engine settings."""
 
@@ -118,6 +128,7 @@ class DuhConfig(BaseModel):
             "anthropic": ProviderConfig(api_key_env="ANTHROPIC_API_KEY"),
             "openai": ProviderConfig(api_key_env="OPENAI_API_KEY"),
             "google": ProviderConfig(api_key_env="GOOGLE_API_KEY"),
+            "mistral": ProviderConfig(api_key_env="MISTRAL_API_KEY"),
         }
     )
     consensus: ConsensusConfig = Field(default_factory=ConsensusConfig)
@@ -126,3 +137,4 @@ class DuhConfig(BaseModel):
     voting: VotingConfig = Field(default_factory=VotingConfig)
     decompose: DecomposeConfig = Field(default_factory=DecomposeConfig)
     taxonomy: TaxonomyConfig = Field(default_factory=TaxonomyConfig)
+    api: APIConfig = Field(default_factory=APIConfig)

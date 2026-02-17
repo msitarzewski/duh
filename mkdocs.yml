@@ -70,9 +70,18 @@ nav:
       - duh feedback: cli/feedback.md
       - duh models: cli/models.md
       - duh cost: cli/cost.md
+      - duh serve: cli/serve.md
+      - duh mcp: cli/mcp.md
+      - duh batch: cli/batch.md
+      - duh export: cli/export.md
+  - REST API: api-reference.md
+  - Python Client: python-client.md
+  - MCP Server: mcp-server.md
   - Guides:
       - Docker: guides/docker.md
       - Local Models: guides/local-models.md
+      - Batch Mode: batch-mode.md
+      - Export: export.md
   - Python API:
       - Library Usage: python-api/library-usage.md
   - Reference:

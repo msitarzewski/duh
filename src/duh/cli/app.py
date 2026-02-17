@@ -1,13 +1,15 @@
 """Main CLI application.
 
 Click commands for the duh consensus engine: ask, recall, threads,
-show, models, cost.
+show, models, cost, batch.
 """
 
 from __future__ import annotations
 
 import asyncio
+import json as json_mod
 import sys
+import time
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -22,6 +24,7 @@ if TYPE_CHECKING:
 
     from duh.cli.display import ConsensusDisplay
     from duh.config.schema import DuhConfig
+    from duh.memory.models import Thread, Vote
     from duh.providers.base import ModelInfo
     from duh.providers.manager import ProviderManager
     from duh.tools.registry import ToolRegistry
@@ -91,7 +94,12 @@ async def _setup_providers(config: DuhConfig) -> ProviderManager:
     for name, prov_config in config.providers.items():
         if not prov_config.enabled:
             continue
-        if prov_config.api_key is None and name in ("anthropic", "openai", "google"):
+        if prov_config.api_key is None and name in (
+            "anthropic",
+            "openai",
+            "google",
+            "mistral",
+        ):
             continue  # Skip providers without API keys
 
         if name == "anthropic":
@@ -112,6 +120,11 @@ async def _setup_providers(config: DuhConfig) -> ProviderManager:
 
             google_prov = GoogleProvider(api_key=prov_config.api_key)
             await pm.register(google_prov)  # type: ignore[arg-type]
+        elif name == "mistral":
+            from duh.providers.mistral import MistralProvider
+
+            mistral_prov = MistralProvider(api_key=prov_config.api_key)
+            await pm.register(mistral_prov)  # type: ignore[arg-type]
 
     return pm
 
@@ -828,6 +841,181 @@ async def _feedback_async(
     click.echo(message)
 
 
+# ── export ──────────────────────────────────────────────────────
+
+
+@cli.command()
+@click.argument("thread_id")
+@click.option(
+    "--format",
+    "fmt",
+    type=click.Choice(["json", "markdown"]),
+    default="json",
+    help="Export format.",
+)
+@click.pass_context
+def export(ctx: click.Context, thread_id: str, fmt: str) -> None:
+    """Export a thread with full debate history.
+
+    THREAD_ID can be the full UUID or a prefix (minimum 8 chars).
+    """
+    config = _load_config(ctx.obj["config_path"])
+    try:
+        asyncio.run(_export_async(config, thread_id, fmt))
+    except DuhError as e:
+        _error(str(e))
+
+
+async def _export_async(config: DuhConfig, thread_id: str, fmt: str) -> None:
+    """Async implementation for the export command."""
+    from duh.memory.repository import MemoryRepository
+
+    factory, engine = await _create_db(config)
+    thread = None
+    votes: list[Vote] = []
+    message: str = ""
+
+    async with factory() as session:
+        repo = MemoryRepository(session)
+
+        # Support prefix matching (same pattern as feedback command)
+        resolved_id = thread_id
+        if len(resolved_id) < 36:
+            thread_list = await repo.list_threads(limit=100)
+            matches = [t for t in thread_list if t.id.startswith(resolved_id)]
+            if not matches:
+                message = f"No thread matching '{thread_id}'."
+            elif len(matches) > 1:
+                lines = [f"Ambiguous prefix '{thread_id}'. Matches:"]
+                for m in matches:
+                    lines.append(f"  {m.id}  {m.question[:50]}")
+                message = "\n".join(lines)
+            else:
+                resolved_id = matches[0].id
+
+        if not message:
+            thread = await repo.get_thread(resolved_id)
+            if thread is None:
+                message = f"Thread not found: {resolved_id}"
+            else:
+                votes = await repo.get_votes(resolved_id)
+
+    await engine.dispose()
+
+    if message:
+        click.echo(message)
+        return
+
+    assert thread is not None
+    if fmt == "json":
+        click.echo(_format_thread_json(thread, votes))
+    else:
+        click.echo(_format_thread_markdown(thread, votes))
+
+
+def _format_thread_json(
+    thread: Thread,
+    votes: list[Vote],
+) -> str:
+    """Format a thread as JSON for export."""
+    from datetime import UTC, datetime
+
+    turns_data = []
+    for turn in thread.turns:
+        contributions_data = []
+        for contrib in turn.contributions:
+            contributions_data.append(
+                {
+                    "model_ref": contrib.model_ref,
+                    "role": contrib.role,
+                    "content": contrib.content,
+                    "input_tokens": contrib.input_tokens,
+                    "output_tokens": contrib.output_tokens,
+                    "cost_usd": contrib.cost_usd,
+                }
+            )
+
+        decision_data = None
+        if turn.decision:
+            decision_data = {
+                "content": turn.decision.content,
+                "confidence": turn.decision.confidence,
+                "dissent": turn.decision.dissent,
+            }
+
+        turns_data.append(
+            {
+                "round_number": turn.round_number,
+                "state": turn.state,
+                "contributions": contributions_data,
+                "decision": decision_data,
+            }
+        )
+
+    votes_data = [
+        {
+            "model_ref": v.model_ref,
+            "content": v.content,
+        }
+        for v in votes
+    ]
+
+    export_data = {
+        "thread_id": thread.id,
+        "question": thread.question,
+        "status": thread.status,
+        "created_at": thread.created_at.isoformat(),
+        "turns": turns_data,
+        "votes": votes_data,
+        "exported_at": datetime.now(UTC).isoformat(),
+    }
+
+    return json_mod.dumps(export_data, indent=2)
+
+
+def _format_thread_markdown(
+    thread: Thread,
+    votes: list[Vote],
+) -> str:
+    """Format a thread as Markdown for export."""
+    lines: list[str] = []
+    created = thread.created_at.strftime("%Y-%m-%d")
+    lines.append(f"# Thread: {thread.question}")
+    lines.append(f"**Status**: {thread.status} | **Created**: {created}")
+    lines.append("")
+
+    if votes:
+        lines.append("## Votes")
+        for v in votes:
+            lines.append(f"**{v.model_ref}**: {v.content}")
+            lines.append("")
+
+    for turn in thread.turns:
+        lines.append(f"## Round {turn.round_number}")
+
+        for contrib in turn.contributions:
+            role_label = contrib.role.capitalize()
+            lines.append(f"### {role_label} ({contrib.model_ref})")
+            lines.append(contrib.content)
+            lines.append("")
+
+        if turn.decision:
+            lines.append("### Decision")
+            conf_pct = f"{turn.decision.confidence:.0%}"
+            dissent_part = (
+                f" | **Dissent**: {turn.decision.dissent}"
+                if turn.decision.dissent
+                else ""
+            )
+            lines.append(f"**Confidence**: {conf_pct}{dissent_part}")
+            lines.append(turn.decision.content)
+            lines.append("")
+
+    lines.append("---")
+    lines.append(f"*Exported from duh v{__version__}*")
+    return "\n".join(lines)
+
+
 # ── models ───────────────────────────────────────────────────────
 
 
@@ -930,3 +1118,268 @@ async def _cost_async(config: DuhConfig) -> None:
         click.echo("By model:")
         for model_ref, model_cost, call_count in by_model:
             click.echo(f"  {model_ref}: ${model_cost:.4f} ({call_count} calls)")
+
+
+# ── serve ────────────────────────────────────────────────────────
+
+
+@cli.command()
+@click.option("--host", default=None, help="Host to bind to (overrides config).")
+@click.option(
+    "--port", type=int, default=None, help="Port to bind to (overrides config)."
+)
+@click.option(
+    "--reload", is_flag=True, default=False, help="Enable auto-reload for development."
+)
+@click.pass_context
+def serve(ctx: click.Context, host: str | None, port: int | None, reload: bool) -> None:
+    """Start the REST API server."""
+    import uvicorn
+
+    from duh.api.app import create_app
+
+    config = _load_config(ctx.obj["config_path"])
+
+    effective_host = host or config.api.host
+    effective_port = port or config.api.port
+
+    app = create_app(config)
+    uvicorn.run(
+        app,
+        host=effective_host,
+        port=effective_port,
+        reload=reload,
+    )
+
+
+# ── mcp ─────────────────────────────────────────────────────────
+
+
+@cli.command()
+@click.pass_context
+def mcp(ctx: click.Context) -> None:
+    """Start the MCP server for AI agent integration."""
+    from duh.mcp.server import run_server
+
+    asyncio.run(run_server())
+
+
+# ── batch ───────────────────────────────────────────────────────
+
+
+@cli.command()
+@click.argument("file", type=click.Path(exists=True))
+@click.option(
+    "--protocol",
+    type=click.Choice(["consensus", "voting", "auto"]),
+    default="consensus",
+    help="Protocol for each question.",
+)
+@click.option(
+    "--rounds",
+    type=int,
+    default=None,
+    help="Max consensus rounds.",
+)
+@click.option(
+    "--format",
+    "output_fmt",
+    type=click.Choice(["text", "json"]),
+    default="text",
+    help="Output format.",
+)
+@click.pass_context
+def batch(
+    ctx: click.Context,
+    file: str,
+    protocol: str,
+    rounds: int | None,
+    output_fmt: str,
+) -> None:
+    """Run consensus on multiple questions from a file.
+
+    FILE can be a text file (one question per line) or JSONL
+    (each line is {"question": "..."}).
+    """
+    config = _load_config(ctx.obj["config_path"])
+    if rounds is not None:
+        config.general.max_rounds = rounds
+
+    try:
+        questions = _parse_batch_file(file, protocol)
+    except (OSError, ValueError) as e:
+        _error(str(e))
+        return  # unreachable
+
+    if not questions:
+        _error("No questions found in file.")
+        return  # unreachable
+
+    try:
+        asyncio.run(_batch_async(questions, config, output_fmt))
+    except DuhError as e:
+        _error(str(e))
+
+
+def _parse_batch_file(
+    file_path: str,
+    default_protocol: str,
+) -> list[dict[str, str]]:
+    """Parse a batch file into a list of question dicts.
+
+    Returns list of {"question": "...", "protocol": "..."}.
+    Auto-detects JSONL vs plain text by trying to parse the first
+    non-empty line as JSON.
+    """
+    path = Path(file_path)
+    lines = path.read_text(encoding="utf-8").splitlines()
+
+    # Find first non-empty line to detect format
+    first_content_line: str | None = None
+    for line in lines:
+        stripped = line.strip()
+        if stripped and not stripped.startswith("#"):
+            first_content_line = stripped
+            break
+
+    if first_content_line is None:
+        return []
+
+    # Detect JSONL format
+    is_jsonl = False
+    try:
+        parsed = json_mod.loads(first_content_line)
+        if isinstance(parsed, dict) and "question" in parsed:
+            is_jsonl = True
+    except (json_mod.JSONDecodeError, ValueError):
+        pass
+
+    questions: list[dict[str, str]] = []
+
+    if is_jsonl:
+        for i, line in enumerate(lines, 1):
+            stripped = line.strip()
+            if not stripped:
+                continue
+            try:
+                entry = json_mod.loads(stripped)
+            except json_mod.JSONDecodeError as e:
+                raise ValueError(f"Invalid JSON on line {i}: {e}") from e
+            if not isinstance(entry, dict) or "question" not in entry:
+                raise ValueError(
+                    f"Line {i}: each JSON line must have a 'question' field"
+                )
+            questions.append(
+                {
+                    "question": entry["question"],
+                    "protocol": entry.get("protocol", default_protocol),
+                }
+            )
+    else:
+        for line in lines:
+            stripped = line.strip()
+            if not stripped or stripped.startswith("#"):
+                continue
+            questions.append(
+                {
+                    "question": stripped,
+                    "protocol": default_protocol,
+                }
+            )
+
+    return questions
+
+
+async def _batch_async(
+    questions: list[dict[str, str]],
+    config: DuhConfig,
+    output_fmt: str,
+) -> None:
+    """Async implementation for the batch command."""
+    pm = await _setup_providers(config)
+
+    if not pm.list_all_models():
+        _error(
+            "No models available. Configure providers in "
+            "~/.config/duh/config.toml or set API key environment variables."
+        )
+
+    total = len(questions)
+    results: list[dict[str, object]] = []
+    total_cost = 0.0
+    start_time = time.monotonic()
+
+    for i, q in enumerate(questions, 1):
+        question = q["question"]
+        q_protocol = q["protocol"]
+        truncated = question[:60] + ("..." if len(question) > 60 else "")
+
+        if output_fmt == "text":
+            header = f"── Question {i}/{total} "
+            click.echo(f"\n{header:─<60}")
+            click.echo(f"Q: {truncated}")
+
+        cost_before = pm.total_cost
+
+        try:
+            if q_protocol == "voting":
+                from duh.consensus.voting import run_voting
+
+                aggregation = config.voting.aggregation
+                vr = await run_voting(question, pm, aggregation=aggregation)
+                decision = vr.decision or ""
+                confidence = vr.confidence
+            else:
+                decision, confidence, _dissent, _cost = await _run_consensus(
+                    question, config, pm
+                )
+
+            q_cost = pm.total_cost - cost_before
+            total_cost += q_cost
+
+            results.append(
+                {
+                    "question": question,
+                    "decision": decision,
+                    "confidence": confidence,
+                    "cost": round(q_cost, 4),
+                }
+            )
+
+            if output_fmt == "text":
+                click.echo(f"Decision: {decision[:200]}")
+                click.echo(f"Confidence: {confidence:.0%}")
+                click.echo(f"Cost: ${q_cost:.4f}")
+
+        except Exception as e:
+            q_cost = pm.total_cost - cost_before
+            total_cost += q_cost
+            results.append(
+                {
+                    "question": question,
+                    "error": str(e),
+                    "confidence": 0.0,
+                    "cost": round(q_cost, 4),
+                }
+            )
+            if output_fmt == "text":
+                click.echo(f"Error: {e}")
+
+    elapsed = time.monotonic() - start_time
+
+    if output_fmt == "json":
+        output = {
+            "results": results,
+            "summary": {
+                "total_questions": total,
+                "total_cost": round(total_cost, 4),
+                "elapsed_seconds": round(elapsed, 1),
+            },
+        }
+        click.echo(json_mod.dumps(output, indent=2))
+    else:
+        click.echo("\n── Summary ──────────────────────────────────────────────")
+        click.echo(
+            f"{total} questions | Total cost: ${total_cost:.4f} "
+            f"| Elapsed: {elapsed:.1f}s"
+        )
