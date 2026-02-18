@@ -188,9 +188,10 @@ class TestExportJson:
         assert turn["round_number"] == 1
         assert turn["state"] == "COMMIT"
 
-        # Contributions
+        # Contributions (order not guaranteed by DB)
         assert len(turn["contributions"]) == 2
-        proposer = turn["contributions"][0]
+        by_role = {c["role"]: c for c in turn["contributions"]}
+        proposer = by_role["proposer"]
         assert proposer["model_ref"] == "anthropic:claude-opus-4-6"
         assert proposer["role"] == "proposer"
         assert proposer["content"] == "Use PostgreSQL for everything."
@@ -204,10 +205,10 @@ class TestExportJson:
         assert turn["decision"]["confidence"] == 0.85
         assert turn["decision"]["dissent"] == "PostgreSQL for future scale."
 
-        # Votes
+        # Votes (order not guaranteed by DB)
         assert len(data["votes"]) == 2
-        assert data["votes"][0]["model_ref"] == "anthropic:claude-opus-4-6"
-        assert data["votes"][0]["content"] == "SQLite"
+        votes_by_model = {v["model_ref"]: v for v in data["votes"]}
+        assert votes_by_model["anthropic:claude-opus-4-6"]["content"] == "SQLite"
 
         asyncio.run(engine.dispose())
 
