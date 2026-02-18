@@ -116,6 +116,13 @@ class TestExportHelp:
         assert "THREAD_ID" in result.output
         assert "--format" in result.output
 
+    def test_help_shows_new_options(self, runner: CliRunner) -> None:
+        result = runner.invoke(cli, ["export", "--help"])
+        assert result.exit_code == 0
+        assert "--content" in result.output
+        assert "--no-dissent" in result.output
+        assert "--output" in result.output
+
     def test_missing_thread_id(self, runner: CliRunner) -> None:
         result = runner.invoke(cli, ["export"])
         assert result.exit_code != 0
@@ -125,6 +132,7 @@ class TestExportHelp:
         result = runner.invoke(cli, ["export", "--help"])
         assert "json" in result.output
         assert "markdown" in result.output
+        assert "pdf" in result.output
 
 
 # ── JSON export tests ────────────────────────────────────────
@@ -247,7 +255,7 @@ class TestExportJson:
 
 
 class TestExportMarkdown:
-    def test_markdown_has_heading_and_content(self, runner: CliRunner) -> None:
+    def test_markdown_full_report(self, runner: CliRunner) -> None:
         factory, engine = _make_db()
         thread_id = _seed_thread_with_data(factory)
 
@@ -264,31 +272,272 @@ class TestExportMarkdown:
         assert result.exit_code == 0
         output = result.output
 
-        # Header
-        assert "# Thread: Best database for CLI tools?" in output
-        assert "**Status**: active" in output
+        # Header - new format
+        assert "# Consensus: Best database for CLI tools?" in output
 
-        # Round
-        assert "## Round 1" in output
-
-        # Contributions
-        assert "### Proposer (anthropic:claude-opus-4-6)" in output
-        assert "Use PostgreSQL for everything." in output
-        assert "### Challenger (openai:gpt-5.2)" in output
-        assert "SQLite is simpler for CLI tools." in output
-
-        # Decision
-        assert "### Decision" in output
-        assert "**Confidence**: 85%" in output
-        assert "**Dissent**: PostgreSQL for future scale." in output
+        # Decision section appears first
+        assert "## Decision" in output
         assert "Use SQLite for v0.1." in output
+        assert "Confidence: 85%" in output
 
-        # Votes
-        assert "## Votes" in output
+        # Dissent
+        assert "## Dissent" in output
+        assert "PostgreSQL for future scale." in output
+
+        # Consensus process section
+        assert "## Consensus Process" in output
+        assert "### Round 1" in output
+
+        # Contributions organized by role
+        assert "#### Proposal (anthropic:claude-opus-4-6)" in output
+        assert "Use PostgreSQL for everything." in output
+        assert "#### Challenges" in output
+        assert "**openai:gpt-5.2**: SQLite is simpler for CLI tools." in output
+
+        # Votes under process
+        assert "### Votes" in output
         assert "**anthropic:claude-opus-4-6**: SQLite" in output
 
-        # Footer
-        assert "Exported from duh v" in output
+        # Footer with cost
+        assert "duh v" in output
+        assert "Cost: $" in output
+
+        asyncio.run(engine.dispose())
+
+    def test_markdown_decision_first(self, runner: CliRunner) -> None:
+        """Decision section appears before Consensus Process."""
+        factory, engine = _make_db()
+        thread_id = _seed_thread_with_data(factory)
+
+        with (
+            patch("duh.cli.app.load_config", return_value=_mem_config()),
+            patch(
+                "duh.cli.app._create_db",
+                new_callable=AsyncMock,
+                return_value=(factory, engine),
+            ),
+        ):
+            result = runner.invoke(cli, ["export", thread_id, "--format", "markdown"])
+
+        output = result.output
+        decision_pos = output.index("## Decision")
+        process_pos = output.index("## Consensus Process")
+        assert decision_pos < process_pos
+
+        asyncio.run(engine.dispose())
+
+    def test_markdown_content_decision_only(self, runner: CliRunner) -> None:
+        """--content decision produces decision-only markdown."""
+        factory, engine = _make_db()
+        thread_id = _seed_thread_with_data(factory)
+
+        with (
+            patch("duh.cli.app.load_config", return_value=_mem_config()),
+            patch(
+                "duh.cli.app._create_db",
+                new_callable=AsyncMock,
+                return_value=(factory, engine),
+            ),
+        ):
+            result = runner.invoke(
+                cli,
+                ["export", thread_id, "--format", "markdown", "--content", "decision"],
+            )
+
+        assert result.exit_code == 0
+        output = result.output
+
+        # Has decision
+        assert "## Decision" in output
+        assert "Use SQLite for v0.1." in output
+
+        # No process section
+        assert "## Consensus Process" not in output
+        assert "### Round" not in output
+        assert "#### Proposal" not in output
+
+        asyncio.run(engine.dispose())
+
+    def test_markdown_no_dissent(self, runner: CliRunner) -> None:
+        """--no-dissent suppresses dissent section."""
+        factory, engine = _make_db()
+        thread_id = _seed_thread_with_data(factory)
+
+        with (
+            patch("duh.cli.app.load_config", return_value=_mem_config()),
+            patch(
+                "duh.cli.app._create_db",
+                new_callable=AsyncMock,
+                return_value=(factory, engine),
+            ),
+        ):
+            result = runner.invoke(
+                cli,
+                [
+                    "export",
+                    thread_id,
+                    "--format",
+                    "markdown",
+                    "--no-dissent",
+                ],
+            )
+
+        assert result.exit_code == 0
+        output = result.output
+
+        assert "## Decision" in output
+        assert "## Dissent" not in output
+        assert "PostgreSQL for future scale." not in output
+
+        asyncio.run(engine.dispose())
+
+    def test_markdown_output_to_file(self, runner: CliRunner, tmp_path: Any) -> None:
+        """--output writes to file instead of stdout."""
+        factory, engine = _make_db()
+        thread_id = _seed_thread_with_data(factory)
+        out_file = str(tmp_path / "export.md")
+
+        with (
+            patch("duh.cli.app.load_config", return_value=_mem_config()),
+            patch(
+                "duh.cli.app._create_db",
+                new_callable=AsyncMock,
+                return_value=(factory, engine),
+            ),
+        ):
+            result = runner.invoke(
+                cli,
+                [
+                    "export",
+                    thread_id,
+                    "--format",
+                    "markdown",
+                    "-o",
+                    out_file,
+                ],
+            )
+
+        assert result.exit_code == 0
+        assert "Exported to" in result.output
+
+        from pathlib import Path
+
+        content = Path(out_file).read_text()
+        assert "# Consensus:" in content
+        assert "## Decision" in content
+
+        asyncio.run(engine.dispose())
+
+
+# ── PDF export tests ─────────────────────────────────────────
+
+
+class TestExportPdf:
+    def test_pdf_requires_output(self, runner: CliRunner) -> None:
+        """PDF format requires --output flag."""
+        result = runner.invoke(cli, ["export", "abc12345", "--format", "pdf"])
+        assert result.exit_code != 0
+        assert "--output" in result.output or "required" in result.output.lower()
+
+    def test_pdf_produces_valid_file(self, runner: CliRunner, tmp_path: Any) -> None:
+        factory, engine = _make_db()
+        thread_id = _seed_thread_with_data(factory)
+        out_file = str(tmp_path / "out.pdf")
+
+        with (
+            patch("duh.cli.app.load_config", return_value=_mem_config()),
+            patch(
+                "duh.cli.app._create_db",
+                new_callable=AsyncMock,
+                return_value=(factory, engine),
+            ),
+        ):
+            result = runner.invoke(
+                cli,
+                ["export", thread_id, "--format", "pdf", "-o", out_file],
+            )
+
+        assert result.exit_code == 0
+        assert "PDF exported to" in result.output
+
+        from pathlib import Path
+
+        pdf_bytes = Path(out_file).read_bytes()
+        # Valid PDF starts with %PDF
+        assert pdf_bytes[:4] == b"%PDF"
+
+        asyncio.run(engine.dispose())
+
+    def test_pdf_decision_only(self, runner: CliRunner, tmp_path: Any) -> None:
+        factory, engine = _make_db()
+        thread_id = _seed_thread_with_data(factory)
+        out_file = str(tmp_path / "decision.pdf")
+
+        with (
+            patch("duh.cli.app.load_config", return_value=_mem_config()),
+            patch(
+                "duh.cli.app._create_db",
+                new_callable=AsyncMock,
+                return_value=(factory, engine),
+            ),
+        ):
+            result = runner.invoke(
+                cli,
+                [
+                    "export",
+                    thread_id,
+                    "--format",
+                    "pdf",
+                    "--content",
+                    "decision",
+                    "-o",
+                    out_file,
+                ],
+            )
+
+        assert result.exit_code == 0
+
+        from pathlib import Path
+
+        pdf_bytes = Path(out_file).read_bytes()
+        assert pdf_bytes[:4] == b"%PDF"
+        # Decision-only PDF should be smaller than full
+        assert len(pdf_bytes) > 0
+
+        asyncio.run(engine.dispose())
+
+    def test_pdf_no_dissent(self, runner: CliRunner, tmp_path: Any) -> None:
+        factory, engine = _make_db()
+        thread_id = _seed_thread_with_data(factory)
+        out_file = str(tmp_path / "no_dissent.pdf")
+
+        with (
+            patch("duh.cli.app.load_config", return_value=_mem_config()),
+            patch(
+                "duh.cli.app._create_db",
+                new_callable=AsyncMock,
+                return_value=(factory, engine),
+            ),
+        ):
+            result = runner.invoke(
+                cli,
+                [
+                    "export",
+                    thread_id,
+                    "--format",
+                    "pdf",
+                    "--no-dissent",
+                    "-o",
+                    out_file,
+                ],
+            )
+
+        assert result.exit_code == 0
+
+        from pathlib import Path
+
+        pdf_bytes = Path(out_file).read_bytes()
+        assert pdf_bytes[:4] == b"%PDF"
 
         asyncio.run(engine.dispose())
 
@@ -354,7 +603,9 @@ class TestExportErrors:
         assert data["thread_id"] == thread_id
         asyncio.run(engine.dispose())
 
-    def test_both_format_options_accepted(self, runner: CliRunner) -> None:
+    def test_all_format_options_accepted(
+        self, runner: CliRunner, tmp_path: Any
+    ) -> None:
         # JSON format
         factory1, engine1 = _make_db()
         thread_id = _seed_thread_with_data(factory1)
@@ -388,6 +639,25 @@ class TestExportErrors:
             )
 
         assert md_result.exit_code == 0
+
+        # PDF format
+        factory3, engine3 = _make_db()
+        thread_id3 = _seed_thread_with_data(factory3)
+        out_file = str(tmp_path / "test.pdf")
+
+        with (
+            patch("duh.cli.app.load_config", return_value=_mem_config()),
+            patch(
+                "duh.cli.app._create_db",
+                new_callable=AsyncMock,
+                return_value=(factory3, engine3),
+            ),
+        ):
+            pdf_result = runner.invoke(
+                cli, ["export", thread_id3, "--format", "pdf", "-o", out_file]
+            )
+
+        assert pdf_result.exit_code == 0
 
     def test_invalid_format_rejected(self, runner: CliRunner) -> None:
         result = runner.invoke(cli, ["export", "abc12345", "--format", "csv"])

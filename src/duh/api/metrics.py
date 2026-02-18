@@ -46,8 +46,7 @@ class Counter:
             for key, val in sorted(self._values.items()):
                 if self.labels:
                     label_str = ",".join(
-                        f'{lbl}="{v}"'
-                        for lbl, v in zip(self.labels, key, strict=True)
+                        f'{lbl}="{v}"' for lbl, v in zip(self.labels, key, strict=True)
                     )
                     lines.append(f"{self.name}{{{label_str}}} {_fmt(val)}")
                 else:
@@ -59,7 +58,17 @@ class Histogram:
     """Thread-safe histogram with predefined buckets."""
 
     DEFAULT_BUCKETS: ClassVar[list[float]] = [
-        0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0,
+        0.005,
+        0.01,
+        0.025,
+        0.05,
+        0.1,
+        0.25,
+        0.5,
+        1.0,
+        2.5,
+        5.0,
+        10.0,
     ]
 
     def __init__(
@@ -97,12 +106,8 @@ class Histogram:
             cumulative = 0
             for b in self.buckets:
                 cumulative += self._bucket_counts[b]
-                lines.append(
-                    f'{self.name}_bucket{{le="{_fmt(b)}"}} {cumulative}'
-                )
-            lines.append(
-                f'{self.name}_bucket{{le="+Inf"}} {self._count}'
-            )
+                lines.append(f'{self.name}_bucket{{le="{_fmt(b)}"}} {cumulative}')
+            lines.append(f'{self.name}_bucket{{le="+Inf"}} {self._count}')
             lines.append(f"{self.name}_sum {_fmt(self._sum)}")
             lines.append(f"{self.name}_count {self._count}")
         return "\n".join(lines) + "\n"
@@ -189,31 +194,39 @@ def _fmt(v: float) -> str:
 # ── Pre-defined metrics ──────────────────────────────────────────
 
 REQUESTS_TOTAL = Counter(
-    "duh_requests_total", "Total HTTP requests",
+    "duh_requests_total",
+    "Total HTTP requests",
     labels=["method", "path", "status"],
 )
 CONSENSUS_RUNS_TOTAL = Counter(
-    "duh_consensus_runs_total", "Total consensus runs",
+    "duh_consensus_runs_total",
+    "Total consensus runs",
 )
 TOKENS_TOTAL = Counter(
-    "duh_tokens_total", "Total tokens consumed",
+    "duh_tokens_total",
+    "Total tokens consumed",
     labels=["provider", "direction"],
 )
 ERRORS_TOTAL = Counter(
-    "duh_errors_total", "Total errors",
+    "duh_errors_total",
+    "Total errors",
     labels=["type"],
 )
 REQUEST_DURATION = Histogram(
-    "duh_request_duration_seconds", "Request duration",
+    "duh_request_duration_seconds",
+    "Request duration",
 )
 CONSENSUS_DURATION = Histogram(
-    "duh_consensus_duration_seconds", "Consensus run duration",
+    "duh_consensus_duration_seconds",
+    "Consensus run duration",
 )
 ACTIVE_CONNECTIONS = Gauge(
-    "duh_active_connections", "Active connections",
+    "duh_active_connections",
+    "Active connections",
 )
 PROVIDER_HEALTH = Gauge(
-    "duh_provider_health", "Provider health status",
+    "duh_provider_health",
+    "Provider health status",
 )
 
 

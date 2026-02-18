@@ -35,8 +35,8 @@ class TestCounter:
         c.inc(method="GET", status="200")
         c.inc(method="POST", status="201")
         text = c.collect()
-        assert '# HELP req_total Requests' in text
-        assert '# TYPE req_total counter' in text
+        assert "# HELP req_total Requests" in text
+        assert "# TYPE req_total counter" in text
         assert 'req_total{method="GET",status="200"} 2' in text
         assert 'req_total{method="POST",status="201"} 1' in text
 
@@ -44,10 +44,10 @@ class TestCounter:
 class TestHistogram:
     def test_histogram_observe(self):
         h = Histogram("dur", "Duration", buckets=[0.1, 0.5, 1.0])
-        h.observe(0.05)   # fits in 0.1, 0.5, 1.0
-        h.observe(0.3)    # fits in 0.5, 1.0
-        h.observe(0.8)    # fits in 1.0
-        h.observe(2.0)    # exceeds all buckets
+        h.observe(0.05)  # fits in 0.1, 0.5, 1.0
+        h.observe(0.3)  # fits in 0.5, 1.0
+        h.observe(0.8)  # fits in 1.0
+        h.observe(2.0)  # exceeds all buckets
 
         text = h.collect()
         # Cumulative counts: 0.1→1, 0.5→2, 1.0→3, +Inf→4
@@ -61,13 +61,13 @@ class TestHistogram:
         h.observe(0.005)
         h.observe(0.05)
         text = h.collect()
-        assert '# HELP lat Latency' in text
-        assert '# TYPE lat histogram' in text
+        assert "# HELP lat Latency" in text
+        assert "# TYPE lat histogram" in text
         assert 'lat_bucket{le="0.01"} 1' in text
         assert 'lat_bucket{le="0.1"} 2' in text
         assert 'lat_bucket{le="+Inf"} 2' in text
-        assert 'lat_sum 0.055' in text
-        assert 'lat_count 2' in text
+        assert "lat_sum 0.055" in text
+        assert "lat_count 2" in text
 
 
 class TestGauge:

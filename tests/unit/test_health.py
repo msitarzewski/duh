@@ -77,6 +77,7 @@ class TestHealthDetailed:
 
     async def test_health_detailed_db_failure(self, health_app):
         """Database component shows error when DB fails."""
+
         # Replace db_factory with one that raises
         async def broken_factory():
             raise RuntimeError("DB is down")

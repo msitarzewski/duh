@@ -187,6 +187,76 @@ class TestSelectProposer:
         with pytest.raises(InsufficientModelsError, match="No models"):
             select_proposer(pm)
 
+    async def test_panel_filters_models(self) -> None:
+        from duh.providers.manager import ProviderManager
+        from tests.fixtures.providers import MockProvider
+
+        pm = ProviderManager()
+        p1 = MockProvider(provider_id="a", responses={"m1": "r"})
+        p2 = MockProvider(provider_id="b", responses={"m2": "r"})
+        await pm.register(p1)
+        await pm.register(p2)
+
+        pm._model_index["a:m1"] = _make_model_info("a", "m1", output_cost=100.0)
+        pm._model_index["b:m2"] = _make_model_info("b", "m2", output_cost=1.0)
+
+        # Without panel, highest cost wins
+        assert select_proposer(pm) == "a:m1"
+
+        # With panel excluding the expensive model
+        result = select_proposer(pm, panel=["b:m2"])
+        assert result == "b:m2"
+
+    async def test_proposer_eligible_excludes_ineligible(self) -> None:
+        from duh.providers.manager import ProviderManager
+        from tests.fixtures.providers import MockProvider
+
+        pm = ProviderManager()
+        p1 = MockProvider(provider_id="search", responses={"sonar": "r"})
+        p2 = MockProvider(provider_id="llm", responses={"gpt": "r"})
+        await pm.register(p1)
+        await pm.register(p2)
+
+        # Sonar is expensive but not proposer-eligible
+        pm._model_index["search:sonar"] = ModelInfo(
+            provider_id="search",
+            model_id="sonar",
+            display_name="Sonar",
+            capabilities=ModelCapability.TEXT | ModelCapability.STREAMING,
+            context_window=128_000,
+            max_output_tokens=4096,
+            input_cost_per_mtok=3.0,
+            output_cost_per_mtok=100.0,
+            proposer_eligible=False,
+        )
+        pm._model_index["llm:gpt"] = _make_model_info("llm", "gpt", output_cost=10.0)
+
+        result = select_proposer(pm)
+        assert result == "llm:gpt"
+
+    async def test_all_ineligible_raises(self) -> None:
+        from duh.providers.manager import ProviderManager
+        from tests.fixtures.providers import MockProvider
+
+        pm = ProviderManager()
+        p = MockProvider(provider_id="search", responses={"sonar": "r"})
+        await pm.register(p)
+
+        pm._model_index["search:sonar"] = ModelInfo(
+            provider_id="search",
+            model_id="sonar",
+            display_name="Sonar",
+            capabilities=ModelCapability.TEXT | ModelCapability.STREAMING,
+            context_window=128_000,
+            max_output_tokens=4096,
+            input_cost_per_mtok=1.0,
+            output_cost_per_mtok=1.0,
+            proposer_eligible=False,
+        )
+
+        with pytest.raises(InsufficientModelsError, match="proposer-eligible"):
+            select_proposer(pm)
+
 
 # ── Handler execution ────────────────────────────────────────────
 

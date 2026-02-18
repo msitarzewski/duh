@@ -225,7 +225,5 @@ class ProviderManager:
         now = time.monotonic()
         window = 60.0
         self._provider_requests.setdefault(provider_id, [])
-        current = [
-            t for t in self._provider_requests[provider_id] if now - t < window
-        ]
+        current = [t for t in self._provider_requests[provider_id] if now - t < window]
         return max(0, rpm - len(current))

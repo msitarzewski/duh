@@ -82,9 +82,7 @@ class TestBackupSqlite:
     def test_missing_source_raises(self, tmp_path: Path) -> None:
         dest = tmp_path / "backup.db"
         with pytest.raises(FileNotFoundError):
-            asyncio.run(
-                backup_sqlite("sqlite:///nonexistent/path/db.sqlite", dest)
-            )
+            asyncio.run(backup_sqlite("sqlite:///nonexistent/path/db.sqlite", dest))
 
     def test_aiosqlite_url(self, tmp_path: Path) -> None:
         """Works with sqlite+aiosqlite:/// prefix too."""
@@ -190,12 +188,8 @@ class TestBackupJson:
                 repo = MemoryRepository(session)
                 thread = await repo.create_thread("Test question")
                 turn = await repo.create_turn(thread.id, 1, "COMMIT")
-                await repo.add_contribution(
-                    turn.id, "mock:model", "proposer", "Answer"
-                )
-                await repo.save_decision(
-                    turn.id, thread.id, "Decision text", 0.9
-                )
+                await repo.add_contribution(turn.id, "mock:model", "proposer", "Answer")
+                await repo.save_decision(turn.id, thread.id, "Decision text", 0.9)
                 await session.commit()
 
             async with factory() as session:
@@ -272,9 +266,7 @@ class TestBackupCli:
         assert data["version"] == "0.5.0"
         asyncio.run(engine.dispose())
 
-    def test_backup_format_auto_sqlite(
-        self, runner: CliRunner, tmp_path: Path
-    ) -> None:
+    def test_backup_format_auto_sqlite(self, runner: CliRunner, tmp_path: Path) -> None:
         """Auto format uses sqlite copy for sqlite DB."""
         src_db = tmp_path / "source.db"
         conn = sqlite3.connect(str(src_db))

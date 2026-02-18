@@ -55,12 +55,23 @@ async def ws_ask(websocket: WebSocket) -> None:
             return
 
         rounds = data.get("rounds", 3)
+        panel: list[str] | None = data.get("panel") or None
+        proposer_override: str | None = data.get("proposer") or None
+        challengers_raw: list[str] | None = data.get("challengers") or None
 
         config: DuhConfig = websocket.app.state.config
         pm: ProviderManager = websocket.app.state.provider_manager
         config.general.max_rounds = rounds
 
-        await _stream_consensus(websocket, question, config, pm)
+        await _stream_consensus(
+            websocket,
+            question,
+            config,
+            pm,
+            panel=panel,
+            proposer_override=proposer_override,
+            challengers_override=challengers_raw,
+        )
 
     except WebSocketDisconnect:
         pass
@@ -78,6 +89,10 @@ async def _stream_consensus(
     question: str,
     config: DuhConfig,
     pm: ProviderManager,
+    *,
+    panel: list[str] | None = None,
+    proposer_override: str | None = None,
+    challengers_override: list[str] | None = None,
 ) -> None:
     """Run consensus loop and stream events to WebSocket."""
     from duh.consensus.convergence import check_convergence
@@ -102,10 +117,12 @@ async def _stream_consensus(
     )
     sm = ConsensusStateMachine(ctx)
 
+    effective_panel = panel or config.consensus.panel or None
+
     for _round in range(config.general.max_rounds):
         # PROPOSE
         sm.transition(ConsensusState.PROPOSE)
-        proposer = select_proposer(pm)
+        proposer = proposer_override or select_proposer(pm, panel=effective_panel)
         await ws.send_json(
             {
                 "type": "phase_start",
@@ -125,7 +142,9 @@ async def _stream_consensus(
 
         # CHALLENGE
         sm.transition(ConsensusState.CHALLENGE)
-        challengers = select_challengers(pm, proposer)
+        challengers = challengers_override or select_challengers(
+            pm, proposer, panel=effective_panel
+        )
         await ws.send_json(
             {
                 "type": "phase_start",

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useThreadsStore } from '@/stores'
 import { TurnCard } from './TurnCard'
-import { GlassPanel, GlowButton, Skeleton, Badge } from '@/components/shared'
+import { GlassPanel, GlowButton, Skeleton, Badge, ExportMenu } from '@/components/shared'
 
 function formatDate(iso: string): string {
   return new Date(iso).toLocaleString('en-US', {
@@ -96,10 +96,11 @@ export function ThreadDetail() {
         <p className="text-center text-xs font-mono text-[var(--color-green)]">Feedback recorded</p>
       )}
 
-      <div className="flex justify-center">
+      <div className="flex justify-center gap-2">
         <GlowButton variant="ghost" size="sm" onClick={() => navigate('/threads')}>
           Back to threads
         </GlowButton>
+        <ExportMenu thread={currentThread} />
       </div>
     </div>
   )

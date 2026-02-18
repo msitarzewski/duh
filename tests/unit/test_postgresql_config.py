@@ -21,9 +21,7 @@ class TestDatabaseConfigDefaults:
         assert cfg.pool_recycle == 3600
 
     def test_database_config_postgresql_url(self):
-        cfg = DatabaseConfig(
-            url="postgresql+asyncpg://user:pass@localhost/duh"
-        )
+        cfg = DatabaseConfig(url="postgresql+asyncpg://user:pass@localhost/duh")
         assert cfg.url == "postgresql+asyncpg://user:pass@localhost/duh"
         assert cfg.pool_size == 5
         assert cfg.max_overflow == 10
@@ -62,18 +60,19 @@ class TestCreateDbPoolBehavior:
         from duh.cli.app import _create_db
 
         config = DuhConfig(
-            database=DatabaseConfig(
-                url=f"sqlite+aiosqlite:///{tmp_path}/test.db"
-            )
+            database=DatabaseConfig(url=f"sqlite+aiosqlite:///{tmp_path}/test.db")
         )
 
         mock_engine = _mock_engine()
-        with patch(
-            "sqlalchemy.ext.asyncio.create_async_engine",
-            return_value=mock_engine,
-        ) as mock_create, patch(
-            "sqlalchemy.event.listens_for",
-            return_value=lambda fn: fn,
+        with (
+            patch(
+                "sqlalchemy.ext.asyncio.create_async_engine",
+                return_value=mock_engine,
+            ) as mock_create,
+            patch(
+                "sqlalchemy.event.listens_for",
+                return_value=lambda fn: fn,
+            ),
         ):
             await _create_db(config)
 

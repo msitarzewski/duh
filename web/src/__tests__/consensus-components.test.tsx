@@ -210,3 +210,120 @@ describe('StreamingText', () => {
     expect(screen.getByText('S', { exact: false })).toBeInTheDocument()
   })
 })
+
+// ── Export Markdown Generation ───────────────────────────
+
+describe('generateExportMarkdown', () => {
+  // Lazy import to avoid pulling in store/websocket at module level
+  let generateExportMarkdown: typeof import('@/components/consensus/ConsensusComplete').generateExportMarkdown
+
+  beforeAll(async () => {
+    const mod = await import('@/components/consensus/ConsensusComplete')
+    generateExportMarkdown = mod.generateExportMarkdown
+  })
+
+  const rounds = [
+    {
+      round: 1,
+      proposer: 'anthropic:claude-3',
+      proposal: 'Use PostgreSQL.',
+      challengers: ['openai:gpt-4'],
+      challenges: [{ model: 'openai:gpt-4', content: 'SQLite is simpler.' }],
+      reviser: 'anthropic:claude-3',
+      revision: 'Use SQLite for v0.1.',
+      confidence: 0.85,
+      dissent: 'PostgreSQL for scale.',
+    },
+  ]
+
+  it('generates decision-only markdown', () => {
+    const md = generateExportMarkdown(
+      'Best database?',
+      'Use SQLite.',
+      0.85,
+      'PostgreSQL for scale.',
+      0.003,
+      rounds,
+      'decision',
+      true,
+    )
+
+    expect(md).toContain('# Consensus: Best database?')
+    expect(md).toContain('## Decision')
+    expect(md).toContain('Use SQLite.')
+    expect(md).toContain('Confidence: 85%')
+    expect(md).toContain('## Dissent')
+    expect(md).toContain('PostgreSQL for scale.')
+    expect(md).not.toContain('## Consensus Process')
+    expect(md).not.toContain('### Round')
+  })
+
+  it('generates full report markdown', () => {
+    const md = generateExportMarkdown(
+      'Best database?',
+      'Use SQLite.',
+      0.85,
+      'PostgreSQL for scale.',
+      0.003,
+      rounds,
+      'full',
+      true,
+    )
+
+    expect(md).toContain('# Consensus: Best database?')
+    expect(md).toContain('## Decision')
+    expect(md).toContain('## Consensus Process')
+    expect(md).toContain('### Round 1')
+    expect(md).toContain('#### Proposal (anthropic:claude-3)')
+    expect(md).toContain('#### Challenges')
+    expect(md).toContain('**openai:gpt-4**: SQLite is simpler.')
+    expect(md).toContain('#### Revision (anthropic:claude-3)')
+  })
+
+  it('suppresses dissent when includeDissent is false', () => {
+    const md = generateExportMarkdown(
+      'Best database?',
+      'Use SQLite.',
+      0.85,
+      'PostgreSQL for scale.',
+      0.003,
+      rounds,
+      'decision',
+      false,
+    )
+
+    expect(md).toContain('## Decision')
+    expect(md).not.toContain('## Dissent')
+    expect(md).not.toContain('PostgreSQL for scale.')
+  })
+
+  it('includes cost in footer', () => {
+    const md = generateExportMarkdown(
+      'Question',
+      'Answer',
+      0.9,
+      null,
+      0.0512,
+      [],
+      'decision',
+      true,
+    )
+
+    expect(md).toContain('Cost: $0.0512')
+  })
+
+  it('handles null question', () => {
+    const md = generateExportMarkdown(
+      null,
+      'Answer',
+      0.9,
+      null,
+      null,
+      [],
+      'decision',
+      true,
+    )
+
+    expect(md).toContain('# Consensus: Unknown')
+  })
+})

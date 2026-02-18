@@ -1,20 +1,74 @@
 # Active Context
 
 **Last Updated**: 2026-02-17
-**Current Phase**: v0.5 COMPLETE — "It Scales"
-**Next Action**: Merge `v0.5.0` branch to main, create PR. Then begin v1.0.0 planning.
+**Current Phase**: v0.5 + Export Feature
+**Next Action**: Merge v0.5.0 to main. Export to Markdown & PDF feature implemented.
+
+## Next Task: Model Selection Controls + Provider Updates
+
+### Context
+Users can't control which models participate in consensus. `select_proposer()` picks highest `output_cost_per_mtok`, `select_challengers()` picks next-costliest. Problems: no user control (`ConsensusConfig.panel` exists but unused), Google catalog outdated, Perplexity should be challengers-only (search-grounded), Anthropic missing `claude-sonnet-4-6`.
+
+### Changes (6 steps)
+
+1. **Update provider model catalogs**
+   - `src/duh/providers/google.py:34-67` — Gemini 3 GA + early-access models (web search for latest)
+   - `src/duh/providers/anthropic.py:36-61` — Add `claude-sonnet-4-6`
+   - `src/duh/providers/perplexity.py:35-60` — Verify current model IDs/pricing
+
+2. **Add `proposer_eligible` flag to ModelInfo**
+   - `src/duh/providers/base.py:28-45` — Add `proposer_eligible: bool = True`
+   - `src/duh/providers/perplexity.py` — Set `proposer_eligible=False` (challengers only, user decision)
+
+3. **Wire `ConsensusConfig.panel` + update selection functions**
+   - `src/duh/consensus/handlers.py:185-202` (`select_proposer`) — Accept optional `panel`, filter to `proposer_eligible=True`
+   - `src/duh/consensus/handlers.py:322-356` (`select_challengers`) — Accept optional `panel`
+   - `src/duh/cli/app.py:236-246`, `src/duh/api/routes/ws.py:108,128`, `src/duh/api/routes/ask.py` — Pass panel
+
+4. **Add CLI flags**: `--proposer MODEL_REF`, `--challengers MODEL_REF,MODEL_REF`, `--panel MODEL_REF,...`
+   - `src/duh/cli/app.py` (ask command)
+
+5. **Add to REST API**: Optional `panel`, `proposer`, `challengers` fields in ask request body
+   - `src/duh/api/routes/ask.py`
+
+6. **Tests**: Update `test_propose_handler.py`, `test_challenge_handler.py` for panel filtering + proposer_eligible. Test CLI flags. Fix any tests with hardcoded model catalogs.
+
+7. **Documentation + CLI help**
+   - `docs/cli/ask.md` — Document `--proposer`, `--challengers`, `--panel` flags
+   - `docs/api-reference.md` — Document panel/proposer/challengers in `/api/ask`
+   - `docs/concepts/providers-and-models.md` — Update model lists, model selection explanation
+   - `docs/getting-started/configuration.md` — Document `[consensus] panel` config
+   - `docs/reference/config-reference.md` — Add panel, proposer_strategy fields
+   - `src/duh/cli/app.py` — Update Click help strings for new flags
+   - `docs/index.md` — Update feature list if needed
+
+### Current model cost ranking (for reference)
+| Model | output_cost | Provider |
+|-------|------------|----------|
+| Opus 4.6 | $25.00 | anthropic |
+| Sonar Pro | $15.00 | perplexity |
+| Sonnet 4.5 | $15.00 | anthropic |
+| GPT-5.2 | $14.00 | openai |
+| Gemini 3 Pro | $12.00 | google |
+| Gemini 2.5 Pro | $10.00 | google |
+| Mistral Medium | $8.10 | mistral |
+| o3 | $8.00 | openai |
+| Sonar Deep Research | $8.00 | perplexity |
+| Mistral Large | $6.00 | mistral |
+| Haiku 4.5 | $5.00 | anthropic |
 
 ---
 
 ## Current State
 
-- **v0.5 COMPLETE on branch `v0.5.0`.** All 18 tasks done. Ready to merge to main.
+- **v0.5 + Export feature on branch `v0.5.0`.** All v0.5 tasks done + export feature added.
 - **6 providers shipping**: Anthropic (3 models), OpenAI (3 models), Google (4 models), Mistral (4 models), Perplexity (3 models) — 17 total.
-- **1354 Python unit/load tests + 117 Vitest tests** (1471 total), ruff clean.
-- **~60 Python source files + 66 frontend source files** (~126 total).
+- **1539 Python unit/load tests + 122 Vitest tests** (1661 total), ruff clean.
+- **~60 Python source files + 67 frontend source files** (~127 total).
 - REST API, WebSocket streaming, MCP server, Python client library, web UI all built.
 - Multi-user auth (JWT + RBAC), PostgreSQL support, Prometheus metrics, backup/restore, Playwright E2E.
 - CLI commands: `duh ask`, `duh recall`, `duh threads`, `duh show`, `duh models`, `duh cost`, `duh serve`, `duh mcp`, `duh batch`, `duh export`, `duh feedback`, `duh backup`, `duh restore`, `duh user-create`, `duh user-list`.
+- Export: `duh export <id> --format pdf/markdown --content full/decision --no-dissent -o file`
 - Docs: production-deployment.md, monitoring.md, authentication.md added.
 - MkDocs docs site: https://msitarzewski.github.io/duh/
 - GitHub repo: https://github.com/msitarzewski/duh

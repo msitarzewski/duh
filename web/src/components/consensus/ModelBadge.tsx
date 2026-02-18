@@ -5,6 +5,7 @@ const providerColors: Record<string, 'cyan' | 'green' | 'amber' | 'red'> = {
   openai: 'green',
   google: 'amber',
   mistral: 'red',
+  perplexity: 'cyan',
 }
 
 export function ModelBadge({ model }: { model: string }) {

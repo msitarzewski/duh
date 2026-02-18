@@ -181,9 +181,7 @@ class TestConvenienceAliases:
     def test_require_viewer_callable(self) -> None:
         assert callable(require_viewer)
 
-    def _build_alias_app(
-        self, dep: object, user: SimpleNamespace
-    ) -> FastAPI:
+    def _build_alias_app(self, dep: object, user: SimpleNamespace) -> FastAPI:
         from duh.api.auth import get_current_user
 
         app = FastAPI()

@@ -116,6 +116,7 @@ class FakeModelInfo:
     max_output_tokens: int
     input_cost_per_mtok: float
     output_cost_per_mtok: float
+    proposer_eligible: bool = True
 
 
 class FakeProviderManager:

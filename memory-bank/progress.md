@@ -22,7 +22,7 @@
 - Alembic migration `005_v05_users.py`: users table, nullable user_id FK on threads/decisions/api_keys
 - 3 new docs: production-deployment.md, authentication.md, monitoring.md
 - Version 0.5.0 across pyproject.toml, __init__.py, api/app.py
-- 1354 Python tests + 117 Vitest tests (1471 total), ruff clean
+- 1539 Python tests + 122 Vitest tests (1661 total), ruff clean
 
 ### v0.4 Additions (Previously Shipped)
 
@@ -150,3 +150,4 @@ Phase 0 benchmark framework — fully functional, pilot-tested on 5 questions.
 | 2026-02-17 | v0.5 T12-T13 (Phase 6: Playwright) — E2E setup + core flows, extended tests | Done |
 | 2026-02-17 | v0.5 T14-T18 (Phase 7: Ship) — multi-user integration tests, load tests, docs, migration finalized, version bump | Done |
 | 2026-02-17 | v0.5.0 — "It Scales" | **Complete** |
+| 2026-02-17 | Export to Markdown & PDF (CLI + API + Web UI) | Done |

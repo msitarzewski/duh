@@ -32,9 +32,7 @@ def _make_thread(question: str = "What is AI?", **kwargs: object) -> Thread:
     return Thread(question=question, **kwargs)
 
 
-def _make_turn(
-    thread: Thread, round_number: int = 1, state: str = "propose"
-) -> Turn:
+def _make_turn(thread: Thread, round_number: int = 1, state: str = "propose") -> Turn:
     return Turn(thread=thread, round_number=round_number, state=state)
 
 
@@ -140,9 +138,7 @@ class TestNullableUserId:
     async def test_decision_without_user(self, db_session: AsyncSession) -> None:
         thread = _make_thread()
         turn = _make_turn(thread)
-        decision = Decision(
-            turn=turn, thread=thread, content="Answer", confidence=0.8
-        )
+        decision = Decision(turn=turn, thread=thread, content="Answer", confidence=0.8)
         db_session.add(decision)
         await db_session.commit()
 

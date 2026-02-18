@@ -44,6 +44,9 @@ Run a consensus query.
 | `rounds` | integer | `3` | Max consensus rounds |
 | `decompose` | boolean | `false` | Decompose into subtasks first |
 | `tools` | boolean | `false` | Enable tool use |
+| `panel` | list[string] | `null` | Restrict to these model refs only (e.g. `["anthropic:claude-opus-4-6", "openai:gpt-5.2"]`) |
+| `proposer` | string | `null` | Override the proposer model ref |
+| `challengers` | list[string] | `null` | Override the challenger model refs |
 
 **Response (200):**
 
@@ -327,6 +330,8 @@ Stream consensus phases in real-time over WebSocket.
 ```json
 {"question": "What database should I use?", "rounds": 3}
 ```
+
+Optional model selection fields: `panel` (list of model refs), `proposer` (model ref), `challengers` (list of model refs).
 
 **Server streams events:**
 

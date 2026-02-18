@@ -23,6 +23,7 @@ dependencies = [
     "bcrypt>=4.0",
     "pyjwt>=2.8",
     "asyncpg>=0.29",
+    "fpdf2>=2.7",
 ]
 
 [project.scripts]

@@ -45,7 +45,7 @@ Provider configuration is a dictionary keyed by provider name. Default providers
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
-| `panel` | list[str] | `[]` | Reserved for future use. |
+| `panel` | list[str] | `[]` | Restrict consensus to these model refs only (e.g. `["anthropic:claude-opus-4-6", "openai:gpt-5.2"]`). Empty = all available models. Override per-query with `--panel`. |
 | `proposer_strategy` | str | `"round_robin"` | Strategy for selecting the proposer model. |
 | `challenge_types` | list[str] | `["flaw", "alternative", "risk", "devils_advocate"]` | Types of challenges to generate. |
 | `min_challengers` | int | `2` | Minimum number of challenger models per round. |

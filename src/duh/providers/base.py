@@ -38,6 +38,7 @@ class ModelInfo:
     input_cost_per_mtok: float  # USD per million input tokens (0.0 for local)
     output_cost_per_mtok: float  # USD per million output tokens (0.0 for local)
     is_local: bool = False
+    proposer_eligible: bool = True  # False = challenger-only (e.g. search-grounded)
 
     @property
     def model_ref(self) -> str:

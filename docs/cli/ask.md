@@ -47,6 +47,9 @@ Output is displayed in real-time with Rich-styled panels:
 | `--decompose` | flag | `false` | Decompose the question into subtasks before consensus. |
 | `--protocol` | choice | From config (`consensus`) | Protocol: `consensus` (default), `voting`, or `auto` (classify first). |
 | `--tools` / `--no-tools` | flag | From config | Enable or disable tool use (web search, code exec, file read). Overrides `tools.enabled` in config. |
+| `--proposer` | string | Auto-selected | Override the proposer model (e.g. `anthropic:claude-opus-4-6`). |
+| `--challengers` | string | Auto-selected | Override challengers (comma-separated model refs, e.g. `openai:gpt-5.2,google:gemini-3-pro-preview`). |
+| `--panel` | string | All models | Restrict consensus to these models only (comma-separated model refs). Overrides `consensus.panel` in config. |
 
 ## Examples
 
@@ -96,6 +99,24 @@ Disable tool use even if enabled in config:
 
 ```bash
 duh ask --no-tools "Explain the CAP theorem"
+```
+
+Use a specific proposer:
+
+```bash
+duh ask --proposer openai:gpt-5.2 "Compare REST and GraphQL"
+```
+
+Override challengers:
+
+```bash
+duh ask --challengers google:gemini-3-pro-preview,anthropic:claude-sonnet-4-6 "Best database for IoT?"
+```
+
+Restrict to a panel of models:
+
+```bash
+duh ask --panel anthropic:claude-opus-4-6,openai:gpt-5.2 "Design a caching strategy"
 ```
 
 With a specific config:

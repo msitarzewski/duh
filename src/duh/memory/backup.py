@@ -240,9 +240,7 @@ async def restore_json(
         col_names = {col.key for col in mapper.columns}
         # Identify datetime columns for ISO string parsing
         dt_cols = {
-            col.key
-            for col in mapper.columns
-            if isinstance(col.type, SADateTime)
+            col.key for col in mapper.columns if isinstance(col.type, SADateTime)
         }
 
         count = 0

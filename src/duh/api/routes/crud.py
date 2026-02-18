@@ -112,6 +112,7 @@ class ModelInfoResponse(BaseModel):
     max_output_tokens: int
     input_cost_per_mtok: float
     output_cost_per_mtok: float
+    proposer_eligible: bool = True
 
 
 class ModelsResponse(BaseModel):
@@ -133,6 +134,7 @@ async def models(request: Request) -> ModelsResponse:
             max_output_tokens=m.max_output_tokens,
             input_cost_per_mtok=m.input_cost_per_mtok,
             output_cost_per_mtok=m.output_cost_per_mtok,
+            proposer_eligible=m.proposer_eligible,
         )
         for m in all_models
     ]

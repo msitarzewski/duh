@@ -638,7 +638,7 @@ class TestAskIntegration:
         )
 
         async def fake_ask(
-            question: str, cfg: Any
+            question: str, cfg: Any, **kwargs: Any
         ) -> tuple[str, float, str | None, float]:
             pm = ProviderManager()
             await pm.register(provider)

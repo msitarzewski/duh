@@ -110,12 +110,15 @@ class TestRestoreJson:
     def test_restore_empty(self, tmp_path: Path) -> None:
         """Restore from a backup of an empty DB works."""
         factory, engine = _make_async_session()
-        backup_file = _make_json_backup(tmp_path, tables={
-            "threads": [],
-            "turns": [],
-            "contributions": [],
-            "decisions": [],
-        })
+        backup_file = _make_json_backup(
+            tmp_path,
+            tables={
+                "threads": [],
+                "turns": [],
+                "contributions": [],
+                "decisions": [],
+            },
+        )
 
         async def _run() -> dict[str, int]:
             async with factory() as session:
@@ -136,38 +139,47 @@ class TestRestoreJson:
         turn_id = str(uuid.uuid4())
         decision_id = str(uuid.uuid4())
 
-        backup_file = _make_json_backup(tmp_path, tables={
-            "users": [],
-            "threads": [{
-                "id": thread_id,
-                "question": "Test question?",
-                "status": "complete",
-                "created_at": "2026-01-01T00:00:00+00:00",
-                "updated_at": "2026-01-01T00:00:00+00:00",
-            }],
-            "turns": [{
-                "id": turn_id,
-                "thread_id": thread_id,
-                "round_number": 1,
-                "state": "COMMIT",
-                "created_at": "2026-01-01T00:00:00+00:00",
-            }],
-            "contributions": [],
-            "turn_summaries": [],
-            "thread_summaries": [],
-            "decisions": [{
-                "id": decision_id,
-                "turn_id": turn_id,
-                "thread_id": thread_id,
-                "content": "The answer is 42",
-                "confidence": 0.95,
-                "created_at": "2026-01-01T00:00:00+00:00",
-            }],
-            "outcomes": [],
-            "subtasks": [],
-            "votes": [],
-            "api_keys": [],
-        })
+        backup_file = _make_json_backup(
+            tmp_path,
+            tables={
+                "users": [],
+                "threads": [
+                    {
+                        "id": thread_id,
+                        "question": "Test question?",
+                        "status": "complete",
+                        "created_at": "2026-01-01T00:00:00+00:00",
+                        "updated_at": "2026-01-01T00:00:00+00:00",
+                    }
+                ],
+                "turns": [
+                    {
+                        "id": turn_id,
+                        "thread_id": thread_id,
+                        "round_number": 1,
+                        "state": "COMMIT",
+                        "created_at": "2026-01-01T00:00:00+00:00",
+                    }
+                ],
+                "contributions": [],
+                "turn_summaries": [],
+                "thread_summaries": [],
+                "decisions": [
+                    {
+                        "id": decision_id,
+                        "turn_id": turn_id,
+                        "thread_id": thread_id,
+                        "content": "The answer is 42",
+                        "confidence": 0.95,
+                        "created_at": "2026-01-01T00:00:00+00:00",
+                    }
+                ],
+                "outcomes": [],
+                "subtasks": [],
+                "votes": [],
+                "api_keys": [],
+            },
+        )
 
         async def _run() -> dict[str, int]:
             async with factory() as session:
@@ -216,25 +228,30 @@ class TestRestoreJson:
 
         # Restore with new data (non-merge)
         thread_id = str(uuid.uuid4())
-        backup_file = _make_json_backup(tmp_path, tables={
-            "users": [],
-            "threads": [{
-                "id": thread_id,
-                "question": "New question",
-                "status": "active",
-                "created_at": "2026-01-01T00:00:00+00:00",
-                "updated_at": "2026-01-01T00:00:00+00:00",
-            }],
-            "turns": [],
-            "contributions": [],
-            "turn_summaries": [],
-            "thread_summaries": [],
-            "decisions": [],
-            "outcomes": [],
-            "subtasks": [],
-            "votes": [],
-            "api_keys": [],
-        })
+        backup_file = _make_json_backup(
+            tmp_path,
+            tables={
+                "users": [],
+                "threads": [
+                    {
+                        "id": thread_id,
+                        "question": "New question",
+                        "status": "active",
+                        "created_at": "2026-01-01T00:00:00+00:00",
+                        "updated_at": "2026-01-01T00:00:00+00:00",
+                    }
+                ],
+                "turns": [],
+                "contributions": [],
+                "turn_summaries": [],
+                "thread_summaries": [],
+                "decisions": [],
+                "outcomes": [],
+                "subtasks": [],
+                "votes": [],
+                "api_keys": [],
+            },
+        )
 
         async def _restore() -> dict[str, int]:
             async with factory() as session:
@@ -277,25 +294,30 @@ class TestRestoreJson:
 
         # Restore with additional data (merge mode)
         new_thread_id = str(uuid.uuid4())
-        backup_file = _make_json_backup(tmp_path, tables={
-            "users": [],
-            "threads": [{
-                "id": new_thread_id,
-                "question": "New merged question",
-                "status": "active",
-                "created_at": "2026-01-01T00:00:00+00:00",
-                "updated_at": "2026-01-01T00:00:00+00:00",
-            }],
-            "turns": [],
-            "contributions": [],
-            "turn_summaries": [],
-            "thread_summaries": [],
-            "decisions": [],
-            "outcomes": [],
-            "subtasks": [],
-            "votes": [],
-            "api_keys": [],
-        })
+        backup_file = _make_json_backup(
+            tmp_path,
+            tables={
+                "users": [],
+                "threads": [
+                    {
+                        "id": new_thread_id,
+                        "question": "New merged question",
+                        "status": "active",
+                        "created_at": "2026-01-01T00:00:00+00:00",
+                        "updated_at": "2026-01-01T00:00:00+00:00",
+                    }
+                ],
+                "turns": [],
+                "contributions": [],
+                "turn_summaries": [],
+                "thread_summaries": [],
+                "decisions": [],
+                "outcomes": [],
+                "subtasks": [],
+                "votes": [],
+                "api_keys": [],
+            },
+        )
 
         async def _restore() -> dict[str, int]:
             async with factory() as session:
@@ -406,18 +428,21 @@ class TestRestoreCli:
             database=DatabaseConfig(url="sqlite+aiosqlite://"),
         )
 
-        backup_file = _make_json_backup(tmp_path, tables={
-            "threads": [],
-            "turns": [],
-            "contributions": [],
-            "turn_summaries": [],
-            "thread_summaries": [],
-            "decisions": [],
-            "outcomes": [],
-            "subtasks": [],
-            "votes": [],
-            "api_keys": [],
-        })
+        backup_file = _make_json_backup(
+            tmp_path,
+            tables={
+                "threads": [],
+                "turns": [],
+                "contributions": [],
+                "turn_summaries": [],
+                "thread_summaries": [],
+                "decisions": [],
+                "outcomes": [],
+                "subtasks": [],
+                "votes": [],
+                "api_keys": [],
+            },
+        )
 
         with (
             patch("duh.cli.app.load_config", return_value=config),
@@ -433,9 +458,7 @@ class TestRestoreCli:
         assert "Restored" in result.output
         asyncio.run(engine.dispose())
 
-    def test_restore_sqlite_pg_errors(
-        self, runner: CliRunner, tmp_path: Path
-    ) -> None:
+    def test_restore_sqlite_pg_errors(self, runner: CliRunner, tmp_path: Path) -> None:
         """Cannot restore a SQLite backup into a PostgreSQL database."""
         from duh.config.schema import DatabaseConfig, DuhConfig
 

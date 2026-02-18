@@ -134,6 +134,7 @@ class PerplexityProvider:
                 max_output_tokens=m["max_output_tokens"],
                 input_cost_per_mtok=m["input_cost_per_mtok"],
                 output_cost_per_mtok=m["output_cost_per_mtok"],
+                proposer_eligible=False,
             )
             for m in _KNOWN_MODELS
         ]
@@ -286,6 +287,7 @@ class PerplexityProvider:
                     max_output_tokens=m["max_output_tokens"],
                     input_cost_per_mtok=m["input_cost_per_mtok"],
                     output_cost_per_mtok=m["output_cost_per_mtok"],
+                    proposer_eligible=False,
                 )
         # Unknown model -- return generic info
         return ModelInfo(
@@ -297,4 +299,5 @@ class PerplexityProvider:
             max_output_tokens=8_192,
             input_cost_per_mtok=0.0,
             output_cost_per_mtok=0.0,
+            proposer_eligible=False,
         )

@@ -21,6 +21,9 @@ class AskRequest(BaseModel):
     rounds: int = 3
     decompose: bool = False
     tools: bool = False
+    panel: list[str] | None = None
+    proposer: str | None = None
+    challengers: list[str] | None = None
 
 
 class AskResponse(BaseModel):
@@ -80,7 +83,12 @@ async def _handle_consensus(  # type: ignore[no-untyped-def]
     from duh.cli.app import _run_consensus
 
     decision, confidence, dissent, cost = await _run_consensus(
-        body.question, config, pm
+        body.question,
+        config,
+        pm,
+        panel=body.panel,
+        proposer_override=body.proposer,
+        challengers_override=body.challengers,
     )
 
     thread_id: str | None = None

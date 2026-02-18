@@ -36,17 +36,18 @@ class TestSQLiteMemoryUsesStaticPool:
         """In-memory SQLite must use StaticPool so all queries share one connection."""
         from duh.cli.app import _create_db
 
-        config = DuhConfig(
-            database=DatabaseConfig(url="sqlite+aiosqlite:///:memory:")
-        )
+        config = DuhConfig(database=DatabaseConfig(url="sqlite+aiosqlite:///:memory:"))
 
         mock_engine = _mock_engine()
-        with patch(
-            "sqlalchemy.ext.asyncio.create_async_engine",
-            return_value=mock_engine,
-        ) as mock_create, patch(
-            "sqlalchemy.event.listens_for",
-            return_value=lambda fn: fn,
+        with (
+            patch(
+                "sqlalchemy.ext.asyncio.create_async_engine",
+                return_value=mock_engine,
+            ) as mock_create,
+            patch(
+                "sqlalchemy.event.listens_for",
+                return_value=lambda fn: fn,
+            ),
         ):
             await _create_db(config)
 
@@ -71,18 +72,19 @@ class TestSQLiteFileUsesNullPool:
         from duh.cli.app import _create_db
 
         config = DuhConfig(
-            database=DatabaseConfig(
-                url=f"sqlite+aiosqlite:///{tmp_path}/test.db"
-            )
+            database=DatabaseConfig(url=f"sqlite+aiosqlite:///{tmp_path}/test.db")
         )
 
         mock_engine = _mock_engine()
-        with patch(
-            "sqlalchemy.ext.asyncio.create_async_engine",
-            return_value=mock_engine,
-        ) as mock_create, patch(
-            "sqlalchemy.event.listens_for",
-            return_value=lambda fn: fn,
+        with (
+            patch(
+                "sqlalchemy.ext.asyncio.create_async_engine",
+                return_value=mock_engine,
+            ) as mock_create,
+            patch(
+                "sqlalchemy.event.listens_for",
+                return_value=lambda fn: fn,
+            ),
         ):
             await _create_db(config)
 
@@ -187,18 +189,19 @@ class TestPoolPrePingEnabledForPostgreSQL:
         from duh.cli.app import _create_db
 
         config = DuhConfig(
-            database=DatabaseConfig(
-                url=f"sqlite+aiosqlite:///{tmp_path}/test.db"
-            )
+            database=DatabaseConfig(url=f"sqlite+aiosqlite:///{tmp_path}/test.db")
         )
 
         mock_engine = _mock_engine()
-        with patch(
-            "sqlalchemy.ext.asyncio.create_async_engine",
-            return_value=mock_engine,
-        ) as mock_create, patch(
-            "sqlalchemy.event.listens_for",
-            return_value=lambda fn: fn,
+        with (
+            patch(
+                "sqlalchemy.ext.asyncio.create_async_engine",
+                return_value=mock_engine,
+            ) as mock_create,
+            patch(
+                "sqlalchemy.event.listens_for",
+                return_value=lambda fn: fn,
+            ),
         ):
             await _create_db(config)
 
@@ -220,9 +223,7 @@ class TestRepositoryUsesSelectinload:
 
         # Create a turn with a contribution
         turn = await repo.create_turn(thread.id, 1, "PROPOSE")
-        await repo.add_contribution(
-            turn.id, "test:model", "proposer", "test content"
-        )
+        await repo.add_contribution(turn.id, "test:model", "proposer", "test content")
         await db_session.commit()
 
         # Load the thread (should eagerly load turns and contributions)
@@ -240,9 +241,7 @@ class TestRepositoryUsesSelectinload:
         repo = MemoryRepository(db_session)
         thread = await repo.create_thread("test question")
         turn = await repo.create_turn(thread.id, 1, "PROPOSE")
-        await repo.add_contribution(
-            turn.id, "test:model", "proposer", "test content"
-        )
+        await repo.add_contribution(turn.id, "test:model", "proposer", "test content")
         await db_session.commit()
 
         loaded = await repo.get_turn(turn.id)
@@ -259,9 +258,7 @@ class TestRepositoryUsesSelectinload:
         repo = MemoryRepository(db_session)
         thread = await repo.create_thread("test question")
         turn = await repo.create_turn(thread.id, 1, "COMMIT")
-        decision = await repo.save_decision(
-            turn.id, thread.id, "test decision", 0.9
-        )
+        decision = await repo.save_decision(turn.id, thread.id, "test decision", 0.9)
         await repo.save_outcome(decision.id, thread.id, "success", notes="worked")
         await db_session.commit()
 

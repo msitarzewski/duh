@@ -1,8 +1,11 @@
-"""GET /api/threads — list and detail endpoints."""
+"""GET /api/threads — list, detail, and export endpoints."""
 
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException, Request
+import io
+
+from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 router = APIRouter(prefix="/api", tags=["threads"])
@@ -193,4 +196,69 @@ async def get_shared_thread(share_token: str, request: Request) -> ThreadDetailR
         status=thread.status,
         created_at=thread.created_at.isoformat(),
         turns=turns,
+    )
+
+
+@router.get("/threads/{thread_id}/export")
+async def export_thread(
+    thread_id: str,
+    request: Request,
+    format: str = Query(default="pdf"),
+    content: str = Query(default="full"),
+    dissent: bool = Query(default=True),
+) -> StreamingResponse:
+    """Export a thread as PDF or markdown."""
+    from duh.cli.app import _format_thread_markdown, _format_thread_pdf
+    from duh.memory.repository import MemoryRepository
+
+    db_factory = request.app.state.db_factory
+    async with db_factory() as session:
+        repo = MemoryRepository(session)
+
+        # Support prefix matching
+        if len(thread_id) < 36:
+            all_threads = await repo.list_threads(limit=100)
+            matches = [t for t in all_threads if t.id.startswith(thread_id)]
+            if not matches:
+                raise HTTPException(
+                    status_code=404, detail=f"Thread not found: {thread_id}"
+                )
+            if len(matches) > 1:
+                raise HTTPException(
+                    status_code=400, detail=f"Ambiguous prefix: {thread_id}"
+                )
+            thread_id = matches[0].id
+
+        thread = await repo.get_thread(thread_id)
+        if thread is None:
+            raise HTTPException(
+                status_code=404, detail=f"Thread not found: {thread_id}"
+            )
+        votes = await repo.get_votes(thread_id)
+
+    short_id = thread_id[:8]
+
+    if format == "pdf":
+        pdf_bytes = _format_thread_pdf(
+            thread, votes, content=content, include_dissent=dissent
+        )
+        return StreamingResponse(
+            io.BytesIO(pdf_bytes),
+            media_type="application/pdf",
+            headers={
+                "Content-Disposition": (
+                    f"attachment; filename=consensus-{short_id}.pdf"
+                )
+            },
+        )
+
+    md_text = _format_thread_markdown(
+        thread, votes, content=content, include_dissent=dissent
+    )
+    return StreamingResponse(
+        io.BytesIO(md_text.encode()),
+        media_type="text/markdown",
+        headers={
+            "Content-Disposition": (f"attachment; filename=consensus-{short_id}.md")
+        },
     )

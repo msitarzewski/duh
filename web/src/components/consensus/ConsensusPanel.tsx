@@ -17,7 +17,7 @@ export function ConsensusPanel() {
   return (
     <div className="space-y-4">
       <QuestionInput
-        onSubmit={(q, r, p) => startConsensus(q, r, p)}
+        onSubmit={(q, r, p, ms) => startConsensus(q, r, p, ms)}
         disabled={isActive}
       />
 

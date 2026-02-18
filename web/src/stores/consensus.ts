@@ -4,6 +4,7 @@ import type {
   WSEvent,
   WSPhaseStart,
   ConsensusPhase,
+  ModelSelectionOptions,
 } from '@/api/types'
 
 export type ConsensusStatus = 'idle' | 'connecting' | 'streaming' | 'complete' | 'error'
@@ -38,6 +39,7 @@ interface ConsensusState {
   rounds: RoundData[]
 
   // Final result
+  question: string | null
   decision: string | null
   confidence: number | null
   dissent: string | null
@@ -45,7 +47,7 @@ interface ConsensusState {
   threadId: string | null
 
   // Actions
-  startConsensus: (question: string, rounds?: number, protocol?: string) => void
+  startConsensus: (question: string, rounds?: number, protocol?: string, modelSelection?: ModelSelectionOptions) => void
   reset: () => void
   disconnect: () => void
 }
@@ -72,19 +74,21 @@ export const useConsensusStore = create<ConsensusState>((set, get) => ({
   currentPhase: null,
   currentRound: 0,
   rounds: [],
+  question: null,
   decision: null,
   confidence: null,
   dissent: null,
   cost: null,
   threadId: null,
 
-  startConsensus: (question, rounds = 3, protocol = 'consensus') => {
+  startConsensus: (question, rounds = 3, protocol = 'consensus', modelSelection?) => {
     set({
       status: 'connecting',
       error: null,
       currentPhase: null,
       currentRound: 0,
       rounds: [],
+      question,
       decision: null,
       confidence: null,
       dissent: null,
@@ -96,6 +100,7 @@ export const useConsensusStore = create<ConsensusState>((set, get) => ({
       question,
       rounds,
       protocol,
+      modelSelection,
       onStatusChange: (wsStatus) => {
         if (wsStatus === 'connected') {
           set({ status: 'streaming' })
@@ -121,6 +126,7 @@ export const useConsensusStore = create<ConsensusState>((set, get) => ({
       currentPhase: null,
       currentRound: 0,
       rounds: [],
+      question: null,
       decision: null,
       confidence: null,
       dissent: null,
