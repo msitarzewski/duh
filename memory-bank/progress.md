@@ -4,7 +4,19 @@
 
 ---
 
-## Current State: Epistemic Confidence Phase A COMPLETE
+## Current State: Consensus Nav + Collapsible Sections COMPLETE
+
+### Consensus Navigation & Collapsible Sections
+
+- **Shared `Disclosure` primitive** — reusable chevron + toggle component used across PhaseCard, TurnCard, ConsensusComplete, DissentBanner, ThreadDetail
+- **Sticky right-side nav** — `ConsensusNav` (live consensus) and `ThreadNav` (thread detail) show round/phase progress, individual challenger model names, scroll-to-section on click
+- **Decision-first layout** — `ConsensusComplete` and thread final decision surface to the top when consensus is complete, collapsible via Disclosure
+- **Per-challenger collapsibility** — each individual challenger is its own Disclosure within the CHALLENGE phase, nav shows short model names (e.g. `gpt-4`, `gemini`)
+- **DissentBanner refactored** — uses Disclosure, parses `[model:name]:` prefix to extract model attribution and display ModelBadge
+- **Responsive** — nav hidden on mobile (`hidden lg:block`), collapsible sections still work
+- **Both views** — ConsensusPage (live streaming) and ThreadDetailPage (stored threads) share the same patterns
+- 1586 Python tests + 166 Vitest tests (1752 total), build clean
+- New files: Disclosure.tsx, ConsensusNav.tsx, ThreadNav.tsx, consensus-nav.test.tsx, thread-nav.test.tsx
 
 ### Epistemic Confidence Phase A
 
@@ -168,3 +180,4 @@ Phase 0 benchmark framework — fully functional, pilot-tested on 5 questions.
 | 2026-02-17 | v0.5.0 — "It Scales" | **Complete** |
 | 2026-02-17 | Export to Markdown & PDF (CLI + API + Web UI) | Done |
 | 2026-02-18 | Epistemic Confidence Phase A (rigor + domain caps + calibration) | Done |
+| 2026-02-18 | Consensus nav + collapsible sections + decision-first layout | Done |

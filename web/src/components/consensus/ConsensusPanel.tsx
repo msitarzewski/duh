@@ -13,6 +13,7 @@ export function ConsensusPanel() {
   } = useConsensusStore()
 
   const isActive = status === 'connecting' || status === 'streaming'
+  const isComplete = status === 'complete'
 
   return (
     <div className="space-y-4">
@@ -30,66 +31,80 @@ export function ConsensusPanel() {
         </GlassPanel>
       )}
 
-      {(isActive || status === 'complete') && rounds.length > 0 && (
-        <div className="space-y-6">
-          {rounds.map((round) => (
-            <div key={round.round} className="space-y-3">
-              <div className="flex items-center gap-2">
-                <span className="font-mono text-xs text-[var(--color-text-dim)]">
-                  ROUND {round.round}
-                </span>
-                {isActive && round.round === currentRound && (
-                  <CostTicker cost={cost} />
-                )}
-              </div>
-
-              {round.proposer && (
-                <PhaseCard
-                  phase="PROPOSE"
-                  model={round.proposer}
-                  content={round.proposal}
-                  isActive={isActive && currentPhase === 'PROPOSE' && round.round === currentRound}
-                />
-              )}
-
-              {(round.challengers.length > 0 || round.challenges.length > 0) && (
-                <PhaseCard
-                  phase="CHALLENGE"
-                  models={round.challengers}
-                  challenges={round.challenges}
-                  isActive={isActive && currentPhase === 'CHALLENGE' && round.round === currentRound}
-                />
-              )}
-
-              {round.reviser && (
-                <PhaseCard
-                  phase="REVISE"
-                  model={round.reviser}
-                  content={round.revision}
-                  isActive={isActive && currentPhase === 'REVISE' && round.round === currentRound}
-                />
-              )}
-
-              {round.confidence !== null && (
-                <div className="flex items-center gap-3 text-xs font-mono text-[var(--color-text-dim)]">
-                  <span>Confidence: {(round.confidence * 100).toFixed(0)}%</span>
-                  {round.rigor !== null && <span>Rigor: {(round.rigor * 100).toFixed(0)}%</span>}
-                  {round.dissent && <span className="text-[var(--color-amber)]">Dissent noted</span>}
-                </div>
-              )}
-            </div>
-          ))}
+      {isComplete && decision && confidence !== null && (
+        <div id="consensus-complete">
+          <ConsensusComplete
+            decision={decision}
+            confidence={confidence}
+            rigor={rigor ?? 0}
+            dissent={dissent}
+            cost={cost}
+            collapsible
+          />
         </div>
       )}
 
-      {status === 'complete' && decision && confidence !== null && (
-        <ConsensusComplete
-          decision={decision}
-          confidence={confidence}
-          rigor={rigor ?? 0}
-          dissent={dissent}
-          cost={cost}
-        />
+      {(isActive || isComplete) && rounds.length > 0 && (
+        <div className="space-y-6">
+          {rounds.map((round) => {
+            const isCurrentRound = isActive && round.round === currentRound
+            const isCompletedRound = !isCurrentRound && (round.round < currentRound || isComplete)
+
+            return (
+              <div key={round.round} id={`consensus-round-${round.round}`} className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <span className="font-mono text-xs text-[var(--color-text-dim)]">
+                    ROUND {round.round}
+                  </span>
+                  {isCurrentRound && (
+                    <CostTicker cost={cost} />
+                  )}
+                </div>
+
+                {round.proposer && (
+                  <PhaseCard
+                    phase="PROPOSE"
+                    model={round.proposer}
+                    content={round.proposal}
+                    isActive={isActive && currentPhase === 'PROPOSE' && round.round === currentRound}
+                    collapsible={isCompletedRound}
+                    defaultOpen={false}
+                  />
+                )}
+
+                {(round.challengers.length > 0 || round.challenges.length > 0) && (
+                  <PhaseCard
+                    phase="CHALLENGE"
+                    models={round.challengers}
+                    challenges={round.challenges}
+                    isActive={isActive && currentPhase === 'CHALLENGE' && round.round === currentRound}
+                    collapsible={isCompletedRound}
+                    defaultOpen={false}
+                  />
+                )}
+
+                {round.reviser && (
+                  <PhaseCard
+                    phase="REVISE"
+                    model={round.reviser}
+                    content={round.revision}
+                    isActive={isActive && currentPhase === 'REVISE' && round.round === currentRound}
+                    collapsible={isCompletedRound}
+                    defaultOpen={false}
+                  />
+                )}
+
+                {round.confidence !== null && (
+                  <div className="flex items-center gap-3 text-xs font-mono text-[var(--color-text-dim)]">
+                    <span>Confidence: {(round.confidence * 100).toFixed(0)}%</span>
+                    {round.rigor !== null && <span>Rigor: {(round.rigor * 100).toFixed(0)}%</span>}
+                    {round.dissent && <span className="text-[var(--color-amber)]">Dissent noted</span>}
+                  </div>
+                )}
+              </div>
+            )
+          })}
+        </div>
       )}
 
       {isActive && (
@@ -100,7 +115,7 @@ export function ConsensusPanel() {
         </div>
       )}
 
-      {status === 'complete' && (
+      {isComplete && (
         <div className="flex justify-center">
           <GlowButton variant="ghost" size="sm" onClick={reset}>
             New Question

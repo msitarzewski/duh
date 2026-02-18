@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { GlassPanel, GlowButton, Markdown } from '@/components/shared'
+import { GlassPanel, GlowButton, Markdown, Disclosure } from '@/components/shared'
 import { ConfidenceMeter } from './ConfidenceMeter'
 import { DissentBanner } from './DissentBanner'
 import { CostTicker } from './CostTicker'
@@ -12,6 +12,7 @@ interface ConsensusCompleteProps {
   rigor: number
   dissent: string | null
   cost: number | null
+  collapsible?: boolean
 }
 
 export function generateExportMarkdown(
@@ -88,7 +89,7 @@ function downloadFile(content: string | Blob, filename: string, mimeType: string
   URL.revokeObjectURL(url)
 }
 
-export function ConsensusComplete({ decision, confidence, rigor, dissent, cost }: ConsensusCompleteProps) {
+export function ConsensusComplete({ decision, confidence, rigor, dissent, cost, collapsible }: ConsensusCompleteProps) {
   const [copied, setCopied] = useState(false)
   const [exportOpen, setExportOpen] = useState(false)
   const { question, rounds, threadId } = useConsensusStore()
@@ -115,6 +116,75 @@ export function ConsensusComplete({ decision, confidence, rigor, dissent, cost }
     setExportOpen(false)
   }
 
+  const header = (
+    <>
+      <span className="font-mono text-xs text-[var(--color-green)] font-semibold">CONSENSUS REACHED</span>
+      <CostTicker cost={cost} />
+      <div className="flex items-center gap-3 ml-auto">
+        <ConfidenceMeter value={confidence} label="Confidence" />
+        <ConfidenceMeter value={rigor} size={48} label="Rigor" />
+      </div>
+    </>
+  )
+
+  const body = (
+    <>
+      <Markdown className="text-sm">{decision}</Markdown>
+
+      <div className="flex gap-2 mt-4">
+        <GlowButton variant="ghost" size="sm" onClick={handleCopy}>
+          {copied ? 'Copied' : 'Copy'}
+        </GlowButton>
+        <div className="relative">
+          <GlowButton variant="ghost" size="sm" onClick={() => setExportOpen(!exportOpen)}>
+            Export
+          </GlowButton>
+          {exportOpen && (
+            <div className="absolute bottom-full left-0 mb-1 bg-[var(--color-bg-secondary)] border border-[var(--color-border)] rounded-lg shadow-lg py-1 min-w-[200px] z-10">
+              <button
+                className="w-full text-left px-3 py-1.5 text-xs hover:bg-[var(--color-bg-tertiary)] text-[var(--color-text)]"
+                onClick={() => handleExportMarkdown('decision')}
+              >
+                Markdown (decision only)
+              </button>
+              <button
+                className="w-full text-left px-3 py-1.5 text-xs hover:bg-[var(--color-bg-tertiary)] text-[var(--color-text)]"
+                onClick={() => handleExportMarkdown('full')}
+              >
+                Markdown (full report)
+              </button>
+              <button
+                className="w-full text-left px-3 py-1.5 text-xs hover:bg-[var(--color-bg-tertiary)] text-[var(--color-text)]"
+                onClick={() => handleExportPdf('decision')}
+              >
+                PDF (decision only)
+              </button>
+              <button
+                className="w-full text-left px-3 py-1.5 text-xs hover:bg-[var(--color-bg-tertiary)] text-[var(--color-text)]"
+                onClick={() => handleExportPdf('full')}
+              >
+                PDF (full report)
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    </>
+  )
+
+  if (collapsible) {
+    return (
+      <div className="space-y-4 animate-fade-in-up">
+        <GlassPanel glow="strong" padding="lg">
+          <Disclosure header={header} defaultOpen>
+            {body}
+            {dissent && <div className="mt-4"><DissentBanner dissent={dissent} /></div>}
+          </Disclosure>
+        </GlassPanel>
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-4 animate-fade-in-up">
       <GlassPanel glow="strong" padding="lg">
@@ -128,50 +198,9 @@ export function ConsensusComplete({ decision, confidence, rigor, dissent, cost }
             <ConfidenceMeter value={rigor} size={48} label="Rigor" />
           </div>
         </div>
-
-        <Markdown className="text-sm">{decision}</Markdown>
-
-        <div className="flex gap-2 mt-4">
-          <GlowButton variant="ghost" size="sm" onClick={handleCopy}>
-            {copied ? 'Copied' : 'Copy'}
-          </GlowButton>
-          <div className="relative">
-            <GlowButton variant="ghost" size="sm" onClick={() => setExportOpen(!exportOpen)}>
-              Export
-            </GlowButton>
-            {exportOpen && (
-              <div className="absolute bottom-full left-0 mb-1 bg-[var(--color-bg-secondary)] border border-[var(--color-border)] rounded-lg shadow-lg py-1 min-w-[200px] z-10">
-                <button
-                  className="w-full text-left px-3 py-1.5 text-xs hover:bg-[var(--color-bg-tertiary)] text-[var(--color-text)]"
-                  onClick={() => handleExportMarkdown('decision')}
-                >
-                  Markdown (decision only)
-                </button>
-                <button
-                  className="w-full text-left px-3 py-1.5 text-xs hover:bg-[var(--color-bg-tertiary)] text-[var(--color-text)]"
-                  onClick={() => handleExportMarkdown('full')}
-                >
-                  Markdown (full report)
-                </button>
-                <button
-                  className="w-full text-left px-3 py-1.5 text-xs hover:bg-[var(--color-bg-tertiary)] text-[var(--color-text)]"
-                  onClick={() => handleExportPdf('decision')}
-                >
-                  PDF (decision only)
-                </button>
-                <button
-                  className="w-full text-left px-3 py-1.5 text-xs hover:bg-[var(--color-bg-tertiary)] text-[var(--color-text)]"
-                  onClick={() => handleExportPdf('full')}
-                >
-                  PDF (full report)
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
+        {body}
+        {dissent && <div className="mt-4"><DissentBanner dissent={dissent} /></div>}
       </GlassPanel>
-
-      {dissent && <DissentBanner dissent={dissent} />}
     </div>
   )
 }

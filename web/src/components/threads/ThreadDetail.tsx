@@ -2,7 +2,9 @@ import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useThreadsStore } from '@/stores'
 import { TurnCard } from './TurnCard'
-import { GlassPanel, GlowButton, Skeleton, Badge, ExportMenu } from '@/components/shared'
+import { GlassPanel, GlowButton, Skeleton, Badge, ExportMenu, Markdown, Disclosure } from '@/components/shared'
+import { ConfidenceMeter } from '@/components/consensus/ConfidenceMeter'
+import { DissentBanner } from '@/components/consensus/DissentBanner'
 
 function formatDate(iso: string): string {
   return new Date(iso).toLocaleString('en-US', {
@@ -54,6 +56,10 @@ export function ThreadDetail() {
     setFeedbackSent(true)
   }
 
+  // Find the final decision from the last turn
+  const lastTurn = currentThread.turns[currentThread.turns.length - 1]
+  const finalDecision = currentThread.status === 'complete' && lastTurn?.decision ? lastTurn.decision : null
+
   return (
     <div className="space-y-4">
       <GlassPanel padding="md" className="relative z-20">
@@ -74,30 +80,66 @@ export function ThreadDetail() {
         </div>
       </GlassPanel>
 
+      {finalDecision && (
+        <div id="thread-decision">
+          <GlassPanel glow="strong" padding="lg" className="animate-fade-in-up">
+            <Disclosure
+              header={
+                <>
+                  <span className="font-mono text-xs text-[var(--color-green)] font-semibold">DECISION</span>
+                  <div className="flex items-center gap-2 ml-auto">
+                    <ConfidenceMeter value={finalDecision.confidence} size={48} label="Confidence" />
+                    <ConfidenceMeter value={finalDecision.rigor} size={36} label="Rigor" />
+                  </div>
+                </>
+              }
+              defaultOpen
+            >
+              <div className="text-sm">
+                <Markdown>{finalDecision.content}</Markdown>
+              </div>
+              {finalDecision.dissent && (
+                <div className="mt-4">
+                  <DissentBanner dissent={finalDecision.dissent} />
+                </div>
+              )}
+            </Disclosure>
+          </GlassPanel>
+        </div>
+      )}
+
       {currentThread.turns.map((turn, i) => (
-        <TurnCard key={i} turn={turn} />
+        <div key={i} id={`thread-round-${turn.round_number}`}>
+          <TurnCard
+            turn={turn}
+            collapsible={currentThread.turns.length > 1}
+            defaultOpen={!finalDecision && i === currentThread.turns.length - 1}
+          />
+        </div>
       ))}
 
-      {currentThread.status === 'complete' && !feedbackSent && (
-        <GlassPanel padding="sm">
-          <p className="text-xs font-mono text-[var(--color-text-dim)] mb-2">How was this decision?</p>
-          <div className="flex gap-2">
-            <GlowButton variant="ghost" size="sm" onClick={() => handleFeedback('success')}>
-              Success
-            </GlowButton>
-            <GlowButton variant="ghost" size="sm" onClick={() => handleFeedback('partial')}>
-              Partial
-            </GlowButton>
-            <GlowButton variant="danger" size="sm" onClick={() => handleFeedback('failure')}>
-              Failure
-            </GlowButton>
-          </div>
-        </GlassPanel>
-      )}
+      <div id="thread-feedback">
+        {currentThread.status === 'complete' && !feedbackSent && (
+          <GlassPanel padding="sm">
+            <p className="text-xs font-mono text-[var(--color-text-dim)] mb-2">How was this decision?</p>
+            <div className="flex gap-2">
+              <GlowButton variant="ghost" size="sm" onClick={() => handleFeedback('success')}>
+                Success
+              </GlowButton>
+              <GlowButton variant="ghost" size="sm" onClick={() => handleFeedback('partial')}>
+                Partial
+              </GlowButton>
+              <GlowButton variant="danger" size="sm" onClick={() => handleFeedback('failure')}>
+                Failure
+              </GlowButton>
+            </div>
+          </GlassPanel>
+        )}
 
-      {feedbackSent && (
-        <p className="text-center text-xs font-mono text-[var(--color-green)]">Feedback recorded</p>
-      )}
+        {feedbackSent && (
+          <p className="text-center text-xs font-mono text-[var(--color-green)]">Feedback recorded</p>
+        )}
+      </div>
 
       <div className="flex justify-center">
         <GlowButton variant="ghost" size="sm" onClick={() => navigate('/threads')}>
