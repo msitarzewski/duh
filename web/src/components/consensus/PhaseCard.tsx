@@ -1,4 +1,4 @@
-import { GlassPanel, Markdown } from '@/components/shared'
+import { GlassPanel, Markdown, Disclosure } from '@/components/shared'
 import { ModelBadge } from './ModelBadge'
 import { StreamingText } from './StreamingText'
 
@@ -9,24 +9,24 @@ interface PhaseCardProps {
   content?: string | null
   isActive?: boolean
   challenges?: Array<{ model: string; content: string }>
+  collapsible?: boolean
+  defaultOpen?: boolean
 }
 
-export function PhaseCard({ phase, model, models, content, isActive, challenges }: PhaseCardProps) {
-  return (
-    <GlassPanel
-      className={`animate-fade-in-up ${isActive ? 'border-[var(--color-border-active)]' : ''}`}
-      glow={isActive ? 'subtle' : 'none'}
-      padding="sm"
-    >
-      <div className="flex items-center gap-2 mb-2">
-        <span className="font-mono text-xs text-[var(--color-primary)] font-semibold">{phase}</span>
-        {isActive && (
-          <span className="w-1.5 h-1.5 rounded-full bg-[var(--color-primary)] animate-pulse-glow" />
-        )}
-        {model && <ModelBadge model={model} />}
-        {models?.map((m) => <ModelBadge key={m} model={m} />)}
-      </div>
+export function PhaseCard({ phase, model, models, content, isActive, challenges, collapsible, defaultOpen = true }: PhaseCardProps) {
+  const header = (
+    <>
+      <span className="font-mono text-xs text-[var(--color-primary)] font-semibold">{phase}</span>
+      {isActive && (
+        <span className="w-1.5 h-1.5 rounded-full bg-[var(--color-primary)] animate-pulse-glow" />
+      )}
+      {model && <ModelBadge model={model} />}
+      {models?.map((m) => <ModelBadge key={m} model={m} />)}
+    </>
+  )
 
+  const body = (
+    <>
       {content && (
         <div className="text-sm">
           {isActive ? (
@@ -40,12 +40,16 @@ export function PhaseCard({ phase, model, models, content, isActive, challenges 
       {challenges && challenges.length > 0 && (
         <div className="mt-3 space-y-2">
           {challenges.map((ch, i) => (
-            <div key={i} className="pl-3 border-l-2 border-[var(--color-amber)]/30">
-              <ModelBadge model={ch.model} />
-              <div className="text-sm text-[var(--color-text-secondary)] mt-1">
+            <Disclosure
+              key={i}
+              defaultOpen={!collapsible}
+              header={<ModelBadge model={ch.model} />}
+              className="pl-3 border-l-2 border-[var(--color-amber)]/30"
+            >
+              <div className="text-sm text-[var(--color-text-secondary)]">
                 <Markdown>{ch.content}</Markdown>
               </div>
-            </div>
+            </Disclosure>
           ))}
         </div>
       )}
@@ -59,6 +63,31 @@ export function PhaseCard({ phase, model, models, content, isActive, challenges 
           Processing...
         </div>
       )}
+    </>
+  )
+
+  if (collapsible) {
+    return (
+      <GlassPanel
+        className={`animate-fade-in-up ${isActive ? 'border-[var(--color-border-active)]' : ''}`}
+        glow={isActive ? 'subtle' : 'none'}
+        padding="sm"
+      >
+        <Disclosure header={header} defaultOpen={defaultOpen} forceOpen={isActive}>
+          {body}
+        </Disclosure>
+      </GlassPanel>
+    )
+  }
+
+  return (
+    <GlassPanel
+      className={`animate-fade-in-up ${isActive ? 'border-[var(--color-border-active)]' : ''}`}
+      glow={isActive ? 'subtle' : 'none'}
+      padding="sm"
+    >
+      <div className="flex items-center gap-2 mb-2">{header}</div>
+      {body}
     </GlassPanel>
   )
 }
