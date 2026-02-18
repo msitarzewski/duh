@@ -82,6 +82,9 @@ nav:
   - MCP Server: mcp-server.md
   - Guides:
       - Docker: guides/docker.md
+      - Production Deployment: guides/production-deployment.md
+      - Authentication: guides/authentication.md
+      - Monitoring: guides/monitoring.md
       - Local Models: guides/local-models.md
       - Batch Mode: batch-mode.md
       - Export: export.md

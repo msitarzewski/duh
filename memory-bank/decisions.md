@@ -310,3 +310,17 @@
 - Bundling mermaid eagerly (bloats main bundle from 278KB to 1.1MB)
 **Consequences**: Main bundle: 617KB (up from 278KB — react-markdown + highlight.js needed on all pages). Mermaid: 498KB lazy chunk only when mermaid blocks exist. Full GFM support (tables, task lists, strikethrough). Code syntax highlighting in 180+ languages. 5 components updated to use `<Markdown>` for LLM content.
 **References**: `web/src/components/shared/Markdown.tsx`, used in ConsensusComplete, PhaseCard, TurnCard, DissentBanner
+
+---
+
+## 2026-02-17: create_all Only for In-Memory SQLite
+
+**Status**: Approved
+**Context**: `_create_db()` in `cli/app.py` called `Base.metadata.create_all()` unconditionally. This conflicts with alembic migrations for file-based SQLite and PostgreSQL: `create_all` creates tables from current models (bypassing alembic version tracking) but cannot add columns to existing tables. When the v0.5 migration added `user_id` to `threads`, `decisions`, and `api_keys`, the `users` table was already created by `create_all` but the FK columns were missing — causing `OperationalError: no such column: api_keys.user_id` at runtime.
+**Decision**: Only call `create_all` when the database URL contains `:memory:` (in-memory SQLite used by tests and dev). File-based SQLite and PostgreSQL rely exclusively on alembic migrations for schema management.
+**Alternatives**:
+- Keep `create_all` with `checkfirst=True` (default) — doesn't help, `create_all` can't alter existing tables
+- Run alembic migrations programmatically at startup — adds complexity, conflates app startup with migration
+- Remove `create_all` entirely — breaks in-memory test fixtures that don't run alembic
+**Consequences**: Tests continue to work (in-memory SQLite still uses `create_all`). Production databases must run `alembic upgrade head` after code updates. This was already the expected workflow but is now enforced.
+**References**: `src/duh/cli/app.py:101-104`

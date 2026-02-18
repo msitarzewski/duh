@@ -6,19 +6,19 @@
 
 ## Where We Are
 
-**v0.4 COMPLETE** — "It Has a Face". Web UI with 3D Decision Space, real-time streaming, thread browser.
+**v0.5 COMPLETE** — "It Scales". Multi-user auth, PostgreSQL, production hardening.
 
-- 1318 Python tests + 117 Vitest tests (1435 total), 50 Python + 66 frontend source files
-- 5 providers (Anthropic, OpenAI, Google, Mistral, local via Ollama) — 14 models
-- Version 0.4.0, branch `v0.3.0` (v0.4 changes uncommitted on top)
+- 1354 Python tests + 12 load tests + 117 Vitest tests (1483 total), ~60 Python + 66 frontend source files
+- 6 providers (Anthropic, OpenAI, Google, Mistral, Perplexity, local via Ollama) — 17 models
+- Version 0.5.0, branch `v0.5.0`, ready to merge to main
 - MkDocs docs live at https://msitarzewski.github.io/duh/
 - GitHub repo: https://github.com/msitarzewski/duh
 
 ## Starting a Session
 
 Load these files:
-1. `activeContext.md` — current state, v0.4 summary, open questions
-2. `roadmap.md:330+` — future version specs
+1. `activeContext.md` — current state, v0.5 complete, open questions
+2. `roadmap.md:513+` — v1.0 spec (next version)
 3. `techContext.md` — tech stack + all decided patterns (Python + frontend)
 4. `decisions.md` — 18 ADRs, all foundational + v0.2 + v0.3 + v0.4 decisions
 
@@ -42,6 +42,10 @@ duh serve --reload                         # dev mode with hot reload
 duh mcp                                    # start MCP server
 duh batch questions.txt                    # batch mode
 duh export <thread_id> --format json       # export thread
+duh backup /path/to/backup.json           # backup database
+duh restore /path/to/backup.json          # restore database
+duh user-create                           # create user account
+duh user-list                             # list users
 
 # Backend Development
 uv sync                                    # install deps
@@ -72,14 +76,17 @@ docker compose up                          # full stack on :8080
 | Decomposition | `src/duh/consensus/decompose.py`, `src/duh/consensus/scheduler.py`, `src/duh/consensus/synthesis.py` |
 | Tools | `src/duh/tools/base.py`, `src/duh/tools/registry.py`, `src/duh/tools/augmented_send.py` |
 | Tool impls | `src/duh/tools/web_search.py`, `src/duh/tools/code_exec.py`, `src/duh/tools/file_read.py` |
-| Providers | `src/duh/providers/base.py`, `anthropic.py`, `openai.py`, `google.py`, `mistral.py` |
+| Providers | `src/duh/providers/base.py`, `anthropic.py`, `openai.py`, `google.py`, `mistral.py`, `perplexity.py` |
 | Memory | `src/duh/memory/models.py`, `repository.py`, `context.py`, `summary.py` |
 | Config | `src/duh/config/schema.py`, `src/duh/config/loader.py` |
 | Core | `src/duh/core/errors.py`, `src/duh/core/retry.py` |
 | REST API | `src/duh/api/app.py`, `src/duh/api/middleware.py`, `src/duh/api/routes/` |
+| Auth/RBAC | `src/duh/api/auth.py`, `src/duh/api/rbac.py` |
+| Monitoring | `src/duh/api/metrics.py`, `src/duh/api/health.py` |
+| Backup | `src/duh/memory/backup.py` |
 | MCP Server | `src/duh/mcp/server.py` |
 | Client | `client/src/duh_client/client.py` |
-| Migrations | `alembic/versions/001_v01_baseline.py` through `004_v03_api_keys.py` |
+| Migrations | `alembic/versions/001_v01_baseline.py` through `005_v05_users.py` |
 | Frontend theme | `web/src/theme/duh-theme.css` (22 CSS vars, dark/light), `web/src/theme/animations.css` (keyframes + `.duh-prose`) |
 | Markdown | `web/src/components/shared/Markdown.tsx` (react-markdown + highlight.js + mermaid lazy) |
 | Frontend API | `web/src/api/client.ts`, `web/src/api/websocket.ts`, `web/src/api/types.ts` |

@@ -425,8 +425,8 @@ class TestExportRoundTrip:
         loop.run_until_complete(engine.dispose())
         loop.close()
 
-        assert "# Thread: Test question for export" in output
-        assert "## Round 1" in output
+        assert "# Consensus: Test question for export" in output
+        assert "## Decision" in output
         assert "Use SQLite" in output
 
 

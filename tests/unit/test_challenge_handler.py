@@ -175,6 +175,49 @@ class TestSelectChallengers:
         with pytest.raises(InsufficientModelsError, match="No models"):
             select_challengers(pm, "any:model")
 
+    async def test_panel_filters_challengers(self) -> None:
+        from duh.providers.manager import ProviderManager
+        from tests.fixtures.providers import MockProvider
+
+        pm = ProviderManager()
+        p1 = MockProvider(provider_id="a", responses={"m1": "r"})
+        p2 = MockProvider(provider_id="b", responses={"m2": "r"})
+        p3 = MockProvider(provider_id="c", responses={"m3": "r"})
+        await pm.register(p1)
+        await pm.register(p2)
+        await pm.register(p3)
+
+        pm._model_index["a:m1"] = _make_model_info("a", "m1", 50.0)
+        pm._model_index["b:m2"] = _make_model_info("b", "m2", 10.0)
+        pm._model_index["c:m3"] = _make_model_info("c", "m3", 1.0)
+
+        # Panel restricts to only b:m2 and c:m3
+        result = select_challengers(pm, "a:m1", count=2, panel=["b:m2", "c:m3"])
+        assert "b:m2" in result
+        assert "c:m3" in result
+        assert "a:m1" not in result
+
+    async def test_panel_fills_with_proposer_when_insufficient(self) -> None:
+        from duh.providers.manager import ProviderManager
+        from tests.fixtures.providers import MockProvider
+
+        pm = ProviderManager()
+        p1 = MockProvider(provider_id="a", responses={"m1": "r"})
+        await pm.register(p1)
+
+        # Panel has only the proposer itself
+        result = select_challengers(pm, "a:m1", count=2, panel=["a:m1"])
+        assert result == ["a:m1", "a:m1"]
+
+    def test_empty_panel_raises(self) -> None:
+        from duh.providers.manager import ProviderManager
+
+        pm = ProviderManager()
+        # Register a model so the "no models" check doesn't trigger first
+        # but pass a panel that matches nothing
+        with pytest.raises(InsufficientModelsError, match="No models"):
+            select_challengers(pm, "any:model", panel=["nonexistent:model"])
+
 
 # ── Sycophancy detection ─────────────────────────────────────────
 

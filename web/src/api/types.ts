@@ -92,6 +92,13 @@ export interface ModelInfo {
   max_output_tokens: number
   input_cost_per_mtok: number
   output_cost_per_mtok: number
+  proposer_eligible: boolean
+}
+
+export interface ModelSelectionOptions {
+  panel?: string[]
+  proposer?: string
+  challengers?: string[]
 }
 
 export interface ModelsResponse {

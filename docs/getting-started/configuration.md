@@ -65,6 +65,7 @@ api_key_env = "GOOGLE_API_KEY"
 min_challengers = 2
 proposer_strategy = "round_robin"
 challenge_types = ["flaw", "alternative", "risk", "devils_advocate"]
+# panel = ["anthropic:claude-opus-4-6", "openai:gpt-5.2"]  # Restrict to specific models
 
 [tools]
 enabled = false          # Enable tool-augmented reasoning
@@ -124,6 +125,9 @@ duh ask --protocol voting "quick judgment call"
 duh ask --decompose "complex multi-part question"
 duh ask --tools "question needing web search"
 duh ask --no-tools "question that should not use tools"
+duh ask --panel anthropic:claude-opus-4-6,openai:gpt-5.2 "restrict to specific models"
+duh ask --proposer openai:gpt-5.2 "use a specific proposer"
+duh ask --challengers google:gemini-3-pro-preview,perplexity:sonar-pro "specific challengers"
 ```
 
 ## Next steps

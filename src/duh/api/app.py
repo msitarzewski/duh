@@ -41,7 +41,7 @@ def create_app(config: DuhConfig | None = None) -> FastAPI:
     app = FastAPI(
         title="duh",
         description="Multi-model consensus engine API",
-        version="0.4.0",
+        version="0.5.0",
         lifespan=lifespan,
     )
     app.state.config = config
@@ -70,11 +70,6 @@ def create_app(config: DuhConfig | None = None) -> FastAPI:
     # API key auth (added last — runs first)
     app.add_middleware(APIKeyMiddleware)
 
-    # Health endpoint
-    @app.get("/api/health")
-    async def health() -> dict[str, str]:
-        return {"status": "ok"}
-
     # Routes
     from duh.api.routes.ask import router as ask_router
     from duh.api.routes.crud import router as crud_router
@@ -85,6 +80,14 @@ def create_app(config: DuhConfig | None = None) -> FastAPI:
     app.include_router(crud_router)
     app.include_router(threads_router)
     app.include_router(ws_router)
+
+    from duh.api.auth import router as auth_router
+    from duh.api.health import router as health_router
+    from duh.api.metrics import router as metrics_router
+
+    app.include_router(auth_router)
+    app.include_router(health_router)
+    app.include_router(metrics_router)
 
     # ── Static file serving for web UI ──
     _mount_frontend(app)

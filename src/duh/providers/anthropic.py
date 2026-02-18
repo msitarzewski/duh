@@ -43,6 +43,14 @@ _KNOWN_MODELS: list[dict[str, Any]] = [
         "output_cost_per_mtok": 25.0,
     },
     {
+        "model_id": "claude-sonnet-4-6",
+        "display_name": "Claude Sonnet 4.6",
+        "context_window": 200_000,
+        "max_output_tokens": 64_000,
+        "input_cost_per_mtok": 3.0,
+        "output_cost_per_mtok": 15.0,
+    },
+    {
         "model_id": "claude-sonnet-4-5-20250929",
         "display_name": "Claude Sonnet 4.5",
         "context_window": 200_000,

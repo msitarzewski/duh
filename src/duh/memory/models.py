@@ -27,6 +27,29 @@ class Base(DeclarativeBase):
     """Declarative base for all duh models."""
 
 
+# ── Users ────────────────────────────────────────────────────────
+
+
+class User(Base):
+    """A registered user."""
+
+    __tablename__ = "users"
+    __table_args__ = (Index("ix_users_email", "email", unique=True),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    email: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
+    password_hash: Mapped[str] = mapped_column(String(128), nullable=False)
+    display_name: Mapped[str] = mapped_column(String(100), nullable=False)
+    role: Mapped[str] = mapped_column(String(20), default="contributor")
+    is_active: Mapped[bool] = mapped_column(default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=_utcnow, onupdate=_utcnow
+    )
+
+    threads: Mapped[list[Thread]] = relationship(back_populates="user")
+
+
 # ── Layer 1: Operational ─────────────────────────────────────────
 
 
@@ -42,11 +65,15 @@ class Thread(Base):
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
     question: Mapped[str] = mapped_column(Text)
     status: Mapped[str] = mapped_column(String(20), default="active")
+    user_id: Mapped[str | None] = mapped_column(
+        ForeignKey("users.id"), nullable=True, index=True, default=None
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, default=_utcnow, onupdate=_utcnow
     )
 
+    user: Mapped[User | None] = relationship(back_populates="threads")
     turns: Mapped[list[Turn]] = relationship(
         back_populates="thread",
         cascade="all, delete-orphan",
@@ -98,6 +125,7 @@ class Contribution(Base):
     """A single model's output within a turn."""
 
     __tablename__ = "contributions"
+    __table_args__ = (Index("ix_contributions_turn_role", "turn_id", "role"),)
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
     turn_id: Mapped[str] = mapped_column(ForeignKey("turns.id"), index=True)
@@ -148,10 +176,17 @@ class Decision(Base):
     """Committed decision from a consensus turn."""
 
     __tablename__ = "decisions"
+    __table_args__ = (
+        Index("ix_decisions_thread_created", "thread_id", "created_at"),
+        Index("ix_decisions_category_genus", "category", "genus"),
+    )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
     turn_id: Mapped[str] = mapped_column(ForeignKey("turns.id"), unique=True)
     thread_id: Mapped[str] = mapped_column(ForeignKey("threads.id"), index=True)
+    user_id: Mapped[str | None] = mapped_column(
+        ForeignKey("users.id"), nullable=True, index=True, default=None
+    )
     content: Mapped[str] = mapped_column(Text)
     confidence: Mapped[float] = mapped_column(Float, default=0.0)
     dissent: Mapped[str | None] = mapped_column(Text, nullable=True, default=None)
@@ -235,6 +270,9 @@ class APIKey(Base):
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
     key_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True)
     name: Mapped[str] = mapped_column(String(100))
+    user_id: Mapped[str | None] = mapped_column(
+        ForeignKey("users.id"), nullable=True, index=True, default=None
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
     revoked_at: Mapped[datetime | None] = mapped_column(
         DateTime, nullable=True, default=None

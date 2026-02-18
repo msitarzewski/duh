@@ -182,24 +182,44 @@ def build_propose_prompt(ctx: ConsensusContext) -> list[PromptMessage]:
 # ── Model selection ───────────────────────────────────────────
 
 
-def select_proposer(provider_manager: ProviderManager) -> str:
+def select_proposer(
+    provider_manager: ProviderManager,
+    *,
+    panel: list[str] | None = None,
+) -> str:
     """Select the strongest available model for proposing.
 
     Uses output cost per million tokens as a proxy for model
     capability. Falls back to the first available model if all
     costs are zero (e.g. local models only).
 
+    When *panel* is provided, only models whose ``model_ref`` is
+    in the panel list are considered.  Models with
+    ``proposer_eligible=False`` (e.g. search-grounded models)
+    are always excluded from proposing.
+
     Returns:
         The ``model_ref`` of the selected model.
 
     Raises:
-        InsufficientModelsError: If no models are registered.
+        InsufficientModelsError: If no eligible models remain.
     """
     models = provider_manager.list_all_models()
     if not models:
         msg = "No models available for proposal"
         raise InsufficientModelsError(msg)
-    return max(models, key=lambda m: m.output_cost_per_mtok).model_ref
+
+    # Apply panel filter
+    if panel:
+        models = [m for m in models if m.model_ref in panel]
+
+    # Exclude proposer-ineligible models
+    eligible = [m for m in models if m.proposer_eligible]
+    if not eligible:
+        msg = "No proposer-eligible models available"
+        raise InsufficientModelsError(msg)
+
+    return max(eligible, key=lambda m: m.output_cost_per_mtok).model_ref
 
 
 # ── Tool call logging ────────────────────────────────────────
@@ -324,6 +344,7 @@ def select_challengers(
     proposer_model: str,
     *,
     count: int = 2,
+    panel: list[str] | None = None,
 ) -> list[str]:
     """Select models for the challenge phase.
 
@@ -331,6 +352,9 @@ def select_challengers(
     is more effective than self-critique). If not enough different
     models are available, fills remaining slots with the proposer
     model (same-model ensemble).
+
+    When *panel* is provided, only models whose ``model_ref`` is
+    in the panel list are considered.
 
     Returns:
         List of ``model_ref`` strings, length up to ``count``.
@@ -342,6 +366,13 @@ def select_challengers(
     if not models:
         msg = "No models available for challenge"
         raise InsufficientModelsError(msg)
+
+    # Apply panel filter
+    if panel:
+        models = [m for m in models if m.model_ref in panel]
+        if not models:
+            msg = "No panel models available for challenge"
+            raise InsufficientModelsError(msg)
 
     others = sorted(
         (m for m in models if m.model_ref != proposer_model),

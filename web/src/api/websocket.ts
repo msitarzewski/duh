@@ -1,4 +1,4 @@
-import type { WSEvent } from './types'
+import type { ModelSelectionOptions, WSEvent } from './types'
 
 export type WSStatus = 'idle' | 'connecting' | 'connected' | 'error' | 'closed'
 
@@ -6,6 +6,7 @@ export interface ConsensusWSOptions {
   question: string
   rounds?: number
   protocol?: string
+  modelSelection?: ModelSelectionOptions
   onEvent: (event: WSEvent) => void
   onStatusChange?: (status: WSStatus) => void
   onError?: (error: Event | string) => void
@@ -28,13 +29,21 @@ export class ConsensusWebSocket {
 
     this.ws.onopen = () => {
       this.setStatus('connected', options.onStatusChange)
-      this.ws!.send(
-        JSON.stringify({
-          question: options.question,
-          rounds: options.rounds ?? 3,
-          protocol: options.protocol ?? 'consensus',
-        }),
-      )
+      const payload: Record<string, unknown> = {
+        question: options.question,
+        rounds: options.rounds ?? 3,
+        protocol: options.protocol ?? 'consensus',
+      }
+      if (options.modelSelection?.panel?.length) {
+        payload.panel = options.modelSelection.panel
+      }
+      if (options.modelSelection?.proposer) {
+        payload.proposer = options.modelSelection.proposer
+      }
+      if (options.modelSelection?.challengers?.length) {
+        payload.challengers = options.modelSelection.challengers
+      }
+      this.ws!.send(JSON.stringify(payload))
     }
 
     this.ws.onmessage = (event) => {

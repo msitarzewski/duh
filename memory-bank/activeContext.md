@@ -1,65 +1,104 @@
 # Active Context
 
 **Last Updated**: 2026-02-17
-**Current Phase**: v0.4 COMPLETE — "It Has a Face"
-**Next Action**: Commit v0.4 changes, merge to main, begin v0.5 planning.
+**Current Phase**: v0.5 + Export Feature
+**Next Action**: Merge v0.5.0 to main. Export to Markdown & PDF feature implemented.
+
+## Next Task: Model Selection Controls + Provider Updates
+
+### Context
+Users can't control which models participate in consensus. `select_proposer()` picks highest `output_cost_per_mtok`, `select_challengers()` picks next-costliest. Problems: no user control (`ConsensusConfig.panel` exists but unused), Google catalog outdated, Perplexity should be challengers-only (search-grounded), Anthropic missing `claude-sonnet-4-6`.
+
+### Changes (6 steps)
+
+1. **Update provider model catalogs**
+   - `src/duh/providers/google.py:34-67` — Gemini 3 GA + early-access models (web search for latest)
+   - `src/duh/providers/anthropic.py:36-61` — Add `claude-sonnet-4-6`
+   - `src/duh/providers/perplexity.py:35-60` — Verify current model IDs/pricing
+
+2. **Add `proposer_eligible` flag to ModelInfo**
+   - `src/duh/providers/base.py:28-45` — Add `proposer_eligible: bool = True`
+   - `src/duh/providers/perplexity.py` — Set `proposer_eligible=False` (challengers only, user decision)
+
+3. **Wire `ConsensusConfig.panel` + update selection functions**
+   - `src/duh/consensus/handlers.py:185-202` (`select_proposer`) — Accept optional `panel`, filter to `proposer_eligible=True`
+   - `src/duh/consensus/handlers.py:322-356` (`select_challengers`) — Accept optional `panel`
+   - `src/duh/cli/app.py:236-246`, `src/duh/api/routes/ws.py:108,128`, `src/duh/api/routes/ask.py` — Pass panel
+
+4. **Add CLI flags**: `--proposer MODEL_REF`, `--challengers MODEL_REF,MODEL_REF`, `--panel MODEL_REF,...`
+   - `src/duh/cli/app.py` (ask command)
+
+5. **Add to REST API**: Optional `panel`, `proposer`, `challengers` fields in ask request body
+   - `src/duh/api/routes/ask.py`
+
+6. **Tests**: Update `test_propose_handler.py`, `test_challenge_handler.py` for panel filtering + proposer_eligible. Test CLI flags. Fix any tests with hardcoded model catalogs.
+
+7. **Documentation + CLI help**
+   - `docs/cli/ask.md` — Document `--proposer`, `--challengers`, `--panel` flags
+   - `docs/api-reference.md` — Document panel/proposer/challengers in `/api/ask`
+   - `docs/concepts/providers-and-models.md` — Update model lists, model selection explanation
+   - `docs/getting-started/configuration.md` — Document `[consensus] panel` config
+   - `docs/reference/config-reference.md` — Add panel, proposer_strategy fields
+   - `src/duh/cli/app.py` — Update Click help strings for new flags
+   - `docs/index.md` — Update feature list if needed
+
+### Current model cost ranking (for reference)
+| Model | output_cost | Provider |
+|-------|------------|----------|
+| Opus 4.6 | $25.00 | anthropic |
+| Sonar Pro | $15.00 | perplexity |
+| Sonnet 4.5 | $15.00 | anthropic |
+| GPT-5.2 | $14.00 | openai |
+| Gemini 3 Pro | $12.00 | google |
+| Gemini 2.5 Pro | $10.00 | google |
+| Mistral Medium | $8.10 | mistral |
+| o3 | $8.00 | openai |
+| Sonar Deep Research | $8.00 | perplexity |
+| Mistral Large | $6.00 | mistral |
+| Haiku 4.5 | $5.00 | anthropic |
 
 ---
 
 ## Current State
 
-- **v0.4 COMPLETE + post-v0.4 polish.** React frontend with 3D Decision Space, real-time WebSocket streaming, thread browser, preferences. Markdown rendering + light/dark mode added post-v0.4.
-- **5 providers shipping**: Anthropic (3 models), OpenAI (3 models), Google (4 models), Mistral (4 models) — 14 total.
-- **1318 Python tests + 117 Vitest tests** (1435 total), ruff clean, mypy strict clean.
-- **50 Python source files + 66 frontend source files** (116 total).
+- **v0.5 + Export feature on branch `v0.5.0`.** All v0.5 tasks done + export feature added.
+- **6 providers shipping**: Anthropic (3 models), OpenAI (3 models), Google (4 models), Mistral (4 models), Perplexity (3 models) — 17 total.
+- **1539 Python unit/load tests + 122 Vitest tests** (1661 total), ruff clean.
+- **~60 Python source files + 67 frontend source files** (~127 total).
 - REST API, WebSocket streaming, MCP server, Python client library, web UI all built.
-- CLI commands: `duh ask`, `duh recall`, `duh threads`, `duh show`, `duh models`, `duh cost`, `duh serve`, `duh mcp`, `duh batch`, `duh export`, `duh feedback`.
+- Multi-user auth (JWT + RBAC), PostgreSQL support, Prometheus metrics, backup/restore, Playwright E2E.
+- CLI commands: `duh ask`, `duh recall`, `duh threads`, `duh show`, `duh models`, `duh cost`, `duh serve`, `duh mcp`, `duh batch`, `duh export`, `duh feedback`, `duh backup`, `duh restore`, `duh user-create`, `duh user-list`.
+- Export: `duh export <id> --format pdf/markdown --content full/decision --no-dissent -o file`
+- Docs: production-deployment.md, monitoring.md, authentication.md added.
 - MkDocs docs site: https://msitarzewski.github.io/duh/
 - GitHub repo: https://github.com/msitarzewski/duh
-- Branch: `v0.3.0` (v0.4 changes uncommitted on top)
 
-## v0.4 Summary
+## v0.5 Delivered
 
-### Frontend (web/)
-- React 19 + Vite 6 + Tailwind 4 + TypeScript
-- Three.js 3D Decision Space (R3F + drei, lazy-loaded, 873KB chunk)
-- Zustand stores (consensus, threads, decision-space, preferences)
-- Glassmorphism design system with 22 CSS custom properties (dark/light mode via `prefers-color-scheme`)
-- Markdown rendering: react-markdown + remark-gfm + rehype-highlight + mermaid (lazy-loaded)
-- Pages: Consensus, Threads, Thread Detail, Decision Space, Preferences, Share
-- WebSocket-driven real-time consensus streaming
-- Mobile-responsive with 2D SVG scatter fallback for Decision Space
-- Page transitions, micro-interactions, ConfidenceMeter animation
-- 117 Vitest tests (5 test files)
+**Theme**: Production hardening, multi-user, enterprise readiness.
+**18 tasks across 7 phases** — all complete.
 
-### Backend additions
-- `GET /api/decisions/space` — filtered decision data for 3D visualization
-- `GET /api/share/{token}` — public share link (no auth)
-- FastAPI static file serving with SPA fallback for web UI
-- `duh serve` logs "Web UI: http://host:port" when dist/ exists
+### What Shipped
+- User accounts + JWT auth + RBAC (admin/contributor/viewer) — `api/auth.py`, `api/rbac.py`, `models.py:User`
+- PostgreSQL support (asyncpg) with connection pooling (`pool_pre_ping`, compound indexes)
+- Perplexity provider adapter (6th provider, search-grounded) — `providers/perplexity.py`
+- Prometheus metrics (`/api/metrics`) + extended health checks (`/api/health/detailed`)
+- Backup/restore CLI (`duh backup`, `duh restore`) with SQLite copy + JSON export/import
+- Playwright E2E browser tests (`web/e2e/`)
+- Per-user + per-provider rate limiting (middleware keys by user_id > api_key > IP)
+- Production deployment documentation (3 new guides)
+- 26 multi-user integration tests + 12 load tests (latency, concurrency, rate limiting)
+- Alembic migration `005_v05_users.py` (users table, user_id FKs on threads/decisions/api_keys)
 
-### Documentation
-- `docs/web-ui.md` — full web UI reference
-- `docs/web-quickstart.md` — getting started guide
-- Updated mkdocs.yml nav and docs/index.md
-
-### Docker
-- Multi-stage build with Node.js 22 frontend stage
-- Default CMD: `serve --host 0.0.0.0 --port 8080`
-- EXPOSE 8080
-
-## v0.4 Architecture (Decided)
-
-- **React embedded in FastAPI** — Vite builds to `web/dist/`, FastAPI mounts as static files with SPA fallback
-- **Three.js code-split** — Scene3D lazy-loaded via React.lazy (873KB chunk)
-- **Mermaid code-split** — lazy `import('mermaid')` only when ```mermaid blocks exist (498KB chunk)
-- **Main bundle** — 617KB (includes react-markdown + highlight.js + remark-gfm)
-- **Zustand for state** — 4 stores (consensus, threads, decision-space, preferences), preferences persisted via localStorage
-- **CSS-only animations** — no framer-motion or JS animation libraries
-- **Light/dark mode** — `prefers-color-scheme` media query + `.theme-dark`/`.theme-light` manual override classes
-- **Theme system** — 22 CSS custom properties in `duh-theme.css`, `.duh-prose` typography in `animations.css`
-- **WebSocket events** — phase-level streaming (propose_start, propose_content, challenge_start, etc.)
-- **API proxy in dev** — Vite proxies /api and /ws to :8080 for development
+### New Source Files (v0.5)
+- `src/duh/api/auth.py` — JWT authentication endpoints
+- `src/duh/api/rbac.py` — Role-based access control
+- `src/duh/api/metrics.py` — Prometheus metrics endpoint
+- `src/duh/api/health.py` — Extended health checks
+- `src/duh/memory/backup.py` — Backup/restore utilities
+- `src/duh/providers/perplexity.py` — Perplexity provider adapter
+- `alembic/versions/005_v05_users.py` — User migration
+- `docs/guides/production-deployment.md`, `authentication.md`, `monitoring.md`
 
 ## Open Questions (Still Unresolved)
 
@@ -68,5 +107,5 @@
 - Vector search solution for SQLite (sqlite-vss vs ChromaDB vs FAISS) — v1.0 decision
 - Client library packaging: monorepo `client/` dir vs separate repo?
 - MCP server transport: stdio vs SSE vs streamable HTTP?
-- Hosted demo economics (try.duh.dev) — deferred
-- Playwright E2E tests — deferred to v0.5
+- Hosted demo economics (try.duh.dev) — deferred to post-1.0
+- A2A protocol — deferred to post-1.0

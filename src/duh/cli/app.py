@@ -67,7 +67,27 @@ async def _create_db(
         if db_path and db_path != ":memory:":
             Path(db_path).parent.mkdir(parents=True, exist_ok=True)
 
-    engine = create_async_engine(url)
+    engine_kwargs: dict[str, object] = {}
+    if url.startswith("sqlite"):
+        if ":memory:" in url:
+            # In-memory SQLite needs StaticPool so all queries share
+            # the same connection (and thus the same in-memory DB).
+            from sqlalchemy.pool import StaticPool
+
+            engine_kwargs["poolclass"] = StaticPool
+            engine_kwargs["connect_args"] = {"check_same_thread": False}
+        else:
+            from sqlalchemy.pool import NullPool
+
+            engine_kwargs["poolclass"] = NullPool
+    else:
+        engine_kwargs["pool_size"] = config.database.pool_size
+        engine_kwargs["max_overflow"] = config.database.max_overflow
+        engine_kwargs["pool_timeout"] = config.database.pool_timeout
+        engine_kwargs["pool_recycle"] = config.database.pool_recycle
+        engine_kwargs["pool_pre_ping"] = True
+
+    engine = create_async_engine(url, **engine_kwargs)
 
     # Enable foreign keys for SQLite
     if url.startswith("sqlite"):
@@ -78,8 +98,12 @@ async def _create_db(
             cursor.execute("PRAGMA foreign_keys=ON")
             cursor.close()
 
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+    # Only use create_all for in-memory SQLite (tests/dev).
+    # File-based SQLite and PostgreSQL are managed by alembic migrations.
+    is_memory = url.startswith("sqlite") and ":memory:" in url
+    if is_memory:
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
 
     factory = async_sessionmaker(engine, expire_on_commit=False)
     return factory, engine
@@ -99,8 +123,13 @@ async def _setup_providers(config: DuhConfig) -> ProviderManager:
             "openai",
             "google",
             "mistral",
+            "perplexity",
         ):
             continue  # Skip providers without API keys
+
+        # Set provider rate limit if configured
+        if prov_config.rate_limit > 0:
+            pm.set_provider_rate_limit(name, prov_config.rate_limit)
 
         if name == "anthropic":
             from duh.providers.anthropic import AnthropicProvider
@@ -125,6 +154,11 @@ async def _setup_providers(config: DuhConfig) -> ProviderManager:
 
             mistral_prov = MistralProvider(api_key=prov_config.api_key)
             await pm.register(mistral_prov)  # type: ignore[arg-type]
+        elif name == "perplexity":
+            from duh.providers.perplexity import PerplexityProvider
+
+            perplexity_prov = PerplexityProvider(api_key=prov_config.api_key)
+            await pm.register(perplexity_prov)  # type: ignore[arg-type]
 
     return pm
 
@@ -166,6 +200,10 @@ async def _run_consensus(
     pm: ProviderManager,
     display: ConsensusDisplay | None = None,
     tool_registry: ToolRegistry | None = None,
+    *,
+    panel: list[str] | None = None,
+    proposer_override: str | None = None,
+    challengers_override: list[str] | None = None,
 ) -> tuple[str, float, str | None, float]:
     """Run the full consensus loop.
 
@@ -193,13 +231,16 @@ async def _run_consensus(
     )
     sm = ConsensusStateMachine(ctx)
 
+    # Resolve effective panel from config or explicit arg
+    effective_panel = panel or config.consensus.panel or None
+
     for _round in range(config.general.max_rounds):
         # PROPOSE
         sm.transition(ConsensusState.PROPOSE)
         if display:
             display.round_header(ctx.current_round, config.general.max_rounds)
 
-        proposer = select_proposer(pm)
+        proposer = proposer_override or select_proposer(pm, panel=effective_panel)
         if display:
             with display.phase_status("PROPOSE", proposer):
                 await handle_propose(ctx, pm, proposer, tool_registry=tool_registry)
@@ -209,7 +250,9 @@ async def _run_consensus(
 
         # CHALLENGE
         sm.transition(ConsensusState.CHALLENGE)
-        challengers = select_challengers(pm, proposer)
+        challengers = challengers_override or select_challengers(
+            pm, proposer, panel=effective_panel
+        )
         if display:
             detail = f"{len(challengers)} models"
             with display.phase_status("CHALLENGE", detail):
@@ -317,6 +360,21 @@ def cli(ctx: click.Context, config_path: str | None) -> None:
     default=None,
     help="Enable/disable tool use (overrides config).",
 )
+@click.option(
+    "--proposer",
+    default=None,
+    help="Override proposer model (e.g. anthropic:claude-opus-4-6).",
+)
+@click.option(
+    "--challengers",
+    default=None,
+    help="Override challengers (comma-separated model refs).",
+)
+@click.option(
+    "--panel",
+    default=None,
+    help="Restrict to these models only (comma-separated model refs).",
+)
 @click.pass_context
 def ask(
     ctx: click.Context,
@@ -325,6 +383,9 @@ def ask(
     decompose: bool,
     protocol: str | None,
     tools: bool | None,
+    proposer: str | None,
+    challengers: str | None,
+    panel: str | None,
 ) -> None:
     """Run a consensus query.
 
@@ -338,6 +399,10 @@ def ask(
     # Override tool settings from CLI flag
     if tools is not None:
         config.tools.enabled = tools
+
+    # Parse model selection overrides
+    panel_list = panel.split(",") if panel else None
+    challengers_list = challengers.split(",") if challengers else None
 
     # Determine effective protocol
     effective_protocol = protocol or config.general.protocol
@@ -364,7 +429,15 @@ def ask(
         return
 
     try:
-        result = asyncio.run(_ask_async(question, config))
+        result = asyncio.run(
+            _ask_async(
+                question,
+                config,
+                panel=panel_list,
+                proposer_override=proposer,
+                challengers_override=challengers_list,
+            )
+        )
     except DuhError as e:
         _error(str(e))
         return  # unreachable
@@ -380,6 +453,10 @@ def ask(
 async def _ask_async(
     question: str,
     config: DuhConfig,
+    *,
+    panel: list[str] | None = None,
+    proposer_override: str | None = None,
+    challengers_override: list[str] | None = None,
 ) -> tuple[str, float, str | None, float]:
     """Async implementation for the ask command."""
     from duh.cli.display import ConsensusDisplay
@@ -396,7 +473,14 @@ async def _ask_async(
     display = ConsensusDisplay()
     display.start()
     return await _run_consensus(
-        question, config, pm, display=display, tool_registry=tool_registry
+        question,
+        config,
+        pm,
+        display=display,
+        tool_registry=tool_registry,
+        panel=panel,
+        proposer_override=proposer_override,
+        challengers_override=challengers_override,
     )
 
 
@@ -849,24 +933,70 @@ async def _feedback_async(
 @click.option(
     "--format",
     "fmt",
-    type=click.Choice(["json", "markdown"]),
+    type=click.Choice(["json", "markdown", "pdf"]),
     default="json",
     help="Export format.",
 )
+@click.option(
+    "--content",
+    type=click.Choice(["full", "decision"]),
+    default="full",
+    help="Content level: full report or decision only.",
+)
+@click.option(
+    "--no-dissent",
+    is_flag=True,
+    default=False,
+    help="Suppress dissent section.",
+)
+@click.option(
+    "-o",
+    "--output",
+    "output_path",
+    type=click.Path(),
+    default=None,
+    help="Output file path (required for PDF).",
+)
 @click.pass_context
-def export(ctx: click.Context, thread_id: str, fmt: str) -> None:
+def export(
+    ctx: click.Context,
+    thread_id: str,
+    fmt: str,
+    content: str,
+    no_dissent: bool,
+    output_path: str | None,
+) -> None:
     """Export a thread with full debate history.
 
     THREAD_ID can be the full UUID or a prefix (minimum 8 chars).
     """
+    if fmt == "pdf" and not output_path:
+        _error("--output / -o is required for PDF export.")
     config = _load_config(ctx.obj["config_path"])
     try:
-        asyncio.run(_export_async(config, thread_id, fmt))
+        asyncio.run(
+            _export_async(
+                config,
+                thread_id,
+                fmt,
+                content=content,
+                include_dissent=not no_dissent,
+                output_path=output_path,
+            )
+        )
     except DuhError as e:
         _error(str(e))
 
 
-async def _export_async(config: DuhConfig, thread_id: str, fmt: str) -> None:
+async def _export_async(
+    config: DuhConfig,
+    thread_id: str,
+    fmt: str,
+    *,
+    content: str = "full",
+    include_dissent: bool = True,
+    output_path: str | None = None,
+) -> None:
     """Async implementation for the export command."""
     from duh.memory.repository import MemoryRepository
 
@@ -908,9 +1038,25 @@ async def _export_async(config: DuhConfig, thread_id: str, fmt: str) -> None:
 
     assert thread is not None
     if fmt == "json":
-        click.echo(_format_thread_json(thread, votes))
+        output = _format_thread_json(thread, votes)
+    elif fmt == "pdf":
+        pdf_bytes = _format_thread_pdf(
+            thread, votes, content=content, include_dissent=include_dissent
+        )
+        assert output_path is not None
+        Path(output_path).write_bytes(pdf_bytes)
+        click.echo(f"PDF exported to {output_path}")
+        return
     else:
-        click.echo(_format_thread_markdown(thread, votes))
+        output = _format_thread_markdown(
+            thread, votes, content=content, include_dissent=include_dissent
+        )
+
+    if output_path:
+        Path(output_path).write_text(output)
+        click.echo(f"Exported to {output_path}")
+    else:
+        click.echo(output)
 
 
 def _format_thread_json(
@@ -976,44 +1122,357 @@ def _format_thread_json(
 def _format_thread_markdown(
     thread: Thread,
     votes: list[Vote],
+    *,
+    content: str = "full",
+    include_dissent: bool = True,
 ) -> str:
-    """Format a thread as Markdown for export."""
+    """Format a thread as Markdown for export.
+
+    Args:
+        content: "full" for complete report, "decision" for decision only.
+        include_dissent: Whether to include the dissent section.
+    """
     lines: list[str] = []
     created = thread.created_at.strftime("%Y-%m-%d")
-    lines.append(f"# Thread: {thread.question}")
-    lines.append(f"**Status**: {thread.status} | **Created**: {created}")
+
+    total_cost = sum(c.cost_usd for turn in thread.turns for c in turn.contributions)
+
+    # Find the final decision
+    final_decision = None
+    for turn in reversed(thread.turns):
+        if turn.decision:
+            final_decision = turn.decision
+            break
+
+    lines.append(f"# Consensus: {thread.question}")
     lines.append("")
 
-    if votes:
-        lines.append("## Votes")
-        for v in votes:
-            lines.append(f"**{v.model_ref}**: {v.content}")
+    # Decision section
+    if final_decision:
+        lines.append("## Decision")
+        lines.append(final_decision.content)
+        lines.append("")
+        conf_pct = f"{final_decision.confidence:.0%}"
+        lines.append(f"Confidence: {conf_pct}")
+        lines.append("")
+
+        if include_dissent and final_decision.dissent:
+            lines.append("## Dissent")
+            lines.append(final_decision.dissent)
             lines.append("")
 
-    for turn in thread.turns:
-        lines.append(f"## Round {turn.round_number}")
+    if content == "full":
+        lines.append("---")
+        lines.append("")
+        lines.append("## Consensus Process")
+        lines.append("")
 
-        for contrib in turn.contributions:
-            role_label = contrib.role.capitalize()
-            lines.append(f"### {role_label} ({contrib.model_ref})")
-            lines.append(contrib.content)
+        for turn in thread.turns:
+            lines.append(f"### Round {turn.round_number}")
             lines.append("")
 
-        if turn.decision:
-            lines.append("### Decision")
-            conf_pct = f"{turn.decision.confidence:.0%}"
-            dissent_part = (
-                f" | **Dissent**: {turn.decision.dissent}"
-                if turn.decision.dissent
-                else ""
-            )
-            lines.append(f"**Confidence**: {conf_pct}{dissent_part}")
-            lines.append(turn.decision.content)
-            lines.append("")
+            proposers = [c for c in turn.contributions if c.role == "proposer"]
+            challengers = [c for c in turn.contributions if c.role == "challenger"]
+            revisers = [c for c in turn.contributions if c.role == "reviser"]
+            others = [
+                c
+                for c in turn.contributions
+                if c.role not in ("proposer", "challenger", "reviser")
+            ]
+
+            for p in proposers:
+                lines.append(f"#### Proposal ({p.model_ref})")
+                lines.append(p.content)
+                lines.append("")
+
+            if challengers:
+                lines.append("#### Challenges")
+                for ch in challengers:
+                    lines.append(f"**{ch.model_ref}**: {ch.content}")
+                    lines.append("")
+
+            for r in revisers:
+                lines.append(f"#### Revision ({r.model_ref})")
+                lines.append(r.content)
+                lines.append("")
+
+            for o in others:
+                role_label = o.role.capitalize()
+                lines.append(f"#### {role_label} ({o.model_ref})")
+                lines.append(o.content)
+                lines.append("")
+
+        if votes:
+            lines.append("### Votes")
+            for v in votes:
+                lines.append(f"**{v.model_ref}**: {v.content}")
+                lines.append("")
 
     lines.append("---")
-    lines.append(f"*Exported from duh v{__version__}*")
+    lines.append(f"*duh v{__version__} | {created} | Cost: ${total_cost:.4f}*")
     return "\n".join(lines)
+
+
+def _format_thread_pdf(
+    thread: Thread,
+    votes: list[Vote],
+    *,
+    content: str = "full",
+    include_dissent: bool = True,
+) -> bytes:
+    """Format a thread as PDF for export.
+
+    Args:
+        content: "full" for complete report, "decision" for decision only.
+        include_dissent: Whether to include the dissent section.
+    """
+    import html as html_mod
+    import re
+
+    from fpdf import FPDF  # type: ignore[import-untyped]
+
+    total_cost = sum(c.cost_usd for turn in thread.turns for c in turn.contributions)
+    created = thread.created_at.strftime("%Y-%m-%d")
+
+    final_decision = None
+    for turn in reversed(thread.turns):
+        if turn.decision:
+            final_decision = turn.decision
+            break
+
+    def _pdf_safe(text: str) -> str:
+        """Replace Unicode chars unsupported by core PDF fonts."""
+        for char, repl in (
+            ("\u2014", "--"),
+            ("\u2013", "-"),
+            ("\u2018", "'"),
+            ("\u2019", "'"),
+            ("\u201c", '"'),
+            ("\u201d", '"'),
+            ("\u2026", "..."),
+            ("\u2022", "*"),
+            ("\u00a0", " "),
+            ("\u2192", "->"),
+            ("\u2190", "<-"),
+        ):
+            text = text.replace(char, repl)
+        return text.encode("latin-1", errors="replace").decode("latin-1")
+
+    def _inline_fmt(text: str) -> str:
+        """Convert inline markdown (bold, italic, code) to HTML."""
+        parts = re.split(r"(`[^`]+`)", text)
+        result: list[str] = []
+        for part in parts:
+            if part.startswith("`") and part.endswith("`"):
+                result.append(
+                    f"<font face='Courier'>{html_mod.escape(part[1:-1])}</font>"
+                )
+            else:
+                escaped = html_mod.escape(part)
+                escaped = re.sub(r"\*\*(.+?)\*\*", r"<b>\1</b>", escaped)
+                escaped = re.sub(r"__(.+?)__", r"<b>\1</b>", escaped)
+                escaped = re.sub(r"\*(.+?)\*", r"<i>\1</i>", escaped)
+                escaped = re.sub(r"_(.+?)_", r"<i>\1</i>", escaped)
+                result.append(escaped)
+        return "".join(result)
+
+    def _md_to_html(md: str) -> str:
+        """Convert markdown to HTML for fpdf2's write_html."""
+        lines = md.split("\n")
+        parts: list[str] = []
+        in_code = False
+        in_list = False
+        list_tag = "ul"
+
+        for line in lines:
+            stripped = line.strip()
+
+            if stripped.startswith("```"):
+                if in_code:
+                    parts.append("</pre>")
+                    in_code = False
+                else:
+                    if in_list:
+                        parts.append(f"</{list_tag}>")
+                        in_list = False
+                    parts.append("<pre>")
+                    in_code = True
+                continue
+
+            if in_code:
+                parts.append(html_mod.escape(line) + "\n")
+                continue
+
+            if not stripped:
+                if in_list:
+                    parts.append(f"</{list_tag}>")
+                    in_list = False
+                continue
+
+            # Headers -> bold paragraph
+            m = re.match(r"^#{1,6}\s+(.+)$", stripped)
+            if m:
+                if in_list:
+                    parts.append(f"</{list_tag}>")
+                    in_list = False
+                parts.append(f"<p><b>{_inline_fmt(m.group(1))}</b></p>")
+                continue
+
+            # Unordered list
+            m = re.match(r"^[-*]\s+(.+)$", stripped)
+            if m:
+                if not in_list or list_tag != "ul":
+                    if in_list:
+                        parts.append(f"</{list_tag}>")
+                    parts.append("<ul>")
+                    in_list = True
+                    list_tag = "ul"
+                parts.append(f"<li>{_inline_fmt(m.group(1))}</li>")
+                continue
+
+            # Ordered list
+            m = re.match(r"^\d+[.)]\s+(.+)$", stripped)
+            if m:
+                if not in_list or list_tag != "ol":
+                    if in_list:
+                        parts.append(f"</{list_tag}>")
+                    parts.append("<ol>")
+                    in_list = True
+                    list_tag = "ol"
+                parts.append(f"<li>{_inline_fmt(m.group(1))}</li>")
+                continue
+
+            # Regular text
+            if in_list:
+                parts.append(f"</{list_tag}>")
+                in_list = False
+            parts.append(f"<p>{_inline_fmt(stripped)}</p>")
+
+        if in_list:
+            parts.append(f"</{list_tag}>")
+        if in_code:
+            parts.append("</pre>")
+
+        return "".join(parts)
+
+    def _write_md(md_text: str) -> None:
+        """Render markdown content as formatted PDF."""
+        pdf.write_html(_pdf_safe(_md_to_html(md_text)))
+
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_auto_page_break(auto=True, margin=15)
+    font = "Helvetica"
+
+    # Title
+    pdf.set_font(font, "B", 16)
+    pdf.multi_cell(0, 10, _pdf_safe(f"Consensus: {thread.question}"))
+    pdf.ln(5)
+
+    # Decision
+    if final_decision:
+        pdf.set_font(font, "B", 13)
+        pdf.cell(0, 8, "Decision")
+        pdf.ln()
+        pdf.ln(2)
+        pdf.set_font(font, "", 11)
+        _write_md(final_decision.content)
+        pdf.ln(3)
+        conf_pct = f"{final_decision.confidence:.0%}"
+        pdf.set_font(font, "I", 10)
+        pdf.cell(0, 6, f"Confidence: {conf_pct}")
+        pdf.ln(8)
+
+        if include_dissent and final_decision.dissent:
+            pdf.set_font(font, "B", 13)
+            pdf.cell(0, 8, "Dissent")
+            pdf.ln()
+            pdf.ln(2)
+            pdf.set_font(font, "", 11)
+            _write_md(final_decision.dissent)
+            pdf.ln(5)
+
+    if content == "full":
+        # Separator
+        pdf.set_draw_color(180, 180, 180)
+        pdf.line(10, pdf.get_y(), 200, pdf.get_y())
+        pdf.ln(5)
+
+        pdf.set_font(font, "B", 13)
+        pdf.cell(0, 8, "Consensus Process")
+        pdf.ln()
+        pdf.ln(3)
+
+        for turn in thread.turns:
+            pdf.set_font(font, "B", 12)
+            pdf.cell(0, 7, f"Round {turn.round_number}")
+            pdf.ln()
+            pdf.ln(2)
+
+            proposers = [c for c in turn.contributions if c.role == "proposer"]
+            challengers = [c for c in turn.contributions if c.role == "challenger"]
+            revisers = [c for c in turn.contributions if c.role == "reviser"]
+            others = [
+                c
+                for c in turn.contributions
+                if c.role not in ("proposer", "challenger", "reviser")
+            ]
+
+            for p in proposers:
+                pdf.set_font(font, "B", 11)
+                pdf.cell(0, 6, f"Proposal ({p.model_ref})")
+                pdf.ln()
+                pdf.set_font(font, "", 10)
+                _write_md(p.content)
+                pdf.ln(3)
+
+            if challengers:
+                pdf.set_font(font, "B", 11)
+                pdf.cell(0, 6, "Challenges")
+                pdf.ln()
+                for ch in challengers:
+                    pdf.set_font(font, "B", 10)
+                    pdf.cell(0, 5, f"{ch.model_ref}:")
+                    pdf.ln()
+                    pdf.set_font(font, "", 10)
+                    _write_md(ch.content)
+                    pdf.ln(2)
+
+            for r in revisers:
+                pdf.set_font(font, "B", 11)
+                pdf.cell(0, 6, f"Revision ({r.model_ref})")
+                pdf.ln()
+                pdf.set_font(font, "", 10)
+                _write_md(r.content)
+                pdf.ln(3)
+
+            for o in others:
+                role_label = o.role.capitalize()
+                pdf.set_font(font, "B", 11)
+                pdf.cell(0, 6, f"{role_label} ({o.model_ref})")
+                pdf.ln()
+                pdf.set_font(font, "", 10)
+                _write_md(o.content)
+                pdf.ln(3)
+
+        if votes:
+            pdf.set_font(font, "B", 11)
+            pdf.cell(0, 6, "Votes")
+            pdf.ln()
+            for v in votes:
+                pdf.set_font(font, "", 10)
+                pdf.cell(0, 5, _pdf_safe(f"{v.model_ref}: {v.content}"))
+                pdf.ln()
+            pdf.ln(3)
+
+    # Footer
+    pdf.set_draw_color(180, 180, 180)
+    pdf.line(10, pdf.get_y(), 200, pdf.get_y())
+    pdf.ln(3)
+    pdf.set_font(font, "I", 9)
+    pdf.cell(0, 5, f"duh v{__version__} | {created} | Cost: ${total_cost:.4f}")
+
+    return bytes(pdf.output())
 
 
 # ── models ───────────────────────────────────────────────────────
@@ -1051,11 +1510,13 @@ async def _models_async(config: DuhConfig) -> None:
     for provider_id, model_list in sorted(by_provider.items()):
         click.echo(f"{provider_id}:")
         for m in model_list:
+            role = "challenger-only" if not m.proposer_eligible else ""
+            suffix = f"  [{role}]" if role else ""
             click.echo(
                 f"  {m.display_name} ({m.model_id})  "
                 f"ctx:{m.context_window:,}  "
                 f"in:${m.input_cost_per_mtok}/Mtok  "
-                f"out:${m.output_cost_per_mtok}/Mtok"
+                f"out:${m.output_cost_per_mtok}/Mtok{suffix}"
             )
         click.echo()
 
@@ -1118,6 +1579,122 @@ async def _cost_async(config: DuhConfig) -> None:
         click.echo("By model:")
         for model_ref, model_cost, call_count in by_model:
             click.echo(f"  {model_ref}: ${model_cost:.4f} ({call_count} calls)")
+
+
+# ── backup ───────────────────────────────────────────────────────
+
+
+@cli.command()
+@click.argument("path", type=click.Path())
+@click.option(
+    "--format",
+    "fmt",
+    type=click.Choice(["auto", "sqlite", "json"]),
+    default="auto",
+    help="Backup format (auto detects from db type).",
+)
+@click.option("--config", "config_path", default=None, help="Config file path.")
+def backup(path: str, fmt: str, config_path: str | None) -> None:
+    """Backup the duh database to PATH."""
+    config = _load_config(config_path)
+    try:
+        asyncio.run(_backup_async(config, path, fmt))
+    except (DuhError, ValueError, FileNotFoundError, OSError) as e:
+        _error(str(e))
+
+
+async def _backup_async(config: DuhConfig, path: str, fmt: str) -> None:
+    """Async implementation for the backup command."""
+    from duh.memory.backup import backup_json, backup_sqlite, detect_db_type
+
+    db_url = config.database.url
+    if "~" in db_url:
+        db_url = db_url.replace("~", str(Path.home()))
+
+    db_type = detect_db_type(db_url)
+    dest = Path(path)
+
+    if fmt == "auto":
+        fmt = "sqlite" if db_type == "sqlite" else "json"
+
+    if fmt == "sqlite" and db_type != "sqlite":
+        _error("Cannot use sqlite backup format for a PostgreSQL database.")
+
+    if fmt == "sqlite":
+        result_path = await backup_sqlite(db_url, dest)
+    else:
+        factory, engine = await _create_db(config)
+        async with factory() as session:
+            result_path = await backup_json(session, dest)
+        await engine.dispose()
+
+    size = result_path.stat().st_size
+    if size < 1024:
+        size_str = f"{size} B"
+    elif size < 1024 * 1024:
+        size_str = f"{size / 1024:.1f} KB"
+    else:
+        size_str = f"{size / (1024 * 1024):.1f} MB"
+
+    click.echo(f"Backup saved to {result_path} ({size_str})")
+
+
+# ── restore ─────────────────────────────────────────────────────
+
+
+@cli.command()
+@click.argument("path", type=click.Path(exists=True))
+@click.option(
+    "--merge",
+    is_flag=True,
+    default=False,
+    help="Merge with existing data instead of replacing.",
+)
+@click.option("--config", "config_path", default=None, help="Config file path.")
+def restore(path: str, merge: bool, config_path: str | None) -> None:
+    """Restore the duh database from PATH."""
+    config = _load_config(config_path)
+    try:
+        asyncio.run(_restore_async(config, path, merge))
+    except (DuhError, ValueError, FileNotFoundError, OSError) as e:
+        _error(str(e))
+
+
+async def _restore_async(config: DuhConfig, path: str, merge: bool) -> None:
+    """Async implementation for the restore command."""
+    from duh.memory.backup import (
+        detect_backup_format,
+        detect_db_type,
+        restore_json,
+        restore_sqlite,
+    )
+
+    db_url = config.database.url
+    if "~" in db_url:
+        db_url = db_url.replace("~", str(Path.home()))
+
+    source = Path(path)
+    fmt = detect_backup_format(source)
+    db_type = detect_db_type(db_url)
+
+    if fmt == "sqlite" and db_type != "sqlite":
+        _error("Cannot restore a SQLite backup into a PostgreSQL database.")
+
+    if fmt == "sqlite":
+        await restore_sqlite(source, db_url)
+        click.echo(f"Restored SQLite database from {source}")
+    else:
+        factory, engine = await _create_db(config)
+        async with factory() as session:
+            counts = await restore_json(session, source, merge=merge)
+        await engine.dispose()
+
+        total = sum(counts.values())
+        mode = "Merged" if merge else "Restored"
+        click.echo(f"{mode} {total} records from {source}")
+        for table_name, count in counts.items():
+            if count > 0:
+                click.echo(f"  {table_name}: {count}")
 
 
 # ── serve ────────────────────────────────────────────────────────
@@ -1392,4 +1969,108 @@ async def _batch_async(
         click.echo(
             f"{total} questions | Total cost: ${total_cost:.4f} "
             f"| Elapsed: {elapsed:.1f}s"
+        )
+
+
+# ── user-create ─────────────────────────────────────────────
+
+
+@cli.command("user-create")
+@click.option("--email", required=True)
+@click.option("--password", required=True)
+@click.option("--name", "display_name", required=True)
+@click.option(
+    "--role",
+    type=click.Choice(["admin", "contributor", "viewer"]),
+    default="contributor",
+)
+@click.option("--config", "config_path", default=None)
+def user_create(
+    email: str,
+    password: str,
+    display_name: str,
+    role: str,
+    config_path: str | None,
+) -> None:
+    """Create a new user."""
+    config = _load_config(config_path)
+    try:
+        asyncio.run(_user_create_async(config, email, password, display_name, role))
+    except DuhError as e:
+        _error(str(e))
+
+
+async def _user_create_async(
+    config: DuhConfig,
+    email: str,
+    password: str,
+    display_name: str,
+    role: str,
+) -> None:
+    """Async implementation for the user-create command."""
+    from sqlalchemy import select
+
+    from duh.api.auth import hash_password
+    from duh.memory.models import User
+
+    factory, engine = await _create_db(config)
+    async with factory() as session:
+        # Check email uniqueness
+        stmt = select(User).where(User.email == email)
+        result = await session.execute(stmt)
+        if result.scalar_one_or_none() is not None:
+            await engine.dispose()
+            _error(f"Email already registered: {email}")
+
+        user = User(
+            email=email,
+            password_hash=hash_password(password),
+            display_name=display_name,
+            role=role,
+        )
+        session.add(user)
+        await session.commit()
+        await session.refresh(user)
+
+    await engine.dispose()
+    click.echo(f"User created: {user.id} ({user.email}) role={user.role}")
+
+
+# ── user-list ───────────────────────────────────────────────
+
+
+@cli.command("user-list")
+@click.option("--config", "config_path", default=None)
+def user_list(config_path: str | None) -> None:
+    """List all users."""
+    config = _load_config(config_path)
+    try:
+        asyncio.run(_user_list_async(config))
+    except DuhError as e:
+        _error(str(e))
+
+
+async def _user_list_async(config: DuhConfig) -> None:
+    """Async implementation for the user-list command."""
+    from sqlalchemy import select
+
+    from duh.memory.models import User
+
+    factory, engine = await _create_db(config)
+    async with factory() as session:
+        stmt = select(User).order_by(User.created_at)
+        result = await session.execute(stmt)
+        users = result.scalars().all()
+
+    await engine.dispose()
+
+    if not users:
+        click.echo("No users found.")
+        return
+
+    for user in users:
+        active = "active" if user.is_active else "disabled"
+        click.echo(
+            f"  {user.id[:8]}  {user.email}  {user.display_name}  "
+            f"role={user.role}  {active}"
         )

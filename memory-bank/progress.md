@@ -4,9 +4,27 @@
 
 ---
 
-## Current State: v0.4 COMPLETE — Web UI with 3D Decision Space
+## Current State: v0.5 COMPLETE — Production Hardening & Multi-User
 
-### v0.4 Additions
+### v0.5 Additions
+
+- User accounts: User ORM model, JWT auth (bcrypt + PyJWT), RBAC (admin/contributor/viewer)
+- PostgreSQL support: asyncpg driver, configurable connection pooling (pool_size, max_overflow, pool_pre_ping)
+- Perplexity provider: 6th cloud provider (sonar, sonar-pro, sonar-deep-research), citation parsing
+- Prometheus metrics: `/api/metrics` endpoint with counters, histograms, gauges (no external deps)
+- Extended health checks: `/api/health/detailed` with DB connectivity, provider health, uptime, version
+- Backup/restore: `duh backup` (SQLite copy or JSON export), `duh restore` (with `--merge` mode)
+- Per-user rate limiting: middleware keys by user_id > api_key > IP, per-provider RPM limits in config
+- Compound indexes: `(thread_id, created_at)` on decisions, `(category, genus)` on decisions, `(turn_id, role)` on contributions
+- Playwright E2E tests: navigation, consensus form, decision space, preferences
+- 26 multi-user integration tests: user isolation, admin access, registration flow, RBAC, JWT validation, deactivation
+- 12 load tests: p50/p95/p99 latency, concurrent requests (10/50/100), rate limiting under load, sustained throughput
+- Alembic migration `005_v05_users.py`: users table, nullable user_id FK on threads/decisions/api_keys
+- 3 new docs: production-deployment.md, authentication.md, monitoring.md
+- Version 0.5.0 across pyproject.toml, __init__.py, api/app.py
+- 1539 Python tests + 122 Vitest tests (1661 total), ruff clean
+
+### v0.4 Additions (Previously Shipped)
 
 - React 19 + Vite 6 + Tailwind 4 + TypeScript frontend (66 source files)
 - 3D Decision Space: Three.js point cloud (R3F + drei), lazy-loaded, code-split (873KB)
@@ -20,7 +38,6 @@
 - Backend: /api/decisions/space endpoint, /api/share/{token}, static file serving + SPA fallback
 - Docker: multi-stage build with Node.js 22 frontend stage
 - Docs: web-ui.md, web-quickstart.md, updated mkdocs.yml
-- Version 0.4.0 across pyproject.toml, __init__.py, api/app.py
 
 ### v0.3 Additions (Previously Shipped)
 
@@ -125,3 +142,12 @@ Phase 0 benchmark framework — fully functional, pilot-tested on 5 questions.
 | 2026-02-17 | v0.4 MkDocs documentation (web-ui.md, web-quickstart.md) | Done |
 | 2026-02-17 | v0.4 Version bump to 0.4.0 | Done |
 | 2026-02-17 | v0.4.0 — "It Has a Face" | **Complete** |
+| 2026-02-17 | v0.5 T1-T3 (Phase 1: DB & Multi-User) — User model + migration, JWT auth, RBAC | Done |
+| 2026-02-17 | v0.5 T4-T5 (Phase 2: PostgreSQL) — asyncpg support, connection pooling + indexes | Done |
+| 2026-02-17 | v0.5 T6-T8 (Phase 3: Rate Limiting & Monitoring) — per-user rate limits, Prometheus metrics, health checks | Done |
+| 2026-02-17 | v0.5 T9 (Phase 4: Perplexity) — Perplexity provider adapter (sonar, sonar-pro, sonar-deep-research) | Done |
+| 2026-02-17 | v0.5 T10-T11 (Phase 5: Backup/Restore) — backup CLI, restore CLI with merge mode | Done |
+| 2026-02-17 | v0.5 T12-T13 (Phase 6: Playwright) — E2E setup + core flows, extended tests | Done |
+| 2026-02-17 | v0.5 T14-T18 (Phase 7: Ship) — multi-user integration tests, load tests, docs, migration finalized, version bump | Done |
+| 2026-02-17 | v0.5.0 — "It Scales" | **Complete** |
+| 2026-02-17 | Export to Markdown & PDF (CLI + API + Web UI) | Done |
