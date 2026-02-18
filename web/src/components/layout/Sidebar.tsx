@@ -4,6 +4,7 @@ const navItems = [
   { path: '/', label: 'Consensus', icon: '\u2B21' },
   { path: '/threads', label: 'Threads', icon: '\u2261' },
   { path: '/space', label: 'Decision Space', icon: '\u25CE' },
+  { path: '/calibration', label: 'Calibration', icon: '\u25C9' },
   { path: '/preferences', label: 'Preferences', icon: '\u2699' },
 ]
 

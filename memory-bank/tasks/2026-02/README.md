@@ -462,3 +462,40 @@
 - Manual override classes: `.theme-dark` / `.theme-light` on any ancestor element
 - Light mode code block overrides in `animations.css`
 - Variables: backgrounds (5), text (3), primary accent, semantic colors (3), borders (3), glass (2), layout (3), typography (1)
+
+---
+
+## Epistemic Confidence Phase A — "Honest Confidence"
+
+### 2026-02-18: Epistemic Confidence Scoring
+- Renamed `_compute_confidence()` → `_compute_rigor()` — old metric now properly named
+- Added `DOMAIN_CAPS` dict and `_domain_cap(intent)` lookup
+- New formula: `confidence = min(domain_cap(intent), rigor)`
+- Domain caps: factual (0.95), technical (0.90), creative (0.85), judgment (0.80), strategic (0.70), default (0.85)
+- `handle_commit()` now always attempts taxonomy classification to get intent for capping
+- Files: `src/duh/consensus/handlers.py`
+
+### 2026-02-18: Rigor Field Propagation (Full Stack)
+- Added `rigor: float` to Decision ORM, ConsensusContext, RoundResult, SubtaskResult, VoteResult, VotingAggregation, SynthesisResult
+- Updated save_decision(), scheduler, synthesis, voting to propagate rigor
+- Updated all CLI outputs (ask, recall, show, export JSON/markdown/PDF)
+- Updated API responses (crud, ask, ws, threads) and MCP server
+- Updated display (show_commit, show_final_decision)
+- Updated context builder to show rigor alongside confidence
+- Frontend: ConfidenceMeter, ConsensusComplete, ConsensusPanel, ThreadDetail, TurnCard, ExportMenu, DecisionCloud, stores
+- Files: 47 files changed, +997 insertions, -230 deletions
+
+### 2026-02-18: SQLite Schema Migration
+- Created `src/duh/memory/migrations.py` — `ensure_schema()` adds rigor column on startup
+- Runs for file-based SQLite only (PRAGMA table_info check → ALTER TABLE)
+- In-memory SQLite: create_all handles it. PostgreSQL: Alembic handles it.
+- Wired into `_create_db()` in `cli/app.py`
+
+### 2026-02-18: Calibration Module + CLI + API + Frontend
+- Created `src/duh/calibration.py` — `compute_calibration()` buckets decisions by confidence, computes ECE
+- `CalibrationBucket` and `CalibrationResult` dataclasses
+- `duh calibration [--category CAT]` CLI command
+- `GET /api/calibration` endpoint with category/since/until filters
+- Frontend: CalibrationDashboard (metric cards + bar chart + bucket table), CalibrationPage, calibration Zustand store
+- Tests: 15 calibration tests, 20 confidence scoring tests, 4 CLI calibration tests
+- **Total: 1586 Python + 126 Vitest = 1712 tests**

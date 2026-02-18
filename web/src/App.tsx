@@ -6,6 +6,7 @@ import {
   ThreadsPage,
   ThreadDetailPage,
   DecisionSpacePage,
+  CalibrationPage,
   PreferencesPage,
   SharePage,
 } from '@/pages'
@@ -21,6 +22,7 @@ export function App() {
             <Route path="/threads" element={<ThreadsPage />} />
             <Route path="/threads/:id" element={<ThreadDetailPage />} />
             <Route path="/space" element={<DecisionSpacePage />} />
+            <Route path="/calibration" element={<CalibrationPage />} />
             <Route path="/preferences" element={<PreferencesPage />} />
           </Route>
         </Routes>

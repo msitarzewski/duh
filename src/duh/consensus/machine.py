@@ -54,6 +54,7 @@ class RoundResult:
     revision: str
     decision: str
     confidence: float
+    rigor: float = 0.0
     dissent: str | None = None
 
 
@@ -90,6 +91,7 @@ class ConsensusContext:
     revision_model: str | None = None
     decision: str | None = None
     confidence: float = 0.0
+    rigor: float = 0.0
     dissent: str | None = None
     converged: bool = False
 
@@ -117,6 +119,7 @@ class ConsensusContext:
         self.revision_model = None
         self.decision = None
         self.confidence = 0.0
+        self.rigor = 0.0
         self.dissent = None
         self.converged = False
 
@@ -131,6 +134,7 @@ class ConsensusContext:
                 revision=self.revision or "",
                 decision=self.decision or "",
                 confidence=self.confidence,
+                rigor=self.rigor,
                 dissent=self.dissent,
             )
         )

@@ -76,7 +76,7 @@ def build_context(
     if decisions and remaining > 0:
         decision_parts: list[str] = []
         for d in decisions:
-            part = f"- [{d.confidence:.0%} confidence] {d.content}"
+            part = f"- [{d.confidence:.0%} confidence, {d.rigor:.0%} rigor] {d.content}"
             if d.dissent:
                 part += f"\n  Dissent: {d.dissent}"
             outcome = outcome_map.get(d.id)

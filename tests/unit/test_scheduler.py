@@ -75,12 +75,13 @@ class TestRunMiniConsensus:
         pm = ProviderManager()
         await pm.register(provider)
 
-        decision, confidence = await _run_mini_consensus(
+        decision, confidence, rigor = await _run_mini_consensus(
             "What database should I use?", pm
         )
         assert isinstance(decision, str)
         assert len(decision) > 0
         assert 0.0 <= confidence <= 1.0
+        assert 0.5 <= rigor <= 1.0
 
     async def test_runs_all_four_phases(self) -> None:
         from duh.providers.manager import ProviderManager

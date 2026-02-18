@@ -1,6 +1,7 @@
 import type {
   AskRequest,
   AskResponse,
+  CalibrationResponse,
   CostResponse,
   DecisionSpaceResponse,
   FeedbackRequest,
@@ -108,6 +109,21 @@ export const api = {
     }
     const suffix = qs.toString() ? `?${qs}` : ''
     return request(`/decisions/space${suffix}`)
+  },
+
+  calibration(params?: {
+    category?: string
+    since?: string
+    until?: string
+  }): Promise<CalibrationResponse> {
+    const qs = new URLSearchParams()
+    if (params) {
+      for (const [k, v] of Object.entries(params)) {
+        if (v != null) qs.set(k, String(v))
+      }
+    }
+    const suffix = qs.toString() ? `?${qs}` : ''
+    return request(`/calibration${suffix}`)
   },
 
   getShare(shareToken: string): Promise<ThreadDetail> {

@@ -3,8 +3,8 @@
 ## Core Files
 - [projectbrief.md](./projectbrief.md) — Vision, tenets, architecture, build sequence
 - [techContext.md](./techContext.md) — Tech stack decisions with rationale (Python, Docker, SQLAlchemy, frontend, tools, etc.)
-- [decisions.md](./decisions.md) — Architectural decisions with context, alternatives, and consequences (18 ADRs)
-- [activeContext.md](./activeContext.md) — Current state, v0.5 complete, ready to merge to main
+- [decisions.md](./decisions.md) — Architectural decisions with context, alternatives, and consequences (20 ADRs)
+- [activeContext.md](./activeContext.md) — Current state, epistemic confidence Phase A complete
 - [progress.md](./progress.md) — Milestone tracking, what's built, what's next
 - [competitive-landscape.md](./competitive-landscape.md) — Research on existing tools, frameworks, and academic work
 - [quick-start.md](./quick-start.md) — Session entry point, v0.5 complete, key file references

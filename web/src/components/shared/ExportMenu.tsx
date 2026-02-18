@@ -14,7 +14,7 @@ function generateMarkdown(thread: ThreadDetail, content: ContentMode, includeDis
   lines.push('')
 
   // Find last decision
-  let finalDecision: { content: string; confidence: number; dissent: string | null } | null = null
+  let finalDecision: { content: string; confidence: number; rigor: number; dissent: string | null } | null = null
   for (let i = thread.turns.length - 1; i >= 0; i--) {
     if (thread.turns[i]?.decision) {
       finalDecision = thread.turns[i]!.decision
@@ -32,7 +32,7 @@ function generateMarkdown(thread: ThreadDetail, content: ContentMode, includeDis
     lines.push('## Decision')
     lines.push(finalDecision.content)
     lines.push('')
-    lines.push(`Confidence: ${Math.round(finalDecision.confidence * 100)}%`)
+    lines.push(`Confidence: ${Math.round(finalDecision.confidence * 100)}%  Rigor: ${Math.round(finalDecision.rigor * 100)}%`)
     lines.push('')
 
     if (includeDissent && finalDecision.dissent) {
@@ -148,7 +148,7 @@ export function ExportMenu({ thread }: ExportMenuProps) {
         {downloading ? 'Exporting...' : 'Export'}
       </GlowButton>
       {open && (
-        <div className="absolute bottom-full left-0 mb-1 bg-[var(--color-bg-secondary)] border border-[var(--color-border)] rounded-lg shadow-lg py-1 min-w-[200px] z-10">
+        <div className="absolute top-full right-0 mt-1 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg shadow-lg py-1 min-w-[200px] z-50">
           <button
             className="w-full text-left px-3 py-1.5 text-xs hover:bg-[var(--color-bg-tertiary)] text-[var(--color-text)]"
             onClick={() => handleMarkdown('decision')}

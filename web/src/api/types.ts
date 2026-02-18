@@ -19,6 +19,7 @@ export interface FeedbackRequest {
 export interface AskResponse {
   decision: string
   confidence: number
+  rigor: number
   dissent: string | null
   cost: number
   thread_id: string | null
@@ -49,6 +50,7 @@ export interface Contribution {
 export interface Decision {
   content: string
   confidence: number
+  rigor: number
   dissent: string | null
 }
 
@@ -130,6 +132,7 @@ export interface SpaceDecision {
   thread_id: string
   question: string
   confidence: number
+  rigor: number
   intent: string | null
   category: string | null
   genus: string | null
@@ -146,6 +149,28 @@ export interface DecisionSpaceResponse {
   decisions: SpaceDecision[]
   axes: SpaceAxisMeta
   total: number
+}
+
+// ── Calibration types ────────────────────────────────────
+
+export interface CalibrationBucket {
+  range_lo: number
+  range_hi: number
+  count: number
+  with_outcomes: number
+  success: number
+  failure: number
+  partial: number
+  accuracy: number
+  mean_confidence: number
+}
+
+export interface CalibrationResponse {
+  buckets: CalibrationBucket[]
+  total_decisions: number
+  total_with_outcomes: number
+  overall_accuracy: number
+  ece: number
 }
 
 // ── WebSocket event types ─────────────────────────────────
@@ -183,6 +208,7 @@ export interface WSChallenge {
 export interface WSCommit {
   type: 'commit'
   confidence: number
+  rigor: number
   dissent: string | null
   round: number
 }
@@ -191,6 +217,7 @@ export interface WSComplete {
   type: 'complete'
   decision: string
   confidence: number
+  rigor: number
   dissent: string | null
   cost: number
   thread_id: string | null

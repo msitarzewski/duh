@@ -23,6 +23,7 @@ class ContributionResponse(BaseModel):
 class DecisionResponse(BaseModel):
     content: str
     confidence: float
+    rigor: float = 0.0
     dissent: str | None = None
 
 
@@ -125,6 +126,7 @@ async def get_thread(thread_id: str, request: Request) -> ThreadDetailResponse:
             dec = DecisionResponse(
                 content=turn.decision.content,
                 confidence=turn.decision.confidence,
+                rigor=turn.decision.rigor,
                 dissent=turn.decision.dissent,
             )
         turns.append(
@@ -179,6 +181,7 @@ async def get_shared_thread(share_token: str, request: Request) -> ThreadDetailR
             dec = DecisionResponse(
                 content=turn.decision.content,
                 confidence=turn.decision.confidence,
+                rigor=turn.decision.rigor,
                 dissent=turn.decision.dissent,
             )
         turns.append(

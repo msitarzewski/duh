@@ -30,12 +30,14 @@ class _FakeDecision:
         self,
         content: str,
         confidence: float = 1.0,
+        rigor: float = 0.0,
         dissent: str | None = None,
     ) -> None:
         _FakeDecision._counter += 1
         self.id = f"fake-decision-{_FakeDecision._counter}"
         self.content = content
         self.confidence = confidence
+        self.rigor = rigor
         self.dissent = dissent
 
 
@@ -93,7 +95,7 @@ class TestBuildContext:
             _FakeDecision("Use Redis", confidence=0.75),
         ]
         result = build_context(None, decisions)  # type: ignore[arg-type]
-        assert "75% confidence" in result
+        assert "75% confidence, 0% rigor" in result
 
     def test_decisions_with_dissent(self) -> None:
         decisions = [

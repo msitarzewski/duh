@@ -154,10 +154,10 @@ class ConsensusDisplay:
             )
         )
 
-    def show_commit(self, confidence: float, dissent: str | None) -> None:
+    def show_commit(self, confidence: float, rigor: float, dissent: str | None) -> None:
         """Display commit result line."""
         check = "[bold green]\\u2713[/bold green]"
-        line = f"{check} COMMIT  Confidence: {confidence:.0%}"
+        line = f"{check} COMMIT  Confidence: {confidence:.0%}  Rigor: {rigor:.0%}"
         if dissent is None:
             line += "  (no dissent)"
         self._console.print(line)
@@ -265,7 +265,8 @@ class ConsensusDisplay:
         check = "[bold green]\\u2713[/bold green]"
         self._console.print(
             f"{check} [{subtask_result.label}]  "
-            f"Confidence: {subtask_result.confidence:.0%}"
+            f"Confidence: {subtask_result.confidence:.0%}  "
+            f"Rigor: {subtask_result.rigor:.0%}"
         )
         self._console.print(
             Panel(
@@ -288,7 +289,10 @@ class ConsensusDisplay:
                 border_style="bright_white",
             )
         )
-        self._console.print(f"Aggregate confidence: {synthesis_result.confidence:.0%}")
+        self._console.print(
+            f"Aggregate confidence: {synthesis_result.confidence:.0%}"
+            f" | Rigor: {synthesis_result.rigor:.0%}"
+        )
 
     # ── Voting ─────────────────────────────────────────────────
 
@@ -325,6 +329,7 @@ class ConsensusDisplay:
         self._console.print(
             f"Strategy: {result.strategy} | "
             f"Confidence: {result.confidence:.0%} | "
+            f"Rigor: {result.rigor:.0%} | "
             f"Votes: {len(result.votes)} | "
             f"Cost: ${cost:.4f}"
         )
@@ -358,6 +363,7 @@ class ConsensusDisplay:
         self,
         decision: str,
         confidence: float,
+        rigor: float,
         cost: float,
         dissent: str | None,
     ) -> None:
@@ -371,7 +377,9 @@ class ConsensusDisplay:
                 border_style="bright_white",
             )
         )
-        self._console.print(f"Confidence: {confidence:.0%} | Cost: ${cost:.4f}")
+        self._console.print(
+            f"Confidence: {confidence:.0%} | Rigor: {rigor:.0%} | Cost: ${cost:.4f}"
+        )
 
         if dissent:
             self._console.print()

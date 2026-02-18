@@ -46,7 +46,10 @@ export function TurnCard({ turn }: { turn: Turn }) {
                 </div>
               )}
             </div>
-            <ConfidenceMeter value={turn.decision.confidence} size={48} />
+            <div className="flex items-center gap-2">
+              <ConfidenceMeter value={turn.decision.confidence} size={48} label="Confidence" />
+              <ConfidenceMeter value={turn.decision.rigor} size={36} label="Rigor" />
+            </div>
           </div>
         </div>
       )}

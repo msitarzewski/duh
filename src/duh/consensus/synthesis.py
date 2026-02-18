@@ -24,6 +24,7 @@ class SynthesisResult:
     content: str
     confidence: float
     strategy: str
+    rigor: float = 0.0
 
 
 def _build_merge_prompt(
@@ -187,9 +188,15 @@ async def synthesize(
     # Aggregate confidence: weighted average of subtask confidences
     total_conf = sum(r.confidence for r in subtask_results)
     avg_confidence = total_conf / len(subtask_results) if subtask_results else 0.0
+    avg_rigor = (
+        sum(r.rigor for r in subtask_results) / len(subtask_results)
+        if subtask_results
+        else 0.0
+    )
 
     return SynthesisResult(
         content=response.content,
         confidence=avg_confidence,
         strategy=strategy,
+        rigor=avg_rigor,
     )

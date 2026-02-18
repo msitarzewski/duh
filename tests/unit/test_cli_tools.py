@@ -242,7 +242,7 @@ class TestAskAsyncToolWiring:
         config = DuhConfig(tools=ToolsConfig(enabled=True))
         mock_config.return_value = config
         mock_providers.return_value.list_all_models.return_value = ["model1"]
-        mock_consensus.return_value = ("Answer", 0.9, None, 0.01)
+        mock_consensus.return_value = ("Answer", 0.9, 1.0, None, 0.01)
 
         runner.invoke(cli, ["ask", "test question"])
 
@@ -263,7 +263,7 @@ class TestAskAsyncToolWiring:
         config = DuhConfig(tools=ToolsConfig(enabled=False))
         mock_config.return_value = config
         mock_providers.return_value.list_all_models.return_value = ["model1"]
-        mock_consensus.return_value = ("Answer", 0.9, None, 0.01)
+        mock_consensus.return_value = ("Answer", 0.9, 1.0, None, 0.01)
 
         runner.invoke(cli, ["ask", "test question"])
 

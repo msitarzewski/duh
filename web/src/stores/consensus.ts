@@ -23,6 +23,7 @@ export interface RoundData {
   reviser: string | null
   revision: string | null
   confidence: number | null
+  rigor: number | null
   dissent: string | null
 }
 
@@ -42,6 +43,7 @@ interface ConsensusState {
   question: string | null
   decision: string | null
   confidence: number | null
+  rigor: number | null
   dissent: string | null
   cost: number | null
   threadId: string | null
@@ -64,6 +66,7 @@ function createEmptyRound(round: number): RoundData {
     reviser: null,
     revision: null,
     confidence: null,
+    rigor: null,
     dissent: null,
   }
 }
@@ -77,6 +80,7 @@ export const useConsensusStore = create<ConsensusState>((set, get) => ({
   question: null,
   decision: null,
   confidence: null,
+  rigor: null,
   dissent: null,
   cost: null,
   threadId: null,
@@ -91,6 +95,7 @@ export const useConsensusStore = create<ConsensusState>((set, get) => ({
       question,
       decision: null,
       confidence: null,
+      rigor: null,
       dissent: null,
       cost: null,
       threadId: null,
@@ -129,6 +134,7 @@ export const useConsensusStore = create<ConsensusState>((set, get) => ({
       question: null,
       decision: null,
       confidence: null,
+      rigor: null,
       dissent: null,
       cost: null,
       threadId: null,
@@ -216,6 +222,7 @@ function handleEvent(
         currentPhase: 'COMMIT' as ConsensusPhase,
         rounds: updateRound(state.rounds, idx, {
           confidence: event.confidence,
+          rigor: event.rigor,
           dissent: event.dissent,
         }),
       })
@@ -227,6 +234,7 @@ function handleEvent(
         status: 'complete',
         decision: event.decision,
         confidence: event.confidence,
+        rigor: event.rigor,
         dissent: event.dissent,
         cost: event.cost,
         threadId: event.thread_id ?? null,

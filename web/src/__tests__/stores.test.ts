@@ -19,6 +19,7 @@ vi.mock('@/api/client', () => ({
     recall: vi.fn(),
     feedback: vi.fn(),
     decisionSpace: vi.fn(),
+    calibration: vi.fn(),
   },
 }))
 
@@ -26,6 +27,7 @@ import { useConsensusStore } from '@/stores/consensus'
 import { useThreadsStore } from '@/stores/threads'
 import { usePreferencesStore } from '@/stores/preferences'
 import { useDecisionSpaceStore } from '@/stores/decision-space'
+import { useCalibrationStore } from '@/stores/calibration'
 import { api } from '@/api/client'
 
 const mockedApi = vi.mocked(api)
@@ -46,6 +48,7 @@ describe('useConsensusStore', () => {
     expect(state.rounds).toEqual([])
     expect(state.decision).toBeNull()
     expect(state.confidence).toBeNull()
+    expect(state.rigor).toBeNull()
     expect(state.dissent).toBeNull()
     expect(state.cost).toBeNull()
   })
@@ -317,6 +320,7 @@ describe('useDecisionSpaceStore', () => {
           thread_id: 't1',
           question: 'Q1',
           confidence: 0.85,
+          rigor: 0.72,
           intent: null,
           category: 'tech',
           genus: null,
@@ -388,5 +392,84 @@ describe('useDecisionSpaceStore', () => {
   it('setTimelineSpeed updates speed', () => {
     useDecisionSpaceStore.getState().setTimelineSpeed(4)
     expect(useDecisionSpaceStore.getState().timelineSpeed).toBe(4)
+  })
+})
+
+// ── Calibration Store ────────────────────────────────────
+
+describe('useCalibrationStore', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    useCalibrationStore.setState({
+      buckets: [],
+      totalDecisions: 0,
+      totalWithOutcomes: 0,
+      overallAccuracy: 0,
+      ece: 0,
+      loading: false,
+      error: null,
+      category: null,
+    })
+  })
+
+  it('has correct initial state', () => {
+    const state = useCalibrationStore.getState()
+    expect(state.buckets).toEqual([])
+    expect(state.totalDecisions).toBe(0)
+    expect(state.totalWithOutcomes).toBe(0)
+    expect(state.overallAccuracy).toBe(0)
+    expect(state.ece).toBe(0)
+    expect(state.loading).toBe(false)
+    expect(state.error).toBeNull()
+    expect(state.category).toBeNull()
+  })
+
+  it('fetchCalibration populates data', async () => {
+    const mockData = {
+      buckets: [
+        {
+          range_lo: 0.0,
+          range_hi: 0.1,
+          count: 0,
+          with_outcomes: 0,
+          success: 0,
+          failure: 0,
+          partial: 0,
+          accuracy: 0,
+          mean_confidence: 0.05,
+        },
+      ],
+      total_decisions: 5,
+      total_with_outcomes: 3,
+      overall_accuracy: 0.75,
+      ece: 0.08,
+    }
+    mockedApi.calibration.mockResolvedValue(mockData)
+
+    await useCalibrationStore.getState().fetchCalibration()
+    const state = useCalibrationStore.getState()
+    expect(state.totalDecisions).toBe(5)
+    expect(state.totalWithOutcomes).toBe(3)
+    expect(state.overallAccuracy).toBe(0.75)
+    expect(state.ece).toBe(0.08)
+    expect(state.buckets).toEqual(mockData.buckets)
+    expect(state.loading).toBe(false)
+  })
+
+  it('fetchCalibration handles errors', async () => {
+    mockedApi.calibration.mockRejectedValue(new Error('Server error'))
+
+    await useCalibrationStore.getState().fetchCalibration()
+    const state = useCalibrationStore.getState()
+    expect(state.error).toBe('Server error')
+    expect(state.loading).toBe(false)
+  })
+
+  it('setCategory updates category filter', () => {
+    useCalibrationStore.getState().setCategory('tech')
+    expect(useCalibrationStore.getState().category).toBe('tech')
+
+    useCalibrationStore.getState().setCategory(null)
+    expect(useCalibrationStore.getState().category).toBeNull()
   })
 })

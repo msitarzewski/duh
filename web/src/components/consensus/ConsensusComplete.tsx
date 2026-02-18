@@ -9,6 +9,7 @@ import type { RoundData } from '@/stores/consensus'
 interface ConsensusCompleteProps {
   decision: string
   confidence: number
+  rigor: number
   dissent: string | null
   cost: number | null
 }
@@ -17,6 +18,7 @@ export function generateExportMarkdown(
   question: string | null,
   decision: string,
   confidence: number,
+  rigor: number,
   dissent: string | null,
   cost: number | null,
   rounds: RoundData[],
@@ -29,7 +31,7 @@ export function generateExportMarkdown(
   lines.push('## Decision')
   lines.push(decision)
   lines.push('')
-  lines.push(`Confidence: ${Math.round(confidence * 100)}%`)
+  lines.push(`Confidence: ${Math.round(confidence * 100)}%  Rigor: ${Math.round(rigor * 100)}%`)
   lines.push('')
 
   if (includeDissent && dissent) {
@@ -86,7 +88,7 @@ function downloadFile(content: string | Blob, filename: string, mimeType: string
   URL.revokeObjectURL(url)
 }
 
-export function ConsensusComplete({ decision, confidence, dissent, cost }: ConsensusCompleteProps) {
+export function ConsensusComplete({ decision, confidence, rigor, dissent, cost }: ConsensusCompleteProps) {
   const [copied, setCopied] = useState(false)
   const [exportOpen, setExportOpen] = useState(false)
   const { question, rounds, threadId } = useConsensusStore()
@@ -98,7 +100,7 @@ export function ConsensusComplete({ decision, confidence, dissent, cost }: Conse
   }
 
   const handleExportMarkdown = (content: 'full' | 'decision') => {
-    const md = generateExportMarkdown(question, decision, confidence, dissent, cost, rounds, content, true)
+    const md = generateExportMarkdown(question, decision, confidence, rigor, dissent, cost, rounds, content, true)
     downloadFile(md, `consensus-${content}.md`, 'text/markdown')
     setExportOpen(false)
   }
@@ -121,7 +123,10 @@ export function ConsensusComplete({ decision, confidence, dissent, cost }: Conse
             <span className="font-mono text-xs text-[var(--color-green)] font-semibold">CONSENSUS REACHED</span>
             <CostTicker cost={cost} />
           </div>
-          <ConfidenceMeter value={confidence} />
+          <div className="flex items-center gap-3">
+            <ConfidenceMeter value={confidence} label="Confidence" />
+            <ConfidenceMeter value={rigor} size={48} label="Rigor" />
+          </div>
         </div>
 
         <Markdown className="text-sm">{decision}</Markdown>

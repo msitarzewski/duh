@@ -30,6 +30,7 @@ class VoteResult:
     model_ref: str
     content: str
     confidence: float = 0.0
+    rigor: float = 0.5
 
 
 @dataclass(frozen=True, slots=True)
@@ -40,6 +41,7 @@ class VotingAggregation:
     decision: str
     strategy: str
     confidence: float
+    rigor: float = 0.5
 
 
 # ── Internal helpers ─────────────────────────────────────────────

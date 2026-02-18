@@ -225,7 +225,7 @@ class TestFullDecomposeDisplay:
             strategy="merge",
         )
         display.show_synthesis(synthesis)
-        display.show_final_decision("Use SQLite for v0.1.", 0.85, 0.042, None)
+        display.show_final_decision("Use SQLite for v0.1.", 0.85, 1.0, 0.042, None)
 
         out = _output(buf)
         assert "DECOMPOSE" in out

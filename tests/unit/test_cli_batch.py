@@ -452,10 +452,10 @@ class TestBatchAsyncUnit:
             pm: Any,
             display: Any = None,
             tool_registry: Any = None,
-        ) -> tuple[str, float, str | None, float]:
+        ) -> tuple[str, float, float, str | None, float]:
             nonlocal consensus_called
             consensus_called = True
-            return ("Use SQLite.", 0.85, None, 0.01)
+            return ("Use SQLite.", 0.85, 1.0, None, 0.01)
 
         with (
             patch("duh.cli.app.load_config", return_value=config),
@@ -546,8 +546,8 @@ class TestBatchAsyncUnit:
             pm: Any,
             display: Any = None,
             tool_registry: Any = None,
-        ) -> tuple[str, float, str | None, float]:
-            return ("Answer.", 0.9, None, 0.01)
+        ) -> tuple[str, float, float, str | None, float]:
+            return ("Answer.", 0.9, 1.0, None, 0.01)
 
         with (
             patch("duh.cli.app.load_config", return_value=config),
@@ -601,12 +601,12 @@ class TestBatchAsyncUnit:
             pm: Any,
             display: Any = None,
             tool_registry: Any = None,
-        ) -> tuple[str, float, str | None, float]:
+        ) -> tuple[str, float, float, str | None, float]:
             nonlocal call_count
             call_count += 1
             if question == "Q2":
                 raise RuntimeError("Provider timeout")
-            return ("Answer.", 0.9, None, 0.01)
+            return ("Answer.", 0.9, 1.0, None, 0.01)
 
         with (
             patch("duh.cli.app.load_config", return_value=config),
@@ -650,10 +650,10 @@ class TestBatchAsyncUnit:
             pm: Any,
             display: Any = None,
             tool_registry: Any = None,
-        ) -> tuple[str, float, str | None, float]:
+        ) -> tuple[str, float, float, str | None, float]:
             if question == "Q2":
                 raise RuntimeError("Model unavailable")
-            return ("Answer.", 0.9, None, 0.01)
+            return ("Answer.", 0.9, 1.0, None, 0.01)
 
         with (
             patch("duh.cli.app.load_config", return_value=config),

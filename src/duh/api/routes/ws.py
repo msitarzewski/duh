@@ -186,11 +186,12 @@ async def _stream_consensus(
 
         # COMMIT
         sm.transition(ConsensusState.COMMIT)
-        await handle_commit(ctx)
+        await handle_commit(ctx, pm)
         await ws.send_json(
             {
                 "type": "commit",
                 "confidence": ctx.confidence,
+                "rigor": ctx.rigor,
                 "dissent": ctx.dissent,
                 "round": ctx.current_round,
             }
@@ -217,6 +218,7 @@ async def _stream_consensus(
             "type": "complete",
             "decision": ctx.decision or "",
             "confidence": ctx.confidence,
+            "rigor": ctx.rigor,
             "dissent": ctx.dissent,
             "cost": pm.total_cost,
             "thread_id": thread_id,
@@ -258,6 +260,7 @@ async def _persist_consensus(
                 thread.id,
                 rr.decision,
                 rr.confidence,
+                rigor=rr.rigor,
                 dissent=rr.dissent,
             )
 
