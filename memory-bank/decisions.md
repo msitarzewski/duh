@@ -1,6 +1,6 @@
 # Architectural Decisions
 
-**Last Updated**: 2026-02-17
+**Last Updated**: 2026-02-18
 
 ---
 
@@ -324,3 +324,33 @@
 - Remove `create_all` entirely — breaks in-memory test fixtures that don't run alembic
 **Consequences**: Tests continue to work (in-memory SQLite still uses `create_all`). Production databases must run `alembic upgrade head` after code updates. This was already the expected workflow but is now enforced.
 **References**: `src/duh/cli/app.py:101-104`
+
+---
+
+## 2026-02-18: Epistemic Confidence — Separate Rigor from Confidence
+
+**Status**: Approved
+**Context**: The original `_compute_confidence()` in `handlers.py` measured challenge quality (ratio of genuine vs sycophantic challenges), producing a score in [0.5, 1.0]. This was misleading: a factual question ("What is the capital of France?") and a strategic question ("Will AI replace software engineers by 2035?") could both score 1.0 confidence if all challenges were genuine. But inherently uncertain questions should never report near-certain confidence.
+**Decision**: Split into two metrics:
+- **Rigor** (renamed from old confidence): measures challenge quality, [0.5, 1.0]
+- **Confidence** (epistemic): `min(domain_cap(intent), rigor)` — rigor clamped by a per-domain ceiling based on question intent (factual=0.95, technical=0.90, creative=0.85, judgment=0.80, strategic=0.70, default=0.85).
+**Alternatives**:
+- Single blended score (simpler, but hides the two distinct signals)
+- User-configurable caps (more flexible, but adds UX complexity without clear benefit)
+- LLM-estimated confidence (model judges own uncertainty — unreliable, circular)
+**Consequences**: Confidence scores are now more honest. Strategic questions max out at 70% even with perfect rigor. Rigor is preserved as a separate signal for calibration analysis. Requires `rigor` column added to Decision model. Full-stack change: ORM, handlers, CLI, API, WebSocket, MCP, frontend all updated.
+**References**: `src/duh/consensus/handlers.py:641-670`, `src/duh/calibration.py`
+
+---
+
+## 2026-02-18: Lightweight SQLite Migrations (Not Alembic)
+
+**Status**: Approved
+**Context**: Adding the `rigor` column to the `decisions` table requires a migration for existing file-based SQLite databases. Alembic handles PostgreSQL migrations, but for SQLite (the default local dev DB), running `alembic upgrade head` is a friction point for casual users.
+**Decision**: Created `src/duh/memory/migrations.py` with `ensure_schema()` that runs on startup for file-based SQLite only. Uses `PRAGMA table_info()` to detect missing columns and `ALTER TABLE` to add them. In-memory SQLite uses `create_all` (unchanged). PostgreSQL uses Alembic (unchanged).
+**Alternatives**:
+- Alembic-only (requires users to run migration command)
+- create_all for all databases (can't alter existing tables)
+- Manual migration instructions in docs (user friction)
+**Consequences**: File-based SQLite databases auto-migrate on startup. Zero friction for local users. PostgreSQL still requires `alembic upgrade head`. Lightweight and self-contained.
+**References**: `src/duh/memory/migrations.py`, `src/duh/cli/app.py:107-110`

@@ -232,6 +232,7 @@ describe('generateExportMarkdown', () => {
       reviser: 'anthropic:claude-3',
       revision: 'Use SQLite for v0.1.',
       confidence: 0.85,
+      rigor: 0.78,
       dissent: 'PostgreSQL for scale.',
     },
   ]
@@ -241,6 +242,7 @@ describe('generateExportMarkdown', () => {
       'Best database?',
       'Use SQLite.',
       0.85,
+      0.78,
       'PostgreSQL for scale.',
       0.003,
       rounds,
@@ -252,6 +254,7 @@ describe('generateExportMarkdown', () => {
     expect(md).toContain('## Decision')
     expect(md).toContain('Use SQLite.')
     expect(md).toContain('Confidence: 85%')
+    expect(md).toContain('Rigor: 78%')
     expect(md).toContain('## Dissent')
     expect(md).toContain('PostgreSQL for scale.')
     expect(md).not.toContain('## Consensus Process')
@@ -263,6 +266,7 @@ describe('generateExportMarkdown', () => {
       'Best database?',
       'Use SQLite.',
       0.85,
+      0.78,
       'PostgreSQL for scale.',
       0.003,
       rounds,
@@ -285,6 +289,7 @@ describe('generateExportMarkdown', () => {
       'Best database?',
       'Use SQLite.',
       0.85,
+      0.78,
       'PostgreSQL for scale.',
       0.003,
       rounds,
@@ -302,6 +307,7 @@ describe('generateExportMarkdown', () => {
       'Question',
       'Answer',
       0.9,
+      0.82,
       null,
       0.0512,
       [],
@@ -317,6 +323,7 @@ describe('generateExportMarkdown', () => {
       null,
       'Answer',
       0.9,
+      0.82,
       null,
       null,
       [],

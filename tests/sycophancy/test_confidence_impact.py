@@ -1,13 +1,13 @@
-"""Tests for sycophancy impact on confidence scoring and dissent.
+"""Tests for sycophancy impact on rigor scoring and dissent.
 
 Verifies the mathematical relationship between sycophantic challenge
-counts and resulting confidence, and that dissent extraction correctly
+counts and resulting rigor, and that dissent extraction correctly
 filters out sycophantic responses.
 """
 
 from __future__ import annotations
 
-from duh.consensus.handlers import _compute_confidence, _extract_dissent
+from duh.consensus.handlers import _compute_rigor, _extract_dissent
 from duh.consensus.machine import ChallengeResult
 
 # ── Helpers ──────────────────────────────────────────────────────
@@ -30,44 +30,44 @@ def _sycophantic(
 # ── Confidence computation ───────────────────────────────────────
 
 
-class TestConfidenceComputation:
+class TestRigorComputation:
     def test_all_genuine_two_challengers(self) -> None:
         """2/2 genuine → 0.5 + (2/2)*0.5 = 1.0."""
         challenges = [_genuine("a"), _genuine("b")]
-        assert _compute_confidence(challenges) == 1.0
+        assert _compute_rigor(challenges) == 1.0
 
     def test_all_sycophantic_two_challengers(self) -> None:
         """0/2 genuine → 0.5 + (0/2)*0.5 = 0.5."""
         challenges = [_sycophantic("a"), _sycophantic("b")]
-        assert _compute_confidence(challenges) == 0.5
+        assert _compute_rigor(challenges) == 0.5
 
     def test_one_genuine_one_sycophantic(self) -> None:
         """1/2 genuine → 0.5 + (1/2)*0.5 = 0.75."""
         challenges = [_genuine("a"), _sycophantic("b")]
-        assert _compute_confidence(challenges) == 0.75
+        assert _compute_rigor(challenges) == 0.75
 
     def test_empty_challenges(self) -> None:
         """No challenges → 0.5 (untested)."""
-        assert _compute_confidence([]) == 0.5
+        assert _compute_rigor([]) == 0.5
 
     def test_single_genuine(self) -> None:
         """1/1 genuine → 1.0."""
-        assert _compute_confidence([_genuine()]) == 1.0
+        assert _compute_rigor([_genuine()]) == 1.0
 
     def test_single_sycophantic(self) -> None:
         """0/1 genuine → 0.5."""
-        assert _compute_confidence([_sycophantic()]) == 0.5
+        assert _compute_rigor([_sycophantic()]) == 0.5
 
     def test_three_challengers_two_genuine(self) -> None:
         """2/3 genuine → 0.5 + (2/3)*0.5 ≈ 0.833."""
         challenges = [_genuine("a"), _genuine("b"), _sycophantic("c")]
-        result = _compute_confidence(challenges)
+        result = _compute_rigor(challenges)
         assert abs(result - (0.5 + (2 / 3) * 0.5)) < 1e-10
 
     def test_three_challengers_one_genuine(self) -> None:
         """1/3 genuine → 0.5 + (1/3)*0.5 ≈ 0.667."""
         challenges = [_genuine("a"), _sycophantic("b"), _sycophantic("c")]
-        result = _compute_confidence(challenges)
+        result = _compute_rigor(challenges)
         assert abs(result - (0.5 + (1 / 3) * 0.5)) < 1e-10
 
     def test_confidence_always_between_half_and_one(self) -> None:
@@ -79,7 +79,7 @@ class TestConfidenceComputation:
                 challenges = [_genuine(f"g{i}") for i in range(n_genuine)] + [
                     _sycophantic(f"s{i}") for i in range(n_syc)
                 ]
-                conf = _compute_confidence(challenges)
+                conf = _compute_rigor(challenges)
                 assert 0.5 <= conf <= 1.0, f"{n_genuine}g/{n_syc}s → {conf}"
 
     def test_confidence_monotonic_with_genuine_ratio(self) -> None:
@@ -91,7 +91,7 @@ class TestConfidenceComputation:
             challenges = [_genuine(f"g{i}") for i in range(n_genuine)] + [
                 _sycophantic(f"s{i}") for i in range(n_syc)
             ]
-            conf = _compute_confidence(challenges)
+            conf = _compute_rigor(challenges)
             assert conf >= prev, f"Not monotonic at {n_genuine}/{total}"
             prev = conf
 

@@ -196,6 +196,72 @@ async def cost(request: Request) -> CostResponse:
     )
 
 
+# -- GET /api/calibration ---------------------------------------------------
+
+
+class CalibrationBucketResponse(BaseModel):
+    range_lo: float
+    range_hi: float
+    count: int
+    with_outcomes: int
+    success: int
+    failure: int
+    partial: int
+    accuracy: float
+    mean_confidence: float
+
+
+class CalibrationResponse(BaseModel):
+    buckets: list[CalibrationBucketResponse]
+    total_decisions: int
+    total_with_outcomes: int
+    overall_accuracy: float
+    ece: float
+
+
+@router.get("/calibration", response_model=CalibrationResponse)
+async def calibration(
+    request: Request,
+    category: str | None = None,
+    since: str | None = None,
+    until: str | None = None,
+) -> CalibrationResponse:
+    """Confidence calibration analysis."""
+    from duh.calibration import compute_calibration
+    from duh.memory.repository import MemoryRepository
+
+    db_factory = request.app.state.db_factory
+    async with db_factory() as session:
+        repo = MemoryRepository(session)
+        decisions = await repo.get_all_decisions_for_space(
+            category=category,
+            since=since,
+            until=until,
+        )
+
+    result = compute_calibration(decisions)
+    return CalibrationResponse(
+        buckets=[
+            CalibrationBucketResponse(
+                range_lo=b.range_lo,
+                range_hi=b.range_hi,
+                count=b.count,
+                with_outcomes=b.with_outcomes,
+                success=b.success,
+                failure=b.failure,
+                partial=b.partial,
+                accuracy=b.accuracy,
+                mean_confidence=b.mean_confidence,
+            )
+            for b in result.buckets
+        ],
+        total_decisions=result.total_decisions,
+        total_with_outcomes=result.total_with_outcomes,
+        overall_accuracy=result.overall_accuracy,
+        ece=result.ece,
+    )
+
+
 # -- GET /api/decisions/space -----------------------------------------------
 
 
@@ -204,6 +270,7 @@ class SpaceDecisionResponse(BaseModel):
     thread_id: str
     question: str
     confidence: float
+    rigor: float = 0.0
     intent: str | None = None
     category: str | None = None
     genus: str | None = None
@@ -270,6 +337,7 @@ async def decision_space(
                     thread_id=d.thread_id,
                     question=question,
                     confidence=d.confidence,
+                    rigor=d.rigor,
                     intent=d.intent,
                     category=d.category,
                     genus=d.genus,

@@ -158,6 +158,7 @@ export function DecisionCloud({ decisions, categories, genera, timelinePosition 
             <p className="text-[11px] text-[#e4e4e7] line-clamp-2 mb-1">{hoveredDecision.question}</p>
             <div className="flex items-center gap-2 text-[10px] font-mono">
               <span className="text-[#00d4ff]">{(hoveredDecision.confidence * 100).toFixed(0)}%</span>
+              <span className="text-[#a1a1aa]">rigor {(hoveredDecision.rigor * 100).toFixed(0)}%</span>
               {hoveredDecision.category && (
                 <span className="text-[#a1a1aa]">{hoveredDecision.category}</span>
               )}

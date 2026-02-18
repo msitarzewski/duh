@@ -189,6 +189,7 @@ class Decision(Base):
     )
     content: Mapped[str] = mapped_column(Text)
     confidence: Mapped[float] = mapped_column(Float, default=0.0)
+    rigor: Mapped[float] = mapped_column(Float, default=0.0)
     dissent: Mapped[str | None] = mapped_column(Text, nullable=True, default=None)
     intent: Mapped[str | None] = mapped_column(String(50), nullable=True, default=None)
     category: Mapped[str | None] = mapped_column(

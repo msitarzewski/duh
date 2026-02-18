@@ -43,6 +43,7 @@ class SubtaskResult:
     label: str
     decision: str
     confidence: float
+    rigor: float = 0.0
     cost: float = 0.0
 
 
@@ -52,7 +53,7 @@ async def _run_mini_consensus(
     *,
     max_rounds: int = 1,
     display: ConsensusDisplay | None = None,
-) -> tuple[str, float]:
+) -> tuple[str, float, float]:
     """Run a simplified single-round consensus for one subtask.
 
     Executes PROPOSE -> CHALLENGE -> REVISE -> COMMIT with the
@@ -65,7 +66,7 @@ async def _run_mini_consensus(
         display: Optional display for real-time progress output.
 
     Returns:
-        (decision, confidence) tuple.
+        (decision, confidence, rigor) tuple.
 
     Raises:
         ConsensusError: If any handler phase fails.
@@ -110,11 +111,11 @@ async def _run_mini_consensus(
 
     # COMMIT
     sm.transition(ConsensusState.COMMIT)
-    await handle_commit(ctx)
+    await handle_commit(ctx, provider_manager)
     if display:
-        display.show_commit(ctx.confidence, ctx.dissent)
+        display.show_commit(ctx.confidence, ctx.rigor, ctx.dissent)
 
-    return ctx.decision or "", ctx.confidence
+    return ctx.decision or "", ctx.confidence, ctx.rigor
 
 
 async def _execute_subtask(
@@ -155,7 +156,7 @@ async def _execute_subtask(
         augmented_question += f"\n\nContext from prior subtasks:\n{dep_text}"
 
     cost_before = provider_manager.total_cost
-    decision, confidence = await _run_mini_consensus(
+    decision, confidence, rigor = await _run_mini_consensus(
         augmented_question, provider_manager, display=display
     )
     subtask_cost = provider_manager.total_cost - cost_before
@@ -164,6 +165,7 @@ async def _execute_subtask(
         label=subtask.label,
         decision=decision,
         confidence=confidence,
+        rigor=rigor,
         cost=subtask_cost,
     )
 

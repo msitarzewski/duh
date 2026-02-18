@@ -177,7 +177,7 @@ class TestHandleAsk:
             patch(
                 "duh.cli.app._run_consensus",
                 new_callable=AsyncMock,
-                return_value=("Use SQLite.", 0.9, "minor dissent", 0.05),
+                return_value=("Use SQLite.", 0.9, 1.0, "minor dissent", 0.05),
             ),
         ):
             result = await _handle_ask({"question": "What DB?", "rounds": 2})
@@ -185,6 +185,7 @@ class TestHandleAsk:
         data = json.loads(result[0].text)
         assert data["decision"] == "Use SQLite."
         assert data["confidence"] == 0.9
+        assert data["rigor"] == 1.0
         assert data["dissent"] == "minor dissent"
         assert data["cost"] == 0.05
 
@@ -205,6 +206,7 @@ class TestHandleAsk:
             decision: str
             strategy: str
             confidence: float
+            rigor: float = 0.5
 
         fake_result = FakeAggregation(
             votes=(FakeVote("m1", "Use X", 0.9),),

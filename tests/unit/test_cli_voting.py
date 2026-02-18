@@ -147,7 +147,7 @@ class TestAskProtocolFlag:
         from duh.config.schema import DuhConfig
 
         mock_config.return_value = DuhConfig()
-        mock_run.return_value = ("Answer.", 1.0, None, 0.0)
+        mock_run.return_value = ("Answer.", 1.0, 1.0, None, 0.0)
 
         result = runner.invoke(cli, ["ask", "Question?"])
         assert result.exit_code == 0
@@ -293,7 +293,7 @@ class TestVotingPersistence:
         assert "Use Django" in result.output
         assert "mock:model-b" in result.output
         assert "Use FastAPI" in result.output
-        assert "Decision (confidence 80%)" in result.output
+        assert "Decision (confidence 80%, rigor 0%)" in result.output
         asyncio.run(engine.dispose())
 
     def test_show_without_votes(self, runner: CliRunner) -> None:

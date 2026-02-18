@@ -1,4 +1,4 @@
-"""Tests for the COMMIT handler: confidence, dissent, context."""
+"""Tests for the COMMIT handler: rigor, confidence, dissent, context."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 import pytest
 
 from duh.consensus.handlers import (
-    _compute_confidence,
+    _compute_rigor,
     _extract_dissent,
     handle_commit,
 )
@@ -61,30 +61,30 @@ def _commit_ctx(**kwargs: object) -> ConsensusContext:
 # ── Confidence computation ───────────────────────────────────────
 
 
-class TestComputeConfidence:
+class TestComputeRigor:
     def test_all_genuine(self) -> None:
         challenges = [
             ChallengeResult("m1", "real issue"),
             ChallengeResult("m2", "another issue"),
         ]
-        assert _compute_confidence(challenges) == 1.0
+        assert _compute_rigor(challenges) == 1.0
 
     def test_all_sycophantic(self) -> None:
         challenges = [
             ChallengeResult("m1", "great answer", sycophantic=True),
             ChallengeResult("m2", "looks good", sycophantic=True),
         ]
-        assert _compute_confidence(challenges) == 0.5
+        assert _compute_rigor(challenges) == 0.5
 
     def test_mixed(self) -> None:
         challenges = [
             ChallengeResult("m1", "real issue"),
             ChallengeResult("m2", "great answer", sycophantic=True),
         ]
-        assert _compute_confidence(challenges) == 0.75
+        assert _compute_rigor(challenges) == 0.75
 
     def test_empty(self) -> None:
-        assert _compute_confidence([]) == 0.5
+        assert _compute_rigor([]) == 0.5
 
 
 # ── Dissent extraction ───────────────────────────────────────────
@@ -147,12 +147,20 @@ class TestHandleCommit:
 
         assert ctx.decision == revision
 
-    async def test_confidence_computed(self) -> None:
+    async def test_rigor_computed(self) -> None:
         ctx = _commit_ctx()
         # Default challenges are all genuine
         await handle_commit(ctx)
 
-        assert ctx.confidence == 1.0
+        assert ctx.rigor == 1.0
+
+    async def test_confidence_capped_by_domain(self) -> None:
+        ctx = _commit_ctx()
+        # All genuine → rigor=1.0, but no pm → no classification → cap=0.85
+        await handle_commit(ctx)
+
+        assert ctx.rigor == 1.0
+        assert ctx.confidence == 0.85  # min(0.85, 1.0)
 
     async def test_confidence_with_sycophantic(self) -> None:
         ctx = _commit_ctx()
@@ -162,7 +170,8 @@ class TestHandleCommit:
         ]
         await handle_commit(ctx)
 
-        assert ctx.confidence == 0.75
+        assert ctx.rigor == 0.75
+        assert ctx.confidence == 0.75  # min(0.85, 0.75) = rigor is lower
 
     async def test_dissent_preserved(self) -> None:
         ctx = _commit_ctx()
@@ -235,7 +244,8 @@ class TestCommitEndToEnd:
         await handle_commit(ctx)
 
         assert ctx.decision == "Use SQLite instead"
-        assert ctx.confidence == 1.0
+        assert ctx.rigor == 1.0
+        assert ctx.confidence == 0.85  # no pm → default cap
         assert ctx.dissent is not None
         assert "Too complex" in ctx.dissent
 
@@ -295,6 +305,7 @@ class TestCommitPersistence:
             thread_id=thread.id,
             content=ctx.decision or "",
             confidence=ctx.confidence,
+            rigor=ctx.rigor,
             dissent=ctx.dissent,
         )
         await db_session.commit()
@@ -305,6 +316,7 @@ class TestCommitPersistence:
         loaded = decisions[0]
         assert loaded.content == ctx.decision
         assert loaded.confidence == ctx.confidence
+        assert loaded.rigor == ctx.rigor
         assert loaded.dissent == ctx.dissent
         assert loaded.turn_id == turn.id
         assert loaded.thread_id == thread.id

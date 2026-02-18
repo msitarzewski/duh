@@ -10,6 +10,7 @@ import asyncio
 import json as json_mod
 import sys
 import time
+from datetime import UTC
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -104,6 +105,10 @@ async def _create_db(
     if is_memory:
         async with engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
+    elif url.startswith("sqlite"):
+        from duh.memory.migrations import ensure_schema
+
+        await ensure_schema(engine)
 
     factory = async_sessionmaker(engine, expire_on_commit=False)
     return factory, engine
@@ -204,10 +209,10 @@ async def _run_consensus(
     panel: list[str] | None = None,
     proposer_override: str | None = None,
     challengers_override: list[str] | None = None,
-) -> tuple[str, float, str | None, float]:
+) -> tuple[str, float, float, str | None, float]:
     """Run the full consensus loop.
 
-    Returns (decision, confidence, dissent, total_cost).
+    Returns (decision, confidence, rigor, dissent, total_cost).
     """
     from duh.consensus.convergence import check_convergence
     from duh.consensus.handlers import (
@@ -275,9 +280,9 @@ async def _run_consensus(
 
         # COMMIT
         sm.transition(ConsensusState.COMMIT)
-        await handle_commit(ctx)
+        await handle_commit(ctx, pm)
         if display:
-            display.show_commit(ctx.confidence, ctx.dissent)
+            display.show_commit(ctx.confidence, ctx.rigor, ctx.dissent)
             display.round_footer(
                 ctx.current_round,
                 config.general.max_rounds,
@@ -303,6 +308,7 @@ async def _run_consensus(
     return (
         ctx.decision or "",
         ctx.confidence,
+        ctx.rigor,
         ctx.dissent,
         pm.total_cost,
     )
@@ -442,12 +448,12 @@ def ask(
         _error(str(e))
         return  # unreachable
 
-    decision, confidence, dissent, cost = result
+    decision, confidence, rigor, dissent, cost = result
 
     from duh.cli.display import ConsensusDisplay
 
     display = ConsensusDisplay()
-    display.show_final_decision(decision, confidence, cost, dissent)
+    display.show_final_decision(decision, confidence, rigor, cost, dissent)
 
 
 async def _ask_async(
@@ -457,7 +463,7 @@ async def _ask_async(
     panel: list[str] | None = None,
     proposer_override: str | None = None,
     challengers_override: list[str] | None = None,
-) -> tuple[str, float, str | None, float]:
+) -> tuple[str, float, float, str | None, float]:
     """Async implementation for the ask command."""
     from duh.cli.display import ConsensusDisplay
 
@@ -528,6 +534,7 @@ async def _ask_voting_async(
                 thread.id,
                 result.decision,
                 result.confidence,
+                rigor=result.rigor,
             )
         await session.commit()
     await engine.dispose()
@@ -563,10 +570,10 @@ async def _ask_auto_async(
 
         display = ConsensusDisplay()
         display.start()
-        decision, confidence, dissent, cost = await _run_consensus(
+        decision, confidence, rigor, dissent, cost = await _run_consensus(
             question, config, pm, display=display
         )
-        display.show_final_decision(decision, confidence, cost, dissent)
+        display.show_final_decision(decision, confidence, rigor, cost, dissent)
 
 
 async def _ask_decompose_async(
@@ -639,8 +646,8 @@ async def _ask_decompose_async(
     # Single-subtask optimization: skip synthesis
     if len(subtask_specs) == 1:
         result = await _run_consensus(question, config, pm, display=display)
-        decision, confidence, dissent, cost = result
-        display.show_final_decision(decision, confidence, cost, dissent)
+        decision, confidence, rigor, dissent, cost = result
+        display.show_final_decision(decision, confidence, rigor, cost, dissent)
         await engine.dispose()
         return
 
@@ -660,6 +667,7 @@ async def _ask_decompose_async(
     display.show_final_decision(
         synthesis_result.content,
         synthesis_result.confidence,
+        synthesis_result.rigor,
         pm.total_cost,
         None,
     )
@@ -711,7 +719,9 @@ async def _recall_async(config: DuhConfig, query: str, limit: int) -> None:
             latest = thread.decisions[-1]
             snippet = latest.content[:120].replace("\n", " ")
             click.echo(f"    Decision: {snippet}...")
-            click.echo(f"    Confidence: {latest.confidence:.0%}")
+            click.echo(
+                f"    Confidence: {latest.confidence:.0%}  Rigor: {latest.rigor:.0%}"
+            )
         click.echo()
 
 
@@ -830,7 +840,10 @@ async def _show_async(config: DuhConfig, thread_id: str) -> None:
             click.echo(f"  {contrib.content}")
             click.echo()
         if turn.decision:
-            click.echo(f"  Decision (confidence {turn.decision.confidence:.0%}):")
+            click.echo(
+                f"  Decision (confidence {turn.decision.confidence:.0%},"
+                f" rigor {turn.decision.rigor:.0%}):"
+            )
             click.echo(f"  {turn.decision.content}")
             if turn.decision.dissent:
                 click.echo(f"  Dissent: {turn.decision.dissent}")
@@ -1086,6 +1099,7 @@ def _format_thread_json(
             decision_data = {
                 "content": turn.decision.content,
                 "confidence": turn.decision.confidence,
+                "rigor": turn.decision.rigor,
                 "dissent": turn.decision.dissent,
             }
 
@@ -1153,7 +1167,8 @@ def _format_thread_markdown(
         lines.append(final_decision.content)
         lines.append("")
         conf_pct = f"{final_decision.confidence:.0%}"
-        lines.append(f"Confidence: {conf_pct}")
+        rigor_pct = f"{final_decision.rigor:.0%}"
+        lines.append(f"Confidence: {conf_pct}  Rigor: {rigor_pct}")
         lines.append("")
 
         if include_dissent and final_decision.dissent:
@@ -1220,19 +1235,30 @@ def _format_thread_pdf(
     content: str = "full",
     include_dissent: bool = True,
 ) -> bytes:
-    """Format a thread as PDF for export.
+    """Format a thread as a research-paper quality PDF.
 
-    Args:
-        content: "full" for complete report, "decision" for decision only.
-        include_dissent: Whether to include the dissent section.
+    Features: repeating header/footer, TOC with bookmarks, provider-colored
+    callout boxes, confidence meter, and full Unicode via TTF fonts (with
+    graceful fallback to core Helvetica).
     """
     import html as html_mod
     import re
+    from datetime import datetime
 
     from fpdf import FPDF  # type: ignore[import-untyped]
 
     total_cost = sum(c.cost_usd for turn in thread.turns for c in turn.contributions)
+    total_input = sum(
+        c.input_tokens for turn in thread.turns for c in turn.contributions
+    )
+    total_output = sum(
+        c.output_tokens for turn in thread.turns for c in turn.contributions
+    )
     created = thread.created_at.strftime("%Y-%m-%d")
+    exported = datetime.now(tz=UTC).strftime("%Y-%m-%d")
+    model_refs = sorted(
+        {c.model_ref for turn in thread.turns for c in turn.contributions}
+    )
 
     final_decision = None
     for turn in reversed(thread.turns):
@@ -1240,23 +1266,93 @@ def _format_thread_pdf(
             final_decision = turn.decision
             break
 
-    def _pdf_safe(text: str) -> str:
-        """Replace Unicode chars unsupported by core PDF fonts."""
-        for char, repl in (
-            ("\u2014", "--"),
-            ("\u2013", "-"),
-            ("\u2018", "'"),
-            ("\u2019", "'"),
-            ("\u201c", '"'),
-            ("\u201d", '"'),
-            ("\u2026", "..."),
-            ("\u2022", "*"),
-            ("\u00a0", " "),
-            ("\u2192", "->"),
-            ("\u2190", "<-"),
-        ):
-            text = text.replace(char, repl)
-        return text.encode("latin-1", errors="replace").decode("latin-1")
+    # ── Provider color map ──────────────────────────────────────
+    provider_colors: dict[str, tuple[int, int, int]] = {
+        "anthropic": (204, 107, 43),
+        "openai": (16, 163, 127),
+        "google": (66, 133, 244),
+        "mistral": (131, 56, 236),
+        "perplexity": (0, 160, 160),
+    }
+    default_color = (120, 120, 120)
+
+    def _provider_color(model_ref: str) -> tuple[int, int, int]:
+        provider = model_ref.split(":")[0].lower() if ":" in model_ref else ""
+        return provider_colors.get(provider, default_color)
+
+    # ── PDF subclass with header/footer ─────────────────────────
+
+    class ConsensusReport(FPDF):  # type: ignore[misc]
+        """FPDF subclass with repeating header and footer."""
+
+        def __init__(self) -> None:
+            super().__init__()
+            self._use_ttf = False
+            self._font_family = "Helvetica"
+            self._mono_family = "Courier"
+
+        def _setup_fonts(self) -> None:
+            """Try to load a TTF font for Unicode support."""
+            import os
+
+            search_paths = [
+                "/System/Library/Fonts/Helvetica.ttc",
+                "/System/Library/Fonts/HelveticaNeue.ttc",
+                "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+                "/usr/share/fonts/TTF/DejaVuSans.ttf",
+            ]
+            for path in search_paths:
+                if os.path.isfile(path):
+                    try:
+                        self.add_font("DuhSans", "", path)
+                        self.add_font("DuhSans", "B", path)
+                        self.add_font("DuhSans", "I", path)
+                        self._use_ttf = True
+                        self._font_family = "DuhSans"
+                        break
+                    except Exception:
+                        continue
+
+        def header(self) -> None:
+            self.set_font(self._font_family, "", 8)
+            self.set_text_color(160, 160, 160)
+            self.cell(0, 5, "duh consensus report", align="L")
+            self.cell(0, 5, exported, align="R", new_x="LMARGIN", new_y="NEXT")
+            self.set_draw_color(220, 220, 220)
+            self.line(10, self.get_y(), 200, self.get_y())
+            self.ln(4)
+
+        def footer(self) -> None:
+            self.set_y(-15)
+            self.set_font(self._font_family, "", 8)
+            self.set_text_color(160, 160, 160)
+            self.set_draw_color(220, 220, 220)
+            self.line(10, self.get_y(), 200, self.get_y())
+            self.ln(2)
+            self.cell(0, 5, f"Page {self.page_no()}/{{nb}}", align="C")
+            self.cell(0, 5, f"duh v{__version__}", align="R")
+
+        def _safe(self, text: str) -> str:
+            """Make text safe for the current font encoding."""
+            if self._use_ttf:
+                return text
+            for char, repl in (
+                ("\u2014", "--"),
+                ("\u2013", "-"),
+                ("\u2018", "'"),
+                ("\u2019", "'"),
+                ("\u201c", '"'),
+                ("\u201d", '"'),
+                ("\u2026", "..."),
+                ("\u2022", "*"),
+                ("\u00a0", " "),
+                ("\u2192", "->"),
+                ("\u2190", "<-"),
+            ):
+                text = text.replace(char, repl)
+            return text.encode("latin-1", errors="replace").decode("latin-1")
+
+    # ── Markdown rendering helpers ──────────────────────────────
 
     def _inline_fmt(text: str) -> str:
         """Convert inline markdown (bold, italic, code) to HTML."""
@@ -1265,7 +1361,8 @@ def _format_thread_pdf(
         for part in parts:
             if part.startswith("`") and part.endswith("`"):
                 result.append(
-                    f"<font face='Courier'>{html_mod.escape(part[1:-1])}</font>"
+                    f"<font face='{pdf._mono_family}'>"
+                    f"{html_mod.escape(part[1:-1])}</font>"
                 )
             else:
                 escaped = html_mod.escape(part)
@@ -1309,7 +1406,6 @@ def _format_thread_pdf(
                     in_list = False
                 continue
 
-            # Headers -> bold paragraph
             m = re.match(r"^#{1,6}\s+(.+)$", stripped)
             if m:
                 if in_list:
@@ -1318,7 +1414,6 @@ def _format_thread_pdf(
                 parts.append(f"<p><b>{_inline_fmt(m.group(1))}</b></p>")
                 continue
 
-            # Unordered list
             m = re.match(r"^[-*]\s+(.+)$", stripped)
             if m:
                 if not in_list or list_tag != "ul":
@@ -1330,7 +1425,6 @@ def _format_thread_pdf(
                 parts.append(f"<li>{_inline_fmt(m.group(1))}</li>")
                 continue
 
-            # Ordered list
             m = re.match(r"^\d+[.)]\s+(.+)$", stripped)
             if m:
                 if not in_list or list_tag != "ol":
@@ -1342,7 +1436,6 @@ def _format_thread_pdf(
                 parts.append(f"<li>{_inline_fmt(m.group(1))}</li>")
                 continue
 
-            # Regular text
             if in_list:
                 parts.append(f"</{list_tag}>")
                 in_list = False
@@ -1357,122 +1450,277 @@ def _format_thread_pdf(
 
     def _write_md(md_text: str) -> None:
         """Render markdown content as formatted PDF."""
-        pdf.write_html(_pdf_safe(_md_to_html(md_text)))
+        pdf.write_html(pdf._safe(_md_to_html(md_text)))
 
-    pdf = FPDF()
-    pdf.add_page()
-    pdf.set_auto_page_break(auto=True, margin=15)
-    font = "Helvetica"
+    # ── Callout box helper ──────────────────────────────────────
 
-    # Title
-    pdf.set_font(font, "B", 16)
-    pdf.multi_cell(0, 10, _pdf_safe(f"Consensus: {thread.question}"))
-    pdf.ln(5)
+    def _draw_accent_bar(
+        start_y: float, end_y: float, color: tuple[int, int, int]
+    ) -> None:
+        """Draw a thick colored accent bar on the left margin."""
+        saved_draw = (pdf.draw_color.r, pdf.draw_color.g, pdf.draw_color.b)
+        saved_width = pdf.line_width
+        pdf.set_draw_color(*color)
+        pdf.set_line_width(2.5)
+        x = pdf.l_margin - 1
+        # Clamp to page content area
+        top = max(start_y, pdf.t_margin)
+        bot = min(end_y, pdf.h - pdf.b_margin)
+        if bot > top:
+            pdf.line(x, top, x, bot)
+        pdf.set_draw_color(*saved_draw)
+        pdf.set_line_width(saved_width)
 
-    # Decision
-    if final_decision:
-        pdf.set_font(font, "B", 13)
-        pdf.cell(0, 8, "Decision")
-        pdf.ln()
-        pdf.ln(2)
-        pdf.set_font(font, "", 11)
-        _write_md(final_decision.content)
-        pdf.ln(3)
-        conf_pct = f"{final_decision.confidence:.0%}"
-        pdf.set_font(font, "I", 10)
-        pdf.cell(0, 6, f"Confidence: {conf_pct}")
-        pdf.ln(8)
+    def _callout_box(
+        model_ref: str,
+        role: str,
+        body: str,
+        *,
+        accent: tuple[int, int, int] | None = None,
+    ) -> None:
+        """Draw a colored callout box with provider accent line."""
+        color = accent or _provider_color(model_ref)
+        start_y = pdf.get_y()
 
-        if include_dissent and final_decision.dissent:
-            pdf.set_font(font, "B", 13)
-            pdf.cell(0, 8, "Dissent")
-            pdf.ln()
-            pdf.ln(2)
-            pdf.set_font(font, "", 11)
-            _write_md(final_decision.dissent)
-            pdf.ln(5)
+        # Indent content to leave room for accent bar
+        saved_margin = pdf.l_margin
+        pdf.set_left_margin(saved_margin + 6)
+        pdf.set_x(pdf.l_margin)
 
-    if content == "full":
-        # Separator
-        pdf.set_draw_color(180, 180, 180)
-        pdf.line(10, pdf.get_y(), 200, pdf.get_y())
+        # Header: model + role
+        pdf.set_font(pdf._font_family, "B", 9)
+        pdf.set_text_color(*color)
+        pdf.cell(0, 5, pdf._safe(f"{model_ref}  |  {role.upper()}"))
         pdf.ln(5)
 
-        pdf.set_font(font, "B", 13)
+        # Body
+        pdf.set_text_color(40, 40, 40)
+        pdf.set_font(pdf._font_family, "", 10)
+        _write_md(body)
+        pdf.ln(2)
+
+        end_y = pdf.get_y()
+
+        # Draw accent bar on left edge (doesn't overlap text)
+        _draw_accent_bar(start_y, end_y, color)
+
+        # Restore margin
+        pdf.set_left_margin(saved_margin)
+        pdf.ln(4)
+
+    # ── Build the PDF ───────────────────────────────────────────
+
+    pdf = ConsensusReport()
+    pdf._setup_fonts()
+    pdf.alias_nb_pages()
+    pdf.set_auto_page_break(auto=True, margin=20)
+    pdf.set_text_color(40, 40, 40)
+
+    # -- Title page / header area --
+    pdf.add_page()
+
+    pdf.set_font(pdf._font_family, "B", 20)
+    pdf.multi_cell(0, 10, pdf._safe(thread.question))
+    pdf.ln(3)
+
+    # Metadata line
+    pdf.set_font(pdf._font_family, "", 9)
+    pdf.set_text_color(130, 130, 130)
+    meta_parts = [
+        f"Thread {thread.id[:8]}",
+        f"Created {created}",
+        f"{len(model_refs)} model{'s' if len(model_refs) != 1 else ''}",
+    ]
+    if total_cost > 0:
+        meta_parts.append(f"Cost ${total_cost:.4f}")
+    pdf.cell(0, 5, pdf._safe("  |  ".join(meta_parts)))
+    pdf.ln(6)
+
+    # Horizontal rule
+    pdf.set_draw_color(200, 200, 200)
+    pdf.set_line_width(0.5)
+    pdf.line(10, pdf.get_y(), 200, pdf.get_y())
+    pdf.ln(6)
+    pdf.set_text_color(40, 40, 40)
+    pdf.set_line_width(0.2)
+
+    # -- TOC placeholder --
+    if content == "full":
+        pdf.insert_toc_placeholder(
+            render_toc,
+            pages=1,
+        )
+
+    # -- Decision section --
+    if final_decision:
+        pdf.start_section("Decision")
+        pdf.set_font(pdf._font_family, "B", 15)
+        pdf.cell(0, 8, "Decision")
+        pdf.ln(8)
+
+        decision_start_y = pdf.get_y()
+
+        # Indent for accent bar
+        pdf.set_left_margin(16)
+        pdf.set_x(16)
+
+        # Decision content
+        pdf.set_font(pdf._font_family, "", 11)
+        pdf.set_text_color(40, 40, 40)
+        _write_md(final_decision.content)
+        pdf.ln(4)
+
+        # Confidence meter
+        conf_pct = final_decision.confidence
+        pdf.set_font(pdf._font_family, "B", 10)
+        pdf.cell(30, 6, pdf._safe(f"Confidence: {conf_pct:.0%}"))
+        bar_x = pdf.get_x() + 2
+        bar_y = pdf.get_y() + 1
+        bar_w = 60
+        bar_h = 4
+        pdf.set_fill_color(230, 230, 230)
+        pdf.rect(bar_x, bar_y, bar_w, bar_h, style="F")
+        g = int(100 + 155 * conf_pct)
+        pdf.set_fill_color(40, min(g, 200), 80)
+        pdf.rect(bar_x, bar_y, bar_w * conf_pct, bar_h, style="F")
+        pdf.ln(10)
+
+        # Rigor meter
+        rigor_pct = final_decision.rigor
+        pdf.set_font(pdf._font_family, "B", 10)
+        pdf.cell(30, 6, pdf._safe(f"Rigor: {rigor_pct:.0%}"))
+        bar_x = pdf.get_x() + 2
+        bar_y = pdf.get_y() + 1
+        pdf.set_fill_color(230, 230, 230)
+        pdf.rect(bar_x, bar_y, bar_w, bar_h, style="F")
+        g = int(100 + 155 * rigor_pct)
+        pdf.set_fill_color(40, min(g, 200), 80)
+        pdf.rect(bar_x, bar_y, bar_w * rigor_pct, bar_h, style="F")
+        pdf.ln(10)
+
+        # Draw green accent bar
+        _draw_accent_bar(decision_start_y, pdf.get_y(), (40, 160, 80))
+        pdf.set_left_margin(10)
+
+        # Dissent
+        if include_dissent and final_decision.dissent:
+            pdf.start_section("Dissent", level=1)
+            pdf.set_font(pdf._font_family, "B", 13)
+            pdf.set_text_color(40, 40, 40)
+            pdf.cell(0, 8, "Dissent")
+            pdf.ln(6)
+
+            dissent_start_y = pdf.get_y()
+            pdf.set_left_margin(16)
+            pdf.set_x(16)
+
+            pdf.set_font(pdf._font_family, "I", 10)
+            pdf.set_text_color(100, 100, 100)
+            _write_md(final_decision.dissent)
+            pdf.ln(4)
+
+            # Amber accent bar
+            _draw_accent_bar(dissent_start_y, pdf.get_y(), (200, 140, 80))
+            pdf.set_left_margin(10)
+            pdf.set_text_color(40, 40, 40)
+
+    # -- Consensus process --
+    if content == "full":
+        pdf.set_draw_color(200, 200, 200)
+        pdf.line(10, pdf.get_y(), 200, pdf.get_y())
+        pdf.ln(6)
+
+        pdf.start_section("Consensus Process")
+        pdf.set_font(pdf._font_family, "B", 15)
         pdf.cell(0, 8, "Consensus Process")
-        pdf.ln()
-        pdf.ln(3)
+        pdf.ln(8)
 
         for turn in thread.turns:
-            pdf.set_font(font, "B", 12)
-            pdf.cell(0, 7, f"Round {turn.round_number}")
-            pdf.ln()
-            pdf.ln(2)
+            section_title = f"Round {turn.round_number}"
+            pdf.start_section(section_title, level=1)
+            pdf.set_font(pdf._font_family, "B", 13)
+            pdf.set_text_color(80, 80, 80)
+            pdf.cell(0, 7, section_title)
+            pdf.ln(7)
+            pdf.set_text_color(40, 40, 40)
 
-            proposers = [c for c in turn.contributions if c.role == "proposer"]
-            challengers = [c for c in turn.contributions if c.role == "challenger"]
-            revisers = [c for c in turn.contributions if c.role == "reviser"]
-            others = [
-                c
-                for c in turn.contributions
-                if c.role not in ("proposer", "challenger", "reviser")
-            ]
+            for c in turn.contributions:
+                _callout_box(c.model_ref, c.role, c.content)
 
-            for p in proposers:
-                pdf.set_font(font, "B", 11)
-                pdf.cell(0, 6, f"Proposal ({p.model_ref})")
-                pdf.ln()
-                pdf.set_font(font, "", 10)
-                _write_md(p.content)
-                pdf.ln(3)
-
-            if challengers:
-                pdf.set_font(font, "B", 11)
-                pdf.cell(0, 6, "Challenges")
-                pdf.ln()
-                for ch in challengers:
-                    pdf.set_font(font, "B", 10)
-                    pdf.cell(0, 5, f"{ch.model_ref}:")
-                    pdf.ln()
-                    pdf.set_font(font, "", 10)
-                    _write_md(ch.content)
-                    pdf.ln(2)
-
-            for r in revisers:
-                pdf.set_font(font, "B", 11)
-                pdf.cell(0, 6, f"Revision ({r.model_ref})")
-                pdf.ln()
-                pdf.set_font(font, "", 10)
-                _write_md(r.content)
-                pdf.ln(3)
-
-            for o in others:
-                role_label = o.role.capitalize()
-                pdf.set_font(font, "B", 11)
-                pdf.cell(0, 6, f"{role_label} ({o.model_ref})")
-                pdf.ln()
-                pdf.set_font(font, "", 10)
-                _write_md(o.content)
-                pdf.ln(3)
-
+        # Votes
         if votes:
-            pdf.set_font(font, "B", 11)
-            pdf.cell(0, 6, "Votes")
-            pdf.ln()
-            for v in votes:
-                pdf.set_font(font, "", 10)
-                pdf.cell(0, 5, _pdf_safe(f"{v.model_ref}: {v.content}"))
-                pdf.ln()
-            pdf.ln(3)
+            pdf.start_section("Votes", level=1)
+            pdf.set_font(pdf._font_family, "B", 13)
+            pdf.cell(0, 8, "Votes")
+            pdf.ln(6)
 
-    # Footer
-    pdf.set_draw_color(180, 180, 180)
+            for v in votes:
+                color = _provider_color(v.model_ref)
+                pdf.set_font(pdf._font_family, "B", 10)
+                pdf.set_text_color(*color)
+                pdf.cell(55, 6, pdf._safe(v.model_ref))
+                pdf.set_font(pdf._font_family, "", 10)
+                pdf.set_text_color(60, 60, 60)
+                pdf.cell(0, 6, pdf._safe(v.content))
+                pdf.ln(6)
+
+            pdf.ln(4)
+            pdf.set_text_color(40, 40, 40)
+
+    # -- Appendix: metadata footer ───────────────────────────────
+    pdf.ln(4)
+    pdf.set_draw_color(200, 200, 200)
     pdf.line(10, pdf.get_y(), 200, pdf.get_y())
-    pdf.ln(3)
-    pdf.set_font(font, "I", 9)
-    pdf.cell(0, 5, f"duh v{__version__} | {created} | Cost: ${total_cost:.4f}")
+    pdf.ln(4)
+
+    pdf.set_font(pdf._font_family, "", 8)
+    pdf.set_text_color(140, 140, 140)
+    footer_parts = [
+        f"Cost: ${total_cost:.4f}",
+        f"Tokens: {total_input:,} in / {total_output:,} out",
+        f"Models: {', '.join(model_refs)}",
+    ]
+    pdf.cell(0, 4, pdf._safe("  |  ".join(footer_parts)))
+    pdf.set_text_color(40, 40, 40)
 
     return bytes(pdf.output())
+
+
+def render_toc(pdf: object, outline: list[object]) -> None:
+    """Render a table of contents page for the PDF.
+
+    Called by fpdf2's ``insert_toc_placeholder`` mechanism.
+    """
+    from fpdf import FPDF
+
+    assert isinstance(pdf, FPDF)
+    font = getattr(pdf, "_font_family", "Helvetica")
+    pdf.set_font(font, "B", 15)
+    pdf.set_text_color(40, 40, 40)
+    pdf.cell(0, 10, "Table of Contents")
+    pdf.ln(10)
+
+    for entry in outline:
+        level = getattr(entry, "level", 0)
+        name = getattr(entry, "name", "")
+        page_number = getattr(entry, "page_number", 0)
+        link = getattr(entry, "link", None)
+
+        indent = 4 * level
+        pdf.set_x(pdf.l_margin + indent)
+
+        if level == 0:
+            pdf.set_font(font, "B", 11)
+        else:
+            pdf.set_font(font, "", 10)
+
+        pdf.set_text_color(60, 60, 60)
+        w = pdf.w - pdf.l_margin - pdf.r_margin - indent - 15
+        # Use safe method if available
+        safe = getattr(pdf, "_safe", lambda t: t)
+        pdf.cell(w, 6, safe(name), link=link)
+        pdf.cell(15, 6, str(page_number), align="R")
+        pdf.ln(6)
 
 
 # ── models ───────────────────────────────────────────────────────
@@ -1579,6 +1827,99 @@ async def _cost_async(config: DuhConfig) -> None:
         click.echo("By model:")
         for model_ref, model_cost, call_count in by_model:
             click.echo(f"  {model_ref}: ${model_cost:.4f} ({call_count} calls)")
+
+
+# ── calibration ──────────────────────────────────────────────────
+
+
+@cli.command()
+@click.option("--category", default=None, help="Filter by decision category.")
+@click.option("--since", default=None, help="Only decisions after this date (ISO).")
+@click.option("--until", default=None, help="Only decisions before this date (ISO).")
+@click.pass_context
+def calibration(
+    ctx: click.Context,
+    category: str | None,
+    since: str | None,
+    until: str | None,
+) -> None:
+    """Show confidence calibration analysis.
+
+    Compares predicted confidence against actual outcomes to
+    measure how well-calibrated the consensus engine is.
+    """
+    config = _load_config(ctx.obj["config_path"])
+    try:
+        asyncio.run(_calibration_async(config, category, since, until))
+    except DuhError as e:
+        _error(str(e))
+
+
+async def _calibration_async(
+    config: DuhConfig,
+    category: str | None,
+    since: str | None,
+    until: str | None,
+) -> None:
+    """Async implementation for the calibration command."""
+    from duh.calibration import compute_calibration
+    from duh.memory.repository import MemoryRepository
+
+    factory, engine = await _create_db(config)
+    async with factory() as session:
+        repo = MemoryRepository(session)
+        decisions = await repo.get_all_decisions_for_space(
+            category=category,
+            since=since,
+            until=until,
+        )
+
+    await engine.dispose()
+
+    result = compute_calibration(decisions)
+
+    if result.total_decisions == 0:
+        click.echo("No decisions found.")
+        return
+
+    click.echo(f"Total decisions: {result.total_decisions}")
+    click.echo(f"With outcomes: {result.total_with_outcomes}")
+    click.echo(f"Overall accuracy: {result.overall_accuracy:.1%}")
+    click.echo(f"ECE: {result.ece:.4f}")
+
+    if result.ece < 0.05:
+        rating = "excellent"
+    elif result.ece < 0.10:
+        rating = "good"
+    elif result.ece < 0.20:
+        rating = "fair"
+    else:
+        rating = "poor"
+    click.echo(f"Calibration: {rating}")
+
+    if result.total_with_outcomes > 0:
+        click.echo()
+        click.echo(
+            f"{'Range':<12} {'Count':>6} {'Outcomes':>9} "
+            f"{'Accuracy':>9} {'Conf':>6} {'Gap':>6}"
+        )
+        for b in result.buckets:
+            if b.count == 0:
+                continue
+            lo_pct = f"{b.range_lo:.0%}"
+            hi_pct = f"{b.range_hi:.0%}"
+            label = f"{lo_pct}-{hi_pct}"
+            acc_str = f"{b.accuracy:.1%}" if b.with_outcomes > 0 else "-"
+            conf_str = f"{b.mean_confidence:.1%}"
+            gap_str = (
+                f"{abs(b.accuracy - b.mean_confidence):.1%}"
+                if b.with_outcomes > 0
+                else "-"
+            )
+            click.echo(
+                f"{label:<12} {b.count:>6} {b.with_outcomes:>9} "
+                f"{acc_str:>9} {conf_str:>6} {gap_str:>6}"
+            )
 
 
 # ── backup ───────────────────────────────────────────────────────
@@ -1916,8 +2257,9 @@ async def _batch_async(
                 vr = await run_voting(question, pm, aggregation=aggregation)
                 decision = vr.decision or ""
                 confidence = vr.confidence
+                rigor = vr.rigor
             else:
-                decision, confidence, _dissent, _cost = await _run_consensus(
+                decision, confidence, rigor, _dissent, _cost = await _run_consensus(
                     question, config, pm
                 )
 
@@ -1929,13 +2271,14 @@ async def _batch_async(
                     "question": question,
                     "decision": decision,
                     "confidence": confidence,
+                    "rigor": rigor,
                     "cost": round(q_cost, 4),
                 }
             )
 
             if output_fmt == "text":
                 click.echo(f"Decision: {decision[:200]}")
-                click.echo(f"Confidence: {confidence:.0%}")
+                click.echo(f"Confidence: {confidence:.0%}  Rigor: {rigor:.0%}")
                 click.echo(f"Cost: ${q_cost:.4f}")
 
         except Exception as e:
@@ -1946,6 +2289,7 @@ async def _batch_async(
                     "question": question,
                     "error": str(e),
                     "confidence": 0.0,
+                    "rigor": 0.0,
                     "cost": round(q_cost, 4),
                 }
             )

@@ -127,6 +127,7 @@ async def _handle_ask(args: dict) -> list[TextContent]:  # type: ignore[type-arg
                     {
                         "decision": result.decision,
                         "confidence": result.confidence,
+                        "rigor": result.rigor,
                         "votes": len(result.votes),
                         "cost": pm.total_cost,
                     }
@@ -134,7 +135,9 @@ async def _handle_ask(args: dict) -> list[TextContent]:  # type: ignore[type-arg
             )
         ]
     else:
-        decision, confidence, dissent, cost = await _run_consensus(question, config, pm)
+        decision, confidence, rigor, dissent, cost = await _run_consensus(
+            question, config, pm
+        )
         return [
             TextContent(
                 type="text",
@@ -142,6 +145,7 @@ async def _handle_ask(args: dict) -> list[TextContent]:  # type: ignore[type-arg
                     {
                         "decision": decision,
                         "confidence": confidence,
+                        "rigor": rigor,
                         "dissent": dissent,
                         "cost": cost,
                     }
@@ -179,6 +183,7 @@ async def _handle_recall(args: dict) -> list[TextContent]:  # type: ignore[type-
                 latest = thread.decisions[-1]
                 entry["decision"] = latest.content[:200]
                 entry["confidence"] = latest.confidence
+                entry["rigor"] = latest.rigor
             results.append(entry)
 
     await engine.dispose()

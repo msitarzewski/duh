@@ -56,7 +56,7 @@ export function ThreadDetail() {
 
   return (
     <div className="space-y-4">
-      <GlassPanel padding="md">
+      <GlassPanel padding="md" className="relative z-20">
         <div className="flex items-start justify-between gap-4">
           <div className="flex-1">
             <p className="text-[var(--color-text)] font-medium">{currentThread.question}</p>
@@ -65,9 +65,12 @@ export function ThreadDetail() {
               <span>{currentThread.thread_id.slice(0, 8)}</span>
             </div>
           </div>
-          <Badge variant={statusVariant[currentThread.status] ?? 'default'} size="md">
-            {currentThread.status}
-          </Badge>
+          <div className="flex flex-col items-end gap-2">
+            <Badge variant={statusVariant[currentThread.status] ?? 'default'} size="md">
+              {currentThread.status}
+            </Badge>
+            {currentThread.status === 'complete' && <ExportMenu thread={currentThread} />}
+          </div>
         </div>
       </GlassPanel>
 
@@ -96,11 +99,10 @@ export function ThreadDetail() {
         <p className="text-center text-xs font-mono text-[var(--color-green)]">Feedback recorded</p>
       )}
 
-      <div className="flex justify-center gap-2">
+      <div className="flex justify-center">
         <GlowButton variant="ghost" size="sm" onClick={() => navigate('/threads')}>
           Back to threads
         </GlowButton>
-        <ExportMenu thread={currentThread} />
       </div>
     </div>
   )

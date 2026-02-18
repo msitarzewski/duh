@@ -230,20 +230,20 @@ class TestShowRevise:
 class TestShowCommit:
     def test_shows_confidence(self) -> None:
         display, buf = _make_display()
-        display.show_commit(0.85, "Some dissent here.")
+        display.show_commit(0.85, 1.0, "Some dissent here.")
         out = _output(buf)
         assert "COMMIT" in out
         assert "85%" in out
 
     def test_shows_no_dissent_marker(self) -> None:
         display, buf = _make_display()
-        display.show_commit(1.0, None)
+        display.show_commit(1.0, 1.0, None)
         out = _output(buf)
         assert "no dissent" in out
 
     def test_confidence_formatting(self) -> None:
         display, buf = _make_display()
-        display.show_commit(0.5, "dissent text")
+        display.show_commit(0.5, 1.0, "dissent text")
         out = _output(buf)
         assert "50%" in out
 
@@ -291,14 +291,14 @@ class TestRoundFooter:
 class TestShowFinalDecision:
     def test_shows_decision_text(self) -> None:
         display, buf = _make_display()
-        display.show_final_decision("Use SQLite for v0.1.", 0.85, 0.0042, None)
+        display.show_final_decision("Use SQLite for v0.1.", 0.85, 1.0, 0.0042, None)
         out = _output(buf)
         assert "Use SQLite for v0.1." in out
         assert "Decision" in out
 
     def test_shows_confidence_and_cost(self) -> None:
         display, buf = _make_display()
-        display.show_final_decision("Answer.", 1.0, 0.0042, None)
+        display.show_final_decision("Answer.", 1.0, 1.0, 0.0042, None)
         out = _output(buf)
         assert "Confidence: 100%" in out
         assert "Cost: $0.0042" in out
@@ -308,6 +308,7 @@ class TestShowFinalDecision:
         display.show_final_decision(
             "Answer.",
             0.75,
+            1.0,
             0.01,
             "[model-a]: PostgreSQL would be better for scale.",
         )
@@ -317,14 +318,14 @@ class TestShowFinalDecision:
 
     def test_no_dissent_panel_when_none(self) -> None:
         display, buf = _make_display()
-        display.show_final_decision("Answer.", 1.0, 0.0, None)
+        display.show_final_decision("Answer.", 1.0, 1.0, 0.0, None)
         out = _output(buf)
         assert "Dissent" not in out
 
     def test_decision_not_truncated(self) -> None:
         display, buf = _make_display()
         long_decision = "x" * 1000
-        display.show_final_decision(long_decision, 0.9, 0.05, None)
+        display.show_final_decision(long_decision, 0.9, 1.0, 0.05, None)
         out = _output(buf)
         # Final decision should NOT be truncated
         assert "..." not in out
@@ -356,10 +357,10 @@ class TestFullRound:
             ]
         )
         display.show_revise("mock:model-a", "Revised with challenges.")
-        display.show_commit(0.75, "Some dissent.")
+        display.show_commit(0.75, 1.0, "Some dissent.")
         display.round_footer(1, 2, 3, 0.05)
         display.show_final_decision(
-            "Final consensus answer.", 0.75, 0.05, "Some dissent."
+            "Final consensus answer.", 0.75, 1.0, 0.05, "Some dissent."
         )
 
         out = _output(buf)

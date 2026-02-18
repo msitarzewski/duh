@@ -393,3 +393,94 @@ class TestCost:
         assert len(data["by_model"]) == 2
         assert data["by_model"][0]["model_ref"] == "expensive:model"
         assert data["by_model"][1]["model_ref"] == "cheap:model"
+
+
+# -- Helpers for calibration -----------------------------------------------
+
+
+async def _seed_decision_with_outcome(
+    app: FastAPI,
+    confidence: float,
+    outcome_result: str | None = None,
+    *,
+    category: str | None = None,
+) -> tuple[str, str]:
+    """Seed a thread with decision and optional outcome.
+
+    Returns (thread_id, decision_id).
+    """
+    async with app.state.db_factory() as session:
+        repo = MemoryRepository(session)
+        thread = await repo.create_thread("Calibration question")
+        turn = await repo.create_turn(thread.id, 1, "COMMIT")
+        decision = await repo.save_decision(
+            turn.id, thread.id, "Decision content", confidence, category=category
+        )
+        if outcome_result is not None:
+            await repo.save_outcome(decision.id, thread.id, outcome_result)
+        await session.commit()
+        return thread.id, decision.id
+
+
+# -- TestCalibration -----------------------------------------------------------
+
+
+class TestCalibration:
+    async def test_empty_returns_zeros(self) -> None:
+        app = await _make_app()
+        client = TestClient(app, raise_server_exceptions=False)
+        resp = client.get("/api/calibration")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["total_decisions"] == 0
+        assert data["total_with_outcomes"] == 0
+        assert data["overall_accuracy"] == 0.0
+        assert data["ece"] == 0.0
+        assert len(data["buckets"]) == 10
+
+    async def test_with_outcomes(self) -> None:
+        app = await _make_app()
+        await _seed_decision_with_outcome(app, 0.9, "success")
+        await _seed_decision_with_outcome(app, 0.9, "success")
+        await _seed_decision_with_outcome(app, 0.3, "failure")
+
+        client = TestClient(app, raise_server_exceptions=False)
+        resp = client.get("/api/calibration")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["total_decisions"] == 3
+        assert data["total_with_outcomes"] == 3
+        assert data["overall_accuracy"] > 0.0
+        assert data["ece"] >= 0.0
+
+    async def test_category_filter(self) -> None:
+        app = await _make_app()
+        await _seed_decision_with_outcome(app, 0.8, "success", category="tech")
+        await _seed_decision_with_outcome(app, 0.5, "failure", category="other")
+
+        client = TestClient(app, raise_server_exceptions=False)
+        resp = client.get("/api/calibration", params={"category": "tech"})
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["total_decisions"] == 1
+        assert data["total_with_outcomes"] == 1
+
+    async def test_bucket_structure(self) -> None:
+        app = await _make_app()
+        await _seed_decision_with_outcome(app, 0.5, "success")
+
+        client = TestClient(app, raise_server_exceptions=False)
+        resp = client.get("/api/calibration")
+        assert resp.status_code == 200
+        data = resp.json()
+        buckets = data["buckets"]
+        assert len(buckets) == 10
+
+        # Check bucket 5 (0.5-0.6) has the decision
+        b5 = buckets[5]
+        assert b5["count"] == 1
+        assert b5["with_outcomes"] == 1
+        assert b5["success"] == 1
+        assert b5["accuracy"] == 1.0
+        assert b5["range_lo"] == 0.5
+        assert b5["range_hi"] == 0.6

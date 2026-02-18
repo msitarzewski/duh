@@ -625,10 +625,10 @@ async def handle_revise(
 # ── COMMIT helpers + handler ─────────────────────────────────
 
 
-def _compute_confidence(challenges: list[ChallengeResult]) -> float:
-    """Compute confidence score from challenge quality.
+def _compute_rigor(challenges: list[ChallengeResult]) -> float:
+    """Compute rigor score from challenge quality.
 
-    Genuine (non-sycophantic) challenges improve confidence because
+    Genuine (non-sycophantic) challenges improve rigor because
     they indicate the revision was rigorously tested.
 
     Returns a float in [0.5, 1.0]:
@@ -639,6 +639,26 @@ def _compute_confidence(challenges: list[ChallengeResult]) -> float:
         return 0.5
     genuine = sum(1 for c in challenges if not c.sycophantic)
     return 0.5 + (genuine / len(challenges)) * 0.5
+
+
+# Domain caps for epistemic confidence scoring.
+# Caps confidence based on question intent to reflect inherent
+# uncertainty of different question types.
+DOMAIN_CAPS: dict[str, float] = {
+    "factual": 0.95,
+    "technical": 0.90,
+    "creative": 0.85,
+    "judgment": 0.80,
+    "strategic": 0.70,
+}
+_DEFAULT_DOMAIN_CAP = 0.85
+
+
+def _domain_cap(intent: str | None) -> float:
+    """Return the confidence ceiling for a given question intent."""
+    if intent is None:
+        return _DEFAULT_DOMAIN_CAP
+    return DOMAIN_CAPS.get(intent, _DEFAULT_DOMAIN_CAP)
 
 
 def _extract_dissent(challenges: list[ChallengeResult]) -> str | None:
@@ -693,14 +713,22 @@ async def handle_commit(
         raise ConsensusError(msg)
 
     ctx.decision = ctx.revision
-    ctx.confidence = _compute_confidence(ctx.challenges)
+    ctx.rigor = _compute_rigor(ctx.challenges)
     ctx.dissent = _extract_dissent(ctx.challenges)
 
-    # Optional taxonomy classification
-    if classify and provider_manager is not None:
+    # Taxonomy classification (always attempt when provider available)
+    intent: str | None = None
+    if provider_manager is not None:
         taxonomy = await _classify_decision(ctx, provider_manager)
         if taxonomy:
             ctx.taxonomy = taxonomy
+            intent = taxonomy.get("intent") or None
+    elif classify:
+        # Legacy path: explicit classify without provider is a no-op
+        pass
+
+    # Epistemic confidence = rigor clamped by domain ceiling
+    ctx.confidence = min(_domain_cap(intent), ctx.rigor)
 
 
 async def _classify_decision(

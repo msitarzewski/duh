@@ -29,6 +29,7 @@ class AskRequest(BaseModel):
 class AskResponse(BaseModel):
     decision: str
     confidence: float
+    rigor: float = 0.0
     dissent: str | None = None
     cost: float
     thread_id: str | None = None
@@ -82,7 +83,7 @@ async def _handle_consensus(  # type: ignore[no-untyped-def]
     """Run the consensus protocol."""
     from duh.cli.app import _run_consensus
 
-    decision, confidence, dissent, cost = await _run_consensus(
+    decision, confidence, rigor, dissent, cost = await _run_consensus(
         body.question,
         config,
         pm,
@@ -95,7 +96,7 @@ async def _handle_consensus(  # type: ignore[no-untyped-def]
     if db_factory is not None:
         try:
             thread_id = await _persist_result(
-                db_factory, body.question, decision, confidence, dissent
+                db_factory, body.question, decision, confidence, dissent, rigor=rigor
             )
         except Exception:
             logger.exception("Failed to persist consensus thread")
@@ -103,6 +104,7 @@ async def _handle_consensus(  # type: ignore[no-untyped-def]
     return AskResponse(
         decision=decision,
         confidence=confidence,
+        rigor=rigor,
         dissent=dissent,
         cost=cost,
         thread_id=thread_id,
@@ -118,6 +120,7 @@ async def _handle_voting(body: AskRequest, config, pm) -> AskResponse:  # type: 
     return AskResponse(
         decision=result.decision,
         confidence=result.confidence,
+        rigor=result.rigor,
         cost=pm.total_cost,
         protocol_used="voting",
     )
@@ -150,12 +153,13 @@ async def _handle_decompose(body: AskRequest, config, pm) -> AskResponse:  # typ
     if len(subtask_specs) == 1:
         from duh.cli.app import _run_consensus
 
-        decision, confidence, dissent, cost = await _run_consensus(
+        decision, confidence, rigor, dissent, cost = await _run_consensus(
             body.question, config, pm
         )
         return AskResponse(
             decision=decision,
             confidence=confidence,
+            rigor=rigor,
             dissent=dissent,
             cost=cost,
             protocol_used="decompose",
@@ -168,6 +172,7 @@ async def _handle_decompose(body: AskRequest, config, pm) -> AskResponse:  # typ
     return AskResponse(
         decision=synthesis_result.content,
         confidence=synthesis_result.confidence,
+        rigor=synthesis_result.rigor,
         cost=pm.total_cost,
         protocol_used="decompose",
     )
@@ -179,6 +184,8 @@ async def _persist_result(
     decision: str,
     confidence: float,
     dissent: str | None,
+    *,
+    rigor: float = 0.0,
 ) -> str:
     """Persist a consensus result to the database.
 
@@ -192,7 +199,7 @@ async def _persist_result(
         thread.status = "complete"
         turn = await repo.create_turn(thread.id, 1, "COMMIT")
         await repo.save_decision(
-            turn.id, thread.id, decision, confidence, dissent=dissent
+            turn.id, thread.id, decision, confidence, rigor=rigor, dissent=dissent
         )
         await session.commit()
         return str(thread.id)

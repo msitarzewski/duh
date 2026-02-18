@@ -1,10 +1,26 @@
 # Progress
 
-**Last Updated**: 2026-02-17
+**Last Updated**: 2026-02-18
 
 ---
 
-## Current State: v0.5 COMPLETE — Production Hardening & Multi-User
+## Current State: Epistemic Confidence Phase A COMPLETE
+
+### Epistemic Confidence Phase A
+
+- **Renamed `_compute_confidence` → `_compute_rigor`** — old "confidence" measured challenge quality, now called "rigor"
+- **Added `rigor` field** to Decision ORM model, ConsensusContext, RoundResult, SubtaskResult, VoteResult, VotingAggregation, SynthesisResult
+- **Domain caps** — confidence capped by question intent: factual (0.95), technical (0.90), creative (0.85), judgment (0.80), strategic (0.70), default (0.85)
+- **Epistemic formula**: `confidence = min(domain_cap(intent), rigor)` — rigor clamped by domain ceiling
+- **Calibration module** — `src/duh/calibration.py` computes ECE (Expected Calibration Error) from decisions with outcomes
+- **`duh calibration` CLI command** — shows calibration analysis with bucket breakdown
+- **`GET /api/calibration` endpoint** — serves calibration data with category/date filters
+- **Calibration frontend** — CalibrationDashboard, CalibrationPage, calibration Zustand store
+- **SQLite migration** — `src/duh/memory/migrations.py` adds rigor column on startup for file-based SQLite
+- **Full-stack propagation** — rigor shown in CLI, API, WebSocket, MCP, frontend across all views
+- **Enhanced PDF export** — research-paper quality: header/footer, TOC, provider callouts, confidence meter, Unicode TTF
+- 1586 Python tests + 126 Vitest tests (1712 total), ruff clean, mypy strict clean
+- New files: calibration.py, migrations.py, test_calibration.py, test_confidence_scoring.py, test_cli_calibration.py, CalibrationDashboard.tsx, CalibrationPage.tsx, calibration.ts
 
 ### v0.5 Additions
 
@@ -151,3 +167,4 @@ Phase 0 benchmark framework — fully functional, pilot-tested on 5 questions.
 | 2026-02-17 | v0.5 T14-T18 (Phase 7: Ship) — multi-user integration tests, load tests, docs, migration finalized, version bump | Done |
 | 2026-02-17 | v0.5.0 — "It Scales" | **Complete** |
 | 2026-02-17 | Export to Markdown & PDF (CLI + API + Web UI) | Done |
+| 2026-02-18 | Epistemic Confidence Phase A (rigor + domain caps + calibration) | Done |

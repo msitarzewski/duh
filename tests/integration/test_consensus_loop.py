@@ -90,6 +90,7 @@ class TestSingleRoundLoop:
         assert ctx.revision is not None
         assert ctx.decision is not None
         assert ctx.confidence > 0
+        assert ctx.rigor > 0
         assert ctx.current_round == 1
 
         # Transition to COMPLETE (max_rounds=1)
@@ -367,8 +368,9 @@ class TestSycophancyIntegration:
 
         await _run_single_round(ctx, sm, pm)
 
-        # Both challengers are sycophantic → confidence should be 0.5
+        # All sycophantic → rigor=0.5, confidence=min(0.85,0.5)
         assert ctx.confidence < 1.0
+        assert ctx.rigor < 1.0
         # Dissent should be None (all sycophantic)
         assert ctx.dissent is None
 

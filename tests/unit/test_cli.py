@@ -72,6 +72,7 @@ class TestAskCommand:
         mock_run.return_value = (
             "Use SQLite for v0.1.",
             1.0,
+            1.0,
             None,
             0.0042,
         )
@@ -97,6 +98,7 @@ class TestAskCommand:
         mock_run.return_value = (
             "Use SQLite.",
             0.75,
+            1.0,
             "[model-a]: PostgreSQL would be better for scale.",
             0.01,
         )
@@ -119,7 +121,7 @@ class TestAskCommand:
         from duh.config.schema import DuhConfig
 
         mock_config.return_value = DuhConfig()
-        mock_run.return_value = ("Answer.", 1.0, None, 0.0)
+        mock_run.return_value = ("Answer.", 1.0, 1.0, None, 0.0)
 
         result = runner.invoke(cli, ["ask", "Question?"])
 
@@ -138,7 +140,7 @@ class TestAskCommand:
 
         config = DuhConfig()
         mock_config.return_value = config
-        mock_run.return_value = ("Answer.", 1.0, None, 0.0)
+        mock_run.return_value = ("Answer.", 1.0, 1.0, None, 0.0)
 
         result = runner.invoke(cli, ["ask", "--rounds", "5", "Question?"])
 
@@ -432,7 +434,7 @@ class TestDbCommands:
         assert "Use PostgreSQL" in result.output
         assert "[CHALLENGER] mock:challenger-1" in result.output
         assert "SQLite is simpler" in result.output
-        assert "Decision (confidence 85%)" in result.output
+        assert "Decision (confidence 85%, rigor 0%)" in result.output
         assert "Use SQLite for v0.1." in result.output
         assert "Dissent: PostgreSQL for future scale." in result.output
         asyncio.run(engine.dispose())
@@ -639,7 +641,7 @@ class TestAskIntegration:
 
         async def fake_ask(
             question: str, cfg: Any, **kwargs: Any
-        ) -> tuple[str, float, str | None, float]:
+        ) -> tuple[str, float, float, str | None, float]:
             pm = ProviderManager()
             await pm.register(provider)
             from duh.cli.app import _run_consensus

@@ -84,7 +84,9 @@ class TestKnownFlawGenuine:
         sm.transition(ConsensusState.COMMIT)
         await handle_commit(ctx)
 
-        assert ctx.confidence == 1.0
+        # rigor=1.0 (all genuine), but no pm → default cap 0.85
+        assert ctx.rigor == 1.0
+        assert ctx.confidence == 0.85
 
     async def test_genuine_challenges_produce_dissent(
         self, known_flaw_genuine_provider: MockProvider

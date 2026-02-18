@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 interface ConfidenceMeterProps {
   value: number
   size?: number
+  label?: string
 }
 
 function getColor(value: number): string {
@@ -12,7 +13,7 @@ function getColor(value: number): string {
   return 'var(--color-green)'
 }
 
-export function ConfidenceMeter({ value, size = 64 }: ConfidenceMeterProps) {
+export function ConfidenceMeter({ value, size = 64, label }: ConfidenceMeterProps) {
   const radius = (size - 8) / 2
   const circumference = 2 * Math.PI * radius
   const targetOffset = circumference * (1 - value)
@@ -54,6 +55,11 @@ export function ConfidenceMeter({ value, size = 64 }: ConfidenceMeterProps) {
       <span className="font-mono text-xs" style={{ color }}>
         {(value * 100).toFixed(0)}%
       </span>
+      {label && (
+        <span className="font-mono text-[10px] text-[var(--color-text-dim)]">
+          {label}
+        </span>
+      )}
     </div>
   )
 }

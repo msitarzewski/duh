@@ -8,7 +8,7 @@ import { CostTicker } from './CostTicker'
 export function ConsensusPanel() {
   const {
     status, error, currentPhase, currentRound, rounds,
-    decision, confidence, dissent, cost,
+    decision, confidence, rigor, dissent, cost,
     startConsensus, reset,
   } = useConsensusStore()
 
@@ -73,6 +73,7 @@ export function ConsensusPanel() {
               {round.confidence !== null && (
                 <div className="flex items-center gap-3 text-xs font-mono text-[var(--color-text-dim)]">
                   <span>Confidence: {(round.confidence * 100).toFixed(0)}%</span>
+                  {round.rigor !== null && <span>Rigor: {(round.rigor * 100).toFixed(0)}%</span>}
                   {round.dissent && <span className="text-[var(--color-amber)]">Dissent noted</span>}
                 </div>
               )}
@@ -85,6 +86,7 @@ export function ConsensusPanel() {
         <ConsensusComplete
           decision={decision}
           confidence={confidence}
+          rigor={rigor ?? 0}
           dissent={dissent}
           cost={cost}
         />

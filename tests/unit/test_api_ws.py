@@ -97,8 +97,9 @@ def _apply_handler_patches(
         ctx.revision_model = ctx.proposal_model
         return _make_response(revision)
 
-    async def mock_commit(ctx, **kwargs):
+    async def mock_commit(ctx, *args, **kwargs):
         ctx.decision = ctx.revision
+        ctx.rigor = 1.0
         ctx.confidence = confidence
         ctx.dissent = dissent
 
@@ -240,6 +241,7 @@ class TestWebSocketAsk:
         complete = next(e for e in events if e["type"] == "complete")
         assert complete["decision"] == "Final answer"
         assert complete["confidence"] == 0.85
+        assert complete["rigor"] == 1.0
         assert complete["dissent"] == "Minor dissent"
         assert "cost" in complete
 
@@ -256,6 +258,7 @@ class TestWebSocketAsk:
 
         commit = next(e for e in events if e["type"] == "commit")
         assert commit["confidence"] == 0.9
+        assert commit["rigor"] == 1.0
         assert commit["dissent"] == "Some dissent"
         assert "round" in commit
 
