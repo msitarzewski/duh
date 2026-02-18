@@ -23,7 +23,7 @@ from duh.api.auth import get_current_user
 ROLE_HIERARCHY: dict[str, int] = {"admin": 3, "contributor": 2, "viewer": 1}
 
 
-def require_role(minimum_role: str):
+def require_role(minimum_role: str) -> Any:
     """FastAPI dependency factory: require user has at least *minimum_role*.
 
     Args:

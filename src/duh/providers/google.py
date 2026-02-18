@@ -93,7 +93,7 @@ def _map_error(e: Exception) -> Exception:
 
 def _build_contents(
     messages: list[PromptMessage],
-) -> tuple[str | None, list[dict[str, str]]]:
+) -> tuple[str | None, list[dict[str, Any]]]:
     """Split PromptMessages into system instruction + contents."""
     system: str | None = None
     contents: list[dict[str, Any]] = []
@@ -168,7 +168,7 @@ class GoogleProvider:
         try:
             response = await self._client.aio.models.generate_content(
                 model=model_id,
-                contents=contents,
+                contents=contents,  # type: ignore[arg-type]
                 config=config,
             )
         except (genai_errors.ClientError, genai_errors.ServerError) as e:
@@ -240,7 +240,7 @@ class GoogleProvider:
         try:
             response = await self._client.aio.models.generate_content_stream(
                 model=model_id,
-                contents=contents,
+                contents=contents,  # type: ignore[arg-type]
                 config=config,
             )
             usage = None
