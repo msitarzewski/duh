@@ -157,8 +157,7 @@ async def _stream_consensus(
         challenge_resps = await handle_challenge(ctx, pm, challengers)
         for i, ch in enumerate(ctx.challenges):
             resp_truncated = (
-                i < len(challenge_resps)
-                and challenge_resps[i].finish_reason != "stop"
+                i < len(challenge_resps) and challenge_resps[i].finish_reason != "stop"
             )
             await ws.send_json(
                 {
