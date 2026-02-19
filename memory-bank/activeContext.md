@@ -1,45 +1,27 @@
 # Active Context
 
-**Last Updated**: 2026-02-18
-**Current Phase**: Consensus UX — right-side nav, collapsible sections, decision-first layout
-**Next Action**: PR open for review.
+**Last Updated**: 2026-02-19
+**Current Phase**: UX cleanup and consensus engine hardening
+**Next Action**: PR ready for review.
 
-## What Just Shipped: Consensus Navigation & Collapsible Sections
+## What Just Shipped: UX Cleanup + Consensus Engine Improvements
 
-### Core Changes
-The consensus page and thread detail view now have proper navigation and information hierarchy for multi-round deliberations.
+### Thread Detail UX
+- All round sections collapsed by default when thread loads — decision stays open
+- Dissent inside decision block collapsed by default
+- `DissentBanner` gained `defaultOpen` prop for caller control
 
-**Before**: Long vertical scroll of rounds with no way to navigate or collapse. Decision buried at the bottom after all rounds.
-**After**:
-- Sticky right-side nav panel shows progress through rounds/phases
-- All sections are independently collapsible via a shared `Disclosure` primitive
-- Decision surfaces to the **top** when consensus is complete (both live + stored threads)
-- Individual challengers shown by model name in nav and each collapsible
-- Dissent gets equal treatment: collapsible `DissentBanner` with model attribution parsed from `[model:name]:` prefix
+### Consensus Engine Hardening
+- **max_tokens bumped 4096 -> 16384** for propose/challenge/revise phases — prevents LLM output truncation on long responses
+- **Token budget in system prompts** — LLMs now told their output budget so they can self-regulate length and end on complete thoughts
+- **Truncation detection** — `finish_reason` checked after each handler call; `truncated` flag sent via WebSocket; amber warning shown in PhaseCard UI
+- **Cross-provider challenger selection** — `select_challengers()` now prefers models from different providers (one per provider first, then fills). Prevents e.g. Opus proposing + two Sonnet variants challenging (same training biases)
 
-### New Shared Component: `Disclosure`
-Reusable chevron + toggle primitive (`web/src/components/shared/Disclosure.tsx`):
-- Props: `header`, `defaultOpen`, `forceOpen`, `className`
-- Used by: PhaseCard, TurnCard, ConsensusComplete, DissentBanner, ThreadDetail
+### Visual Polish
+- Export dropdown menus (both `ConsensusComplete` and `ExportMenu`) now use glass styling matching the design system (`glass-bg` + `backdrop-blur`)
 
-### Files Changed (17 files)
-**New files:**
-- `web/src/components/shared/Disclosure.tsx` — Shared collapsible primitive
-- `web/src/components/consensus/ConsensusNav.tsx` — Sticky nav for live consensus
-- `web/src/components/threads/ThreadNav.tsx` — Sticky nav for thread detail
-- `web/src/__tests__/consensus-nav.test.tsx` — 32 tests (Disclosure, PhaseCard, DissentBanner, TurnCard, ConsensusNav)
-- `web/src/__tests__/thread-nav.test.tsx` — 8 tests (ThreadNav)
-
-**Modified:**
-- `PhaseCard.tsx` — Uses Disclosure for outer collapse + per-challenger Disclosure
-- `TurnCard.tsx` — Uses Disclosure for outer collapse + per-contribution Disclosure
-- `ConsensusComplete.tsx` — Collapsible via Disclosure, dissent moved inside panel
-- `DissentBanner.tsx` — Uses Disclosure, parses `[model:name]:` prefix for ModelBadge
-- `ConsensusPanel.tsx` — Decision at top when complete, scroll target IDs
-- `ConsensusPage.tsx` — Flex-row layout with sticky ConsensusNav sidebar
-- `ThreadDetail.tsx` — Decision surfaced to top, DissentBanner for dissent, scroll IDs
-- `ThreadDetailPage.tsx` — Flex-row layout with sticky ThreadNav sidebar
-- Barrel exports: `consensus/index.ts`, `threads/index.ts`, `shared/index.ts`
+### PDF Export Bug Fix
+- `_setup_fonts()` was missing the bold-italic (`BI`) TTF font variant — caused crash when dissent content contained bold markdown rendered in italic context
 
 ### Test Results
 - 1586 Python tests + 166 Vitest tests (1752 total)
@@ -49,10 +31,9 @@ Reusable chevron + toggle primitive (`web/src/components/shared/Disclosure.tsx`)
 
 ## Current State
 
-- **Branch `consensus-nav-collapsible`** — ready for PR.
+- **Branch `ux-cleanup`** — ready for PR.
 - **1586 Python tests + 166 Vitest tests** (1752 total).
-- **~62 Python source files + 75 frontend source files** (~137 total).
-- All previous features intact (v0.1–v0.5 + export + epistemic confidence).
+- All previous features intact (v0.1–v0.5 + export + epistemic confidence + consensus nav).
 
 ## Open Questions (Still Unresolved)
 

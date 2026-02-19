@@ -499,3 +499,18 @@
 - Frontend: CalibrationDashboard (metric cards + bar chart + bucket table), CalibrationPage, calibration Zustand store
 - Tests: 15 calibration tests, 20 confidence scoring tests, 4 CLI calibration tests
 - **Total: 1586 Python + 126 Vitest = 1712 tests**
+
+---
+
+## UX Cleanup + Consensus Engine Improvements
+
+### 2026-02-19: UX Cleanup
+- Thread detail: all sections collapsed by default except decision (with dissent)
+- `DissentBanner` gained `defaultOpen` prop
+- Export dropdown menus use glass styling (`glass-bg` + `backdrop-blur`)
+- PDF export crash fix: missing bold-italic (`BI`) TTF font variant in `_setup_fonts()`
+- `max_tokens` bumped 4096 -> 16384 for propose/challenge/revise
+- Token budget communicated to LLMs in system prompts via `_token_budget_note()`
+- Truncation detection: `finish_reason` checked, `truncated` flag sent via WebSocket, amber warning in PhaseCard
+- Cross-provider challenger selection: prefers one model per different provider for diversity
+- See: [190219_ux-cleanup.md](./190219_ux-cleanup.md)

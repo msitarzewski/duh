@@ -12,6 +12,7 @@ export type ConsensusStatus = 'idle' | 'connecting' | 'streaming' | 'complete' |
 export interface ChallengeEntry {
   model: string
   content: string
+  truncated?: boolean
 }
 
 export interface RoundData {
@@ -25,6 +26,7 @@ export interface RoundData {
   confidence: number | null
   rigor: number | null
   dissent: string | null
+  truncated: string[]
 }
 
 interface ConsensusState {
@@ -68,6 +70,7 @@ function createEmptyRound(round: number): RoundData {
     confidence: null,
     rigor: null,
     dissent: null,
+    truncated: [],
   }
 }
 
@@ -193,8 +196,13 @@ function handleEvent(
       const [round, idx] = found
 
       const update: Partial<RoundData> = {}
-      if (event.phase === 'PROPOSE') update.proposal = event.content ?? null
-      else if (event.phase === 'REVISE') update.revision = event.content ?? null
+      if (event.phase === 'PROPOSE') {
+        update.proposal = event.content ?? null
+        if (event.truncated) update.truncated = [...round.truncated, 'PROPOSE']
+      } else if (event.phase === 'REVISE') {
+        update.revision = event.content ?? null
+        if (event.truncated) update.truncated = [...round.truncated, 'REVISE']
+      }
 
       set({ rounds: updateRound(state.rounds, idx, { ...round, ...update }) })
       break
@@ -205,9 +213,11 @@ function handleEvent(
       if (!found) break
       const [round, idx] = found
 
+      const truncatedUpdate = event.truncated ? [...round.truncated, `CHALLENGE:${event.model}`] : round.truncated
       set({
         rounds: updateRound(state.rounds, idx, {
-          challenges: [...round.challenges, { model: event.model, content: event.content }],
+          challenges: [...round.challenges, { model: event.model, content: event.content, truncated: event.truncated }],
+          truncated: truncatedUpdate,
         }),
       })
       break

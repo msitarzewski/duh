@@ -197,12 +197,14 @@ export interface WSPhaseComplete {
   type: 'phase_complete'
   phase: ConsensusPhase
   content?: string
+  truncated?: boolean
 }
 
 export interface WSChallenge {
   type: 'challenge'
   model: string
   content: string
+  truncated?: boolean
 }
 
 export interface WSCommit {

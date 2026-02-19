@@ -8,12 +8,13 @@ interface PhaseCardProps {
   models?: string[]
   content?: string | null
   isActive?: boolean
-  challenges?: Array<{ model: string; content: string }>
+  challenges?: Array<{ model: string; content: string; truncated?: boolean }>
   collapsible?: boolean
   defaultOpen?: boolean
+  truncated?: boolean
 }
 
-export function PhaseCard({ phase, model, models, content, isActive, challenges, collapsible, defaultOpen = true }: PhaseCardProps) {
+export function PhaseCard({ phase, model, models, content, isActive, challenges, collapsible, defaultOpen = true, truncated }: PhaseCardProps) {
   const header = (
     <>
       <span className="font-mono text-xs text-[var(--color-primary)] font-semibold">{phase}</span>
@@ -52,6 +53,12 @@ export function PhaseCard({ phase, model, models, content, isActive, challenges,
             </Disclosure>
           ))}
         </div>
+      )}
+
+      {(truncated || challenges?.some((ch) => ch.truncated)) && (
+        <p className="text-[10px] font-mono text-[var(--color-amber)] mt-2">
+          Output truncated — response hit token limit
+        </p>
       )}
 
       {isActive && !content && !challenges?.length && (

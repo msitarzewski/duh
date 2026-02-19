@@ -69,6 +69,7 @@ export function ConsensusPanel() {
                     isActive={isActive && currentPhase === 'PROPOSE' && round.round === currentRound}
                     collapsible={isCompletedRound}
                     defaultOpen={false}
+                    truncated={round.truncated.includes('PROPOSE')}
                   />
                 )}
 
@@ -91,6 +92,7 @@ export function ConsensusPanel() {
                     isActive={isActive && currentPhase === 'REVISE' && round.round === currentRound}
                     collapsible={isCompletedRound}
                     defaultOpen={false}
+                    truncated={round.truncated.includes('REVISE')}
                   />
                 )}
 

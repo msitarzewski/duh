@@ -100,7 +100,7 @@ export function ThreadDetail() {
               </div>
               {finalDecision.dissent && (
                 <div className="mt-4">
-                  <DissentBanner dissent={finalDecision.dissent} />
+                  <DissentBanner dissent={finalDecision.dissent} defaultOpen={false} />
                 </div>
               )}
             </Disclosure>
@@ -113,7 +113,7 @@ export function ThreadDetail() {
           <TurnCard
             turn={turn}
             collapsible={currentThread.turns.length > 1}
-            defaultOpen={!finalDecision && i === currentThread.turns.length - 1}
+            defaultOpen={false}
           />
         </div>
       ))}
