@@ -171,7 +171,8 @@ def build_propose_prompt(
     Round > 1: system prompt + question + previous round context
     (decision and challenges) so the proposer can improve.
     """
-    system = f"{_grounding_prefix()}\n\n{_PROPOSER_SYSTEM}{_token_budget_note(max_tokens)}"
+    budget = _token_budget_note(max_tokens)
+    system = f"{_grounding_prefix()}\n\n{_PROPOSER_SYSTEM}{budget}"
 
     if ctx.current_round <= 1 or not ctx.round_history:
         user_content = ctx.question
@@ -581,7 +582,8 @@ def build_revise_prompt(
     User prompt includes the question, original proposal, and all
     challenges so the revision addresses each one.
     """
-    system = f"{_grounding_prefix()}\n\n{_REVISER_SYSTEM}{_token_budget_note(max_tokens)}"
+    budget = _token_budget_note(max_tokens)
+    system = f"{_grounding_prefix()}\n\n{_REVISER_SYSTEM}{budget}"
 
     challenges_text = "\n\n".join(
         f"Challenge from {c.model_ref}:\n{c.content}" for c in ctx.challenges

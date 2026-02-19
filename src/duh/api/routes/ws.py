@@ -156,13 +156,16 @@ async def _stream_consensus(
         )
         challenge_resps = await handle_challenge(ctx, pm, challengers)
         for i, ch in enumerate(ctx.challenges):
-            truncated = i < len(challenge_resps) and challenge_resps[i].finish_reason != "stop"
+            resp_truncated = (
+                i < len(challenge_resps)
+                and challenge_resps[i].finish_reason != "stop"
+            )
             await ws.send_json(
                 {
                     "type": "challenge",
                     "model": ch.model_ref,
                     "content": ch.content,
-                    "truncated": truncated,
+                    "truncated": resp_truncated,
                 }
             )
         await ws.send_json({"type": "phase_complete", "phase": "CHALLENGE"})
