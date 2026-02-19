@@ -149,17 +149,29 @@ def _grounding_prefix() -> str:
     return f"Today's date is {today}. {_GROUNDING}"
 
 
+def _token_budget_note(max_tokens: int) -> str:
+    """Instruction telling the model its output token budget."""
+    return (
+        f"\n\nYour response budget is approximately {max_tokens:,} tokens. "
+        "Structure your answer to fit within this budget — be thorough but "
+        "concise. If the topic requires extensive detail, prioritize the most "
+        "important points and ensure your response ends with a complete thought."
+    )
+
+
 # ── Prompt building ───────────────────────────────────────────
 
 
-def build_propose_prompt(ctx: ConsensusContext) -> list[PromptMessage]:
+def build_propose_prompt(
+    ctx: ConsensusContext, *, max_tokens: int = 16384
+) -> list[PromptMessage]:
     """Build prompt messages for the PROPOSE phase.
 
     Round 1: system prompt + question.
     Round > 1: system prompt + question + previous round context
     (decision and challenges) so the proposer can improve.
     """
-    system = f"{_grounding_prefix()}\n\n{_PROPOSER_SYSTEM}"
+    system = f"{_grounding_prefix()}\n\n{_PROPOSER_SYSTEM}{_token_budget_note(max_tokens)}"
 
     if ctx.current_round <= 1 or not ctx.round_history:
         user_content = ctx.question
@@ -243,7 +255,7 @@ async def handle_propose(
     model_ref: str,
     *,
     temperature: float = 0.7,
-    max_tokens: int = 4096,
+    max_tokens: int = 16384,
     tool_registry: ToolRegistry | None = None,
 ) -> ModelResponse:
     """Execute the PROPOSE phase of consensus.
@@ -279,7 +291,7 @@ async def handle_propose(
         msg = f"handle_propose requires PROPOSE state, got {ctx.state.value}"
         raise ConsensusError(msg)
 
-    messages = build_propose_prompt(ctx)
+    messages = build_propose_prompt(ctx, max_tokens=max_tokens)
     provider, model_id = provider_manager.get_provider(model_ref)
 
     if tool_registry is not None:
@@ -316,6 +328,8 @@ async def handle_propose(
 def build_challenge_prompt(
     ctx: ConsensusContext,
     framing: str = "flaw",
+    *,
+    max_tokens: int = 16384,
 ) -> list[PromptMessage]:
     """Build prompt messages for the CHALLENGE phase.
 
@@ -325,9 +339,10 @@ def build_challenge_prompt(
     Args:
         ctx: Consensus context with the proposal to challenge.
         framing: One of the challenge framing types.
+        max_tokens: Token budget communicated to the model.
     """
     system_text = _CHALLENGE_FRAMINGS.get(framing, _CHALLENGE_FRAMINGS["flaw"])
-    system = f"{_grounding_prefix()}\n\n{system_text}"
+    system = f"{_grounding_prefix()}\n\n{system_text}{_token_budget_note(max_tokens)}"
     user_content = (
         f"Question: {ctx.question}\n\n"
         f"Answer from another expert (do NOT defer to this -- challenge it):\n"
@@ -374,13 +389,43 @@ def select_challengers(
             msg = "No panel models available for challenge"
             raise InsufficientModelsError(msg)
 
-    others = sorted(
-        (m for m in models if m.model_ref != proposer_model),
+    proposer_provider = proposer_model.split(":")[0]
+
+    others = [m for m in models if m.model_ref != proposer_model]
+
+    # Prefer models from different providers for true cross-provider challenge
+    cross_provider = sorted(
+        (m for m in others if m.provider_id != proposer_provider),
+        key=lambda m: m.output_cost_per_mtok,
+        reverse=True,
+    )
+    same_provider = sorted(
+        (m for m in others if m.provider_id == proposer_provider),
         key=lambda m: m.output_cost_per_mtok,
         reverse=True,
     )
 
-    selected = [m.model_ref for m in others[:count]]
+    # Pick cross-provider first, then fill with same-provider
+    selected: list[str] = []
+    used_providers: set[str] = set()
+    for m in cross_provider:
+        if len(selected) >= count:
+            break
+        # Prefer one model per provider for maximum diversity
+        if m.provider_id not in used_providers:
+            selected.append(m.model_ref)
+            used_providers.add(m.provider_id)
+    # If still not enough, add remaining cross-provider models
+    for m in cross_provider:
+        if len(selected) >= count:
+            break
+        if m.model_ref not in selected:
+            selected.append(m.model_ref)
+    # Then same-provider models
+    for m in same_provider:
+        if len(selected) >= count:
+            break
+        selected.append(m.model_ref)
     # Fill remaining slots with proposer (same-model ensemble)
     while len(selected) < count:
         selected.append(proposer_model)
@@ -415,7 +460,7 @@ async def _call_challenger(
 
     Returns (model_ref, framing, response).
     """
-    messages = build_challenge_prompt(ctx, framing=framing)
+    messages = build_challenge_prompt(ctx, framing=framing, max_tokens=max_tokens)
     provider, model_id = provider_manager.get_provider(model_ref)
 
     if tool_registry is not None:
@@ -446,7 +491,7 @@ async def handle_challenge(
     challenger_models: list[str],
     *,
     temperature: float = 0.7,
-    max_tokens: int = 4096,
+    max_tokens: int = 16384,
     tool_registry: ToolRegistry | None = None,
 ) -> list[ModelResponse]:
     """Execute the CHALLENGE phase of consensus.
@@ -527,14 +572,16 @@ async def handle_challenge(
 # ── REVISE prompt + handler ───────────────────────────────────
 
 
-def build_revise_prompt(ctx: ConsensusContext) -> list[PromptMessage]:
+def build_revise_prompt(
+    ctx: ConsensusContext, *, max_tokens: int = 16384
+) -> list[PromptMessage]:
     """Build prompt messages for the REVISE phase.
 
     System prompt instructs the reviser to address challenges.
     User prompt includes the question, original proposal, and all
     challenges so the revision addresses each one.
     """
-    system = f"{_grounding_prefix()}\n\n{_REVISER_SYSTEM}"
+    system = f"{_grounding_prefix()}\n\n{_REVISER_SYSTEM}{_token_budget_note(max_tokens)}"
 
     challenges_text = "\n\n".join(
         f"Challenge from {c.model_ref}:\n{c.content}" for c in ctx.challenges
@@ -557,7 +604,7 @@ async def handle_revise(
     model_ref: str | None = None,
     *,
     temperature: float = 0.7,
-    max_tokens: int = 4096,
+    max_tokens: int = 16384,
 ) -> ModelResponse:
     """Execute the REVISE phase of consensus.
 
@@ -604,7 +651,7 @@ async def handle_revise(
         msg = "handle_revise requires a model_ref or proposal_model"
         raise ConsensusError(msg)
 
-    messages = build_revise_prompt(ctx)
+    messages = build_revise_prompt(ctx, max_tokens=max_tokens)
     provider, model_id = provider_manager.get_provider(reviser_ref)
 
     response = await provider.send(

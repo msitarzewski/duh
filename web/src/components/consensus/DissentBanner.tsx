@@ -9,7 +9,7 @@ function parseModelFromDissent(dissent: string): { model: string | null; content
   return { model: null, content: dissent }
 }
 
-export function DissentBanner({ dissent }: { dissent: string }) {
+export function DissentBanner({ dissent, defaultOpen = true }: { dissent: string; defaultOpen?: boolean }) {
   const { model, content } = parseModelFromDissent(dissent)
 
   return (
@@ -21,7 +21,7 @@ export function DissentBanner({ dissent }: { dissent: string }) {
             {model && <ModelBadge model={model} />}
           </>
         }
-        defaultOpen
+        defaultOpen={defaultOpen}
       >
         <div className="text-sm text-[var(--color-text-secondary)]">
           <Markdown>{content}</Markdown>

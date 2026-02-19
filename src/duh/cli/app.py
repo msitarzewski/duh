@@ -1307,6 +1307,7 @@ def _format_thread_pdf(
                         self.add_font("DuhSans", "", path)
                         self.add_font("DuhSans", "B", path)
                         self.add_font("DuhSans", "I", path)
+                        self.add_font("DuhSans", "BI", path)
                         self._use_ttf = True
                         self._font_family = "DuhSans"
                         break

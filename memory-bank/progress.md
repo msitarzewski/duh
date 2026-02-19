@@ -181,3 +181,4 @@ Phase 0 benchmark framework — fully functional, pilot-tested on 5 questions.
 | 2026-02-17 | Export to Markdown & PDF (CLI + API + Web UI) | Done |
 | 2026-02-18 | Epistemic Confidence Phase A (rigor + domain caps + calibration) | Done |
 | 2026-02-18 | Consensus nav + collapsible sections + decision-first layout | Done |
+| 2026-02-19 | UX cleanup: collapse defaults, max_tokens 16384, cross-provider challengers, truncation detection, glass exports, PDF BI font fix | Done |

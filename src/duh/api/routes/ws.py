@@ -131,12 +131,13 @@ async def _stream_consensus(
                 "round": ctx.current_round,
             }
         )
-        await handle_propose(ctx, pm, proposer)
+        propose_resp = await handle_propose(ctx, pm, proposer)
         await ws.send_json(
             {
                 "type": "phase_complete",
                 "phase": "PROPOSE",
                 "content": ctx.proposal or "",
+                "truncated": propose_resp.finish_reason != "stop",
             }
         )
 
@@ -153,13 +154,15 @@ async def _stream_consensus(
                 "round": ctx.current_round,
             }
         )
-        await handle_challenge(ctx, pm, challengers)
-        for ch in ctx.challenges:
+        challenge_resps = await handle_challenge(ctx, pm, challengers)
+        for i, ch in enumerate(ctx.challenges):
+            truncated = i < len(challenge_resps) and challenge_resps[i].finish_reason != "stop"
             await ws.send_json(
                 {
                     "type": "challenge",
                     "model": ch.model_ref,
                     "content": ch.content,
+                    "truncated": truncated,
                 }
             )
         await ws.send_json({"type": "phase_complete", "phase": "CHALLENGE"})
@@ -175,12 +178,13 @@ async def _stream_consensus(
                 "round": ctx.current_round,
             }
         )
-        await handle_revise(ctx, pm)
+        revise_resp = await handle_revise(ctx, pm)
         await ws.send_json(
             {
                 "type": "phase_complete",
                 "phase": "REVISE",
                 "content": ctx.revision or "",
+                "truncated": revise_resp.finish_reason != "stop",
             }
         )
 
