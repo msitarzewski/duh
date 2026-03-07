@@ -84,6 +84,14 @@ MODEL_CATALOG: dict[str, list[dict[str, Any]]] = {
     ],
     "openai": [
         {
+            "model_id": "gpt-5.4",
+            "display_name": "GPT-5.4",
+            "context_window": 1_048_576,
+            "max_output_tokens": 128_000,
+            "input_cost_per_mtok": 2.50,
+            "output_cost_per_mtok": 15.00,
+        },
+        {
             "model_id": "gpt-5.2",
             "display_name": "GPT-5.2",
             "context_window": 400_000,
@@ -229,6 +237,7 @@ NO_TEMPERATURE_MODELS: set[str] = {
     "gpt-5",
     "gpt-5-mini",
     "gpt-5-nano",
+    "gpt-5.4",
 }
 
 # ── Providers that are challenger-only (not proposer-eligible) ──

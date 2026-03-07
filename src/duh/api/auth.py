@@ -169,7 +169,11 @@ async def login(body: LoginRequest, request: Request) -> TokenResponse:
         result = await session.execute(stmt)
         user = result.scalar_one_or_none()
 
-    if user is None or not verify_password(body.password, user.password_hash):
+    if (
+        user is None
+        or user.password_hash is None
+        or not verify_password(body.password, user.password_hash)
+    ):
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
     if not user.is_active:
@@ -178,6 +182,53 @@ async def login(body: LoginRequest, request: Request) -> TokenResponse:
     token = create_token(
         user.id, config.auth.jwt_secret, config.auth.token_expiry_hours
     )
+    return TokenResponse(access_token=token, user_id=user.id, role=user.role)
+
+
+class GuestRequest(BaseModel):
+    email: str
+
+
+@router.post("/guest", response_model=TokenResponse)
+async def guest_login(body: GuestRequest, request: Request) -> TokenResponse:
+    """Create or retrieve a guest user (email-only, no password)."""
+    config = request.app.state.config
+    if not config.auth.jwt_secret:
+        raise HTTPException(status_code=500, detail="JWT secret not configured")
+
+    from sqlalchemy import select
+
+    from duh.memory.models import User
+
+    db_factory = request.app.state.db_factory
+    async with db_factory() as session:
+        stmt = select(User).where(User.email == body.email)
+        result = await session.execute(stmt)
+        existing = result.scalar_one_or_none()
+
+        if existing is not None:
+            if not existing.is_guest:
+                raise HTTPException(
+                    status_code=409,
+                    detail="Email registered as full account. Please log in.",
+                )
+            # Return token for existing guest
+            token = create_token(existing.id, config.auth.jwt_secret, expiry_hours=4)
+            return TokenResponse(
+                access_token=token, user_id=existing.id, role=existing.role
+            )
+
+        # Create new guest user
+        user = User(
+            email=body.email,
+            display_name=body.email.split("@")[0],
+            is_guest=True,
+        )
+        session.add(user)
+        await session.commit()
+        await session.refresh(user)
+
+    token = create_token(user.id, config.auth.jwt_secret, expiry_hours=4)
     return TokenResponse(access_token=token, user_id=user.id, role=user.role)
 
 

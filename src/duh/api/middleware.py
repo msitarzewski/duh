@@ -30,6 +30,7 @@ class APIKeyMiddleware(BaseHTTPMiddleware):
         "/api/metrics",
         "/api/auth/register",
         "/api/auth/login",
+        "/api/auth/guest",
         "/api/auth/status",
         "/docs",
         "/openapi.json",

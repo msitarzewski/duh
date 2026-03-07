@@ -80,7 +80,7 @@ export function ParticleField({ count = 30 }: { count?: number }) {
   return (
     <canvas
       ref={canvasRef}
-      className="fixed inset-0 pointer-events-none z-0"
+      className="fixed inset-0 pointer-events-none z-[var(--z-background)]"
     />
   )
 }

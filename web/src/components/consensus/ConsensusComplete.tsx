@@ -160,7 +160,7 @@ export function ConsensusComplete({ decision, confidence, rigor, dissent, cost, 
             Export
           </GlowButton>
           {exportOpen && (
-            <div className="absolute bottom-full left-0 mb-1 bg-[var(--glass-bg)] backdrop-blur-[var(--glass-blur)] border border-[var(--color-border)] rounded-[var(--radius-md)] shadow-lg py-1 min-w-[200px] z-50">
+            <div className="absolute bottom-full left-0 mb-1 bg-[var(--glass-bg)] backdrop-blur-[var(--glass-blur)] border border-[var(--color-border)] rounded-[var(--radius-md)] shadow-lg py-1 min-w-[200px] z-[var(--z-dropdown)]">
               <button
                 className="w-full text-left px-3 py-1.5 text-xs hover:bg-[var(--color-bg-tertiary)] text-[var(--color-text)]"
                 onClick={() => handleExportMarkdown('decision')}

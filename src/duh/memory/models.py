@@ -38,10 +38,13 @@ class User(Base):
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
     email: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
-    password_hash: Mapped[str] = mapped_column(String(128), nullable=False)
+    password_hash: Mapped[str | None] = mapped_column(
+        String(128), nullable=True, default=None
+    )
     display_name: Mapped[str] = mapped_column(String(100), nullable=False)
     role: Mapped[str] = mapped_column(String(20), default="contributor")
     is_active: Mapped[bool] = mapped_column(default=True)
+    is_guest: Mapped[bool] = mapped_column(default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, default=_utcnow, onupdate=_utcnow
@@ -65,6 +68,10 @@ class Thread(Base):
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
     question: Mapped[str] = mapped_column(Text)
     status: Mapped[str] = mapped_column(String(20), default="active")
+    is_public: Mapped[bool] = mapped_column(default=False)
+    slug: Mapped[str | None] = mapped_column(
+        String(200), nullable=True, unique=True, default=None
+    )
     user_id: Mapped[str | None] = mapped_column(
         ForeignKey("users.id"), nullable=True, index=True, default=None
     )

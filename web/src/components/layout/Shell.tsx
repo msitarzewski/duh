@@ -8,7 +8,7 @@ export function Shell() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
 
   return (
-    <div className="h-screen flex overflow-hidden bg-[var(--color-bg)]">
+    <div className="h-screen flex overflow-hidden bg-[var(--color-bg)] isolate">
       <GridOverlay />
       <ParticleField count={20} />
 
@@ -19,7 +19,7 @@ export function Shell() {
 
       {/* Mobile sidebar overlay */}
       {sidebarOpen && (
-        <div className="fixed inset-0 z-40 lg:hidden">
+        <div className="fixed inset-0 z-[var(--z-overlay)] lg:hidden">
           <div
             className="absolute inset-0 bg-black/60"
             onClick={() => setSidebarOpen(false)}
@@ -30,7 +30,7 @@ export function Shell() {
         </div>
       )}
 
-      <div className="flex-1 flex flex-col min-w-0 relative z-10">
+      <div className="flex-1 flex flex-col min-w-0 relative">
         <TopBar onMenuClick={() => setSidebarOpen(!sidebarOpen)} />
         <main className="flex-1 overflow-y-auto">
           <Outlet />
