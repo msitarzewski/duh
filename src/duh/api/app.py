@@ -5,12 +5,16 @@ from __future__ import annotations
 from contextlib import asynccontextmanager
 from typing import TYPE_CHECKING
 
-from fastapi import FastAPI
+from fastapi import APIRouter, FastAPI
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncIterator
+    from collections.abc import AsyncIterator, Callable
+    from contextlib import AbstractAsyncContextManager as AsyncContextManager
 
     from duh.config.schema import DuhConfig
+
+# Extra lifespans keyed by config id — avoids closure issues with lifespan()
+_extra_lifespans: dict[int, Callable[[FastAPI], AsyncContextManager[None]] | None] = {}
 
 
 @asynccontextmanager
@@ -26,17 +30,37 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.engine = engine
     app.state.provider_manager = pm
 
-    yield
+    extra = getattr(app.state, "extra_lifespan", None)
+    if extra is not None:
+        async with extra(app):
+            yield
+    else:
+        yield
 
     await engine.dispose()
 
 
-def create_app(config: DuhConfig | None = None) -> FastAPI:
-    """Create and configure the FastAPI application."""
+def create_app(
+    config: DuhConfig | None = None,
+    extra_routers: list[APIRouter] | None = None,
+    extra_lifespan: Callable[[FastAPI], AsyncContextManager[None]] | None = None,
+) -> FastAPI:
+    """Create and configure the FastAPI application.
+
+    Args:
+        config: Application configuration. Loaded from defaults if None.
+        extra_routers: Additional routers registered after built-in routes
+            but before the frontend static file mount.
+        extra_lifespan: Additional async context manager composed with the
+            built-in lifespan. Runs after DB/provider setup.
+    """
     from duh.config.loader import load_config
 
     if config is None:
         config = load_config()
+
+    # Store extra_lifespan on module level so the lifespan function can use it
+    _extra_lifespans[id(config)] = extra_lifespan
 
     app = FastAPI(
         title="duh",
@@ -45,6 +69,7 @@ def create_app(config: DuhConfig | None = None) -> FastAPI:
         lifespan=lifespan,
     )
     app.state.config = config
+    app.state.extra_lifespan = extra_lifespan
 
     # ── Middleware (Starlette runs in reverse order of addition) ──
     from fastapi.middleware.cors import CORSMiddleware
@@ -88,6 +113,11 @@ def create_app(config: DuhConfig | None = None) -> FastAPI:
     app.include_router(auth_router)
     app.include_router(health_router)
     app.include_router(metrics_router)
+
+    # Extra routers from external packages
+    if extra_routers:
+        for r in extra_routers:
+            app.include_router(r)
 
     # ── Static file serving for web UI ──
     _mount_frontend(app)

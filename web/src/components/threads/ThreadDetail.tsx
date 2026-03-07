@@ -62,7 +62,7 @@ export function ThreadDetail() {
 
   return (
     <div className="space-y-4">
-      <GlassPanel padding="md" className="relative z-20">
+      <GlassPanel padding="md">
         <div className="flex items-start justify-between gap-4">
           <div className="flex-1">
             <p className="text-[var(--color-text)] font-medium">{currentThread.question}</p>

@@ -1,0 +1,425 @@
+
+▗ ▗   ▖ ▖  Claude Code v2.1.71
+           Opus 4.6 · Claude Max
+  ▘▘ ▝▝    ~/Software/duh
+
+╭────────────────────────────────────────────────────────────────────────────────────────────╮
+│ Plan to implement                                                                          │
+│                                                                                            │
+│ Plan: duh Composability + duh-bot Scaffold                                                 │
+│                                                                                            │
+│ Context                                                                                    │
+│                                                                                            │
+│ duh needs to become composable so external packages can extend it with additional routes,  │
+│ models, and middleware. This enables a separate duh-bot project (private repo) to build on │
+│  top of duh without forking. The public duh repo stays pure open source (AGPLv3) with no   │
+│ commercial code.                                                                           │
+│                                                                                            │
+│ This plan has two deliverables:                                                            │
+│ 1. Part A: Composability changes to duh (this repo) — app factory extensibility, guest     │
+│ auth, slug utility, model fields                                                           │
+│ 2. Part B: Scaffold duh-bot as a sibling repo at /Users/michael/Software/duh-bot/ with its │
+│  own PRD                                                                                   │
+│                                                                                            │
+│ ---                                                                                        │
+│ Part A: duh Composability (this repo)                                                      │
+│                                                                                            │
+│ A1. License                                                                                │
+│                                                                                            │
+│ - New file: LICENSE — AGPLv3 full text                                                     │
+│ - File: README.md line 130 — change "TBD" to "AGPL-3.0" with link to LICENSE               │
+│                                                                                            │
+│ A2. App factory extensibility                                                              │
+│                                                                                            │
+│ File: src/duh/api/app.py — create_app() (line 34)                                          │
+│                                                                                            │
+│ Add optional parameters so external packages can extend the app:                           │
+│ def create_app(                                                                            │
+│     config: DuhConfig | None = None,                                                       │
+│     extra_routers: list[APIRouter] | None = None,                                          │
+│     extra_lifespan: Callable[[FastAPI], AsyncContextManager[None]] | None = None,          │
+│ ) -> FastAPI:                                                                              │
+│                                                                                            │
+│ - extra_routers: registered after built-in routers, before _mount_frontend()               │
+│ - extra_lifespan: composed with built-in lifespan (runs after DB/provider setup)           │
+│ - Default behavior unchanged when no extras passed (~15 lines added)                       │
+│                                                                                            │
+│ A3. User model — guest support                                                             │
+│                                                                                            │
+│ File: src/duh/memory/models.py — User class (line 33)                                      │
+│                                                                                            │
+│ # Change line 41:                                                                          │
+│ password_hash: Mapped[str | None] = mapped_column(String(128), nullable=True,              │
+│ default=None)                                                                              │
+│ # Add after line 44:                                                                       │
+│ is_guest: Mapped[bool] = mapped_column(default=False)                                      │
+│                                                                                            │
+│ Enables email-only access without requiring a password. Useful for low-friction onboarding │
+│  in self-hosted instances.                                                                 │
+│                                                                                            │
+│ A4. Thread model — public visibility + slugs                                               │
+│                                                                                            │
+│ File: src/duh/memory/models.py — Thread class                                              │
+│                                                                                            │
+│ Add:                                                                                       │
+│ is_public: Mapped[bool] = mapped_column(default=False)                                     │
+│ slug: Mapped[str | None] = mapped_column(String(200), nullable=True, unique=True,          │
+│ default=None)                                                                              │
+│                                                                                            │
+│ Enables SEO-friendly share URLs. Extends existing /share/:id functionality with            │
+│ human-readable paths.                                                                      │
+│                                                                                            │
+│ A5. Guest auth endpoint                                                                    │
+│                                                                                            │
+│ File: src/duh/api/auth.py                                                                  │
+│                                                                                            │
+│ Add POST /api/auth/guest:                                                                  │
+│ - Request: { email: str }                                                                  │
+│ - Creates User with is_guest=True, password_hash=None                                      │
+│ - If email exists as guest, returns existing user's token                                  │
+│ - If email exists as registered user, returns 409 ("please log in")                        │
+│ - Returns short-lived JWT (4 hours)                                                        │
+│                                                                                            │
+│ File: src/duh/api/middleware.py — add /api/auth/guest to EXEMPT_PATHS                      │
+│                                                                                            │
+│ A6. Slug utility                                                                           │
+│                                                                                            │
+│ New file: src/duh/core/slugify.py                                                          │
+│                                                                                            │
+│ generate_slug(question: str) -> str — lowercase, strip non-alphanumeric, hyphenate,        │
+│ truncate to 80 chars, append 6-char hash for uniqueness.                                   │
+│                                                                                            │
+│ A7. Repository methods                                                                     │
+│                                                                                            │
+│ File: src/duh/memory/repository.py                                                         │
+│                                                                                            │
+│ Add:                                                                                       │
+│ - get_thread_by_slug(slug: str) -> Thread | None                                           │
+│ - list_public_threads(limit, offset, search, category) -> list[Thread]                     │
+│ - get_or_create_guest(email: str) -> User                                                  │
+│                                                                                            │
+│ A8. Migrations                                                                             │
+│                                                                                            │
+│ File: src/duh/memory/migrations.py                                                         │
+│                                                                                            │
+│ Extend ensure_schema() to add new columns (is_guest, is_public, slug, nullable             │
+│ password_hash) to existing SQLite databases.                                               │
+│                                                                                            │
+│ A9. Tests                                                                                  │
+│                                                                                            │
+│ - tests/unit/test_guest_auth.py — guest creation, idempotency, registered conflict         │
+│ - tests/unit/test_slugify.py — slug generation edge cases                                  │
+│ - tests/unit/test_app_factory.py — extra_routers parameter works                           │
+│ - Update existing tests if User model changes break them                                   │
+│                                                                                            │
+│ ---                                                                                        │
+│ Part B: duh-bot Scaffold (new repo)                                                        │
+│                                                                                            │
+│ Create /Users/michael/Software/duh-bot/ with project structure and a PRD document.         │
+│                                                                                            │
+│ B1. Directory structure                                                                    │
+│                                                                                            │
+│ duh-bot/                                                                                   │
+│   pyproject.toml                                                                           │
+│   .env.example                                                                             │
+│   .gitignore                                                                               │
+│   README.md                                                                                │
+│   docs/                                                                                    │
+│     PRD.md                # Full product requirements document                             │
+│   src/duh_bot/                                                                             │
+│     __init__.py                                                                            │
+│     app.py                # create_hosted_app() extending duh                              │
+│     config.py             # StripeConfig                                                   │
+│     routes/                                                                                │
+│       __init__.py                                                                          │
+│       payments.py         # Stripe PaymentIntent routes                                    │
+│       kb.py               # Knowledge base API                                             │
+│       ws_paid.py          # Paid WebSocket endpoint                                        │
+│     models.py             # Payment table                                                  │
+│     repository.py         # Payment CRUD                                                   │
+│   web/                                                                                     │
+│     package.json                                                                           │
+│     vite.config.ts                                                                         │
+│     src/                                                                                   │
+│       App.tsx                                                                              │
+│       api/                                                                                 │
+│         client.ts                                                                          │
+│         types.ts                                                                           │
+│       stores/                                                                              │
+│         payment.ts                                                                         │
+│       pages/                                                                               │
+│         LandingPage.tsx                                                                    │
+│         AskPage.tsx                                                                        │
+│         KnowledgeBasePage.tsx                                                              │
+│         KBDetailPage.tsx                                                                   │
+│       components/                                                                          │
+│         payment/                                                                           │
+│           StripeCheckout.tsx                                                               │
+│           PaidConsensusStream.tsx                                                          │
+│         kb/                                                                                │
+│           KBEntryCard.tsx                                                                  │
+│   tests/                                                                                   │
+│     __init__.py                                                                            │
+│     test_payments.py                                                                       │
+│     test_kb.py                                                                             │
+│   docker/                                                                                  │
+│     Dockerfile                                                                             │
+│     docker-compose.yml                                                                     │
+│                                                                                            │
+│ B2. pyproject.toml                                                                         │
+│                                                                                            │
+│ [project]                                                                                  │
+│ name = "duh-bot"                                                                           │
+│ version = "0.1.0"                                                                          │
+│ requires-python = ">=3.12"                                                                 │
+│ dependencies = [                                                                           │
+│     "duh>=0.6.0",                                                                          │
+│     "stripe>=12.0",                                                                        │
+│ ]                                                                                          │
+│                                                                                            │
+│ [tool.uv.sources]                                                                          │
+│ duh = { path = "../duh", editable = true }                                                 │
+│                                                                                            │
+│ B3. PRD document (docs/PRD.md)                                                             │
+│                                                                                            │
+│ Write a comprehensive PRD covering:                                                        │
+│                                                                                            │
+│ Product:                                                                                   │
+│ - duh.bot — paid multi-model consensus service                                             │
+│ - $5 per question, Stripe payments                                                         │
+│ - Authorize upfront, capture on completion, cancel on failure                              │
+│ - Public results feed a browsable knowledge base                                           │
+│                                                                                            │
+│ User flows:                                                                                │
+│ - Guest: land -> enter question + email -> pay $5 -> watch consensus -> get result + email │
+│ - Registered: land -> log in -> enter question -> pay $5 -> watch consensus -> result in   │
+│ dashboard                                                                                  │
+│ - Browse: visit KB -> search/filter -> read full consensus debates                         │
+│                                                                                            │
+│ Technical architecture:                                                                    │
+│ - Extends duh via create_app(extra_routers=[...])                                          │
+│ - Payment model uses duh's SQLAlchemy Base                                                 │
+│ - Paid WebSocket reuses duh's _stream_consensus()                                          │
+│ - Frontend shares duh's design system (CSS vars, shared components)                        │
+│                                                                                            │
+│ Stripe integration:                                                                        │
+│ - PaymentIntent with capture_method="manual"                                               │
+│ - Webhook handler for payment lifecycle                                                    │
+│ - ~$0.45 fee per $5 transaction (8.9%)                                                     │
+│                                                                                            │
+│ Knowledge base:                                                                            │
+│ - All paid questions public by default                                                     │
+│ - SEO-friendly slugs, sitemap, meta tags                                                   │
+│ - Search, category filters, pagination                                                     │
+│                                                                                            │
+│ Auth:                                                                                      │
+│ - Full accounts via duh's existing auth                                                    │
+│ - Guest mode via duh's new /api/auth/guest                                                 │
+│                                                                                            │
+│ Deployment:                                                                                │
+│ - Docker Compose (FastAPI + nginx + PostgreSQL)                                            │
+│ - Domain: duh.bot                                                                          │
+│ - Stripe live keys + webhook URL                                                           │
+│ - Transactional email via Postmark/SES                                                     │
+│                                                                                            │
+│ B4. Initial files                                                                          │
+│                                                                                            │
+│ Create stub __init__.py files, .gitignore, .env.example (with Stripe key placeholders),    │
+│ and README.md explaining the project.                                                      │
+│                                                                                            │
+│ ---                                                                                        │
+│ Implementation Order                                                                       │
+│                                                                                            │
+│ 1. Part A (duh repo): A1 license -> A2 app factory -> A3-A4 model changes -> A8 migrations │
+│  -> A5 guest auth -> A6 slug -> A7 repository -> A9 tests                                  │
+│ 2. Part B (duh-bot repo): B1 scaffold -> B2 pyproject -> B3 PRD -> B4 initial files        │
+│                                                                                            │
+│ ---                                                                                        │
+│ Verification                                                                               │
+│                                                                                            │
+│ Part A (duh repo)                                                                          │
+│                                                                                            │
+│ 1. uv run ruff check --fix src/ tests/ && uv run ruff format src/ tests/                   │
+│ 2. uv run mypy src/duh/                                                                    │
+│ 3. uv run pytest tests/ -v — all existing + new tests pass                                 │
+│ 4. cd web && npm run build && npm test                                                     │
+│ 5. Verify: create_app(extra_routers=[dummy_router]) includes the dummy router's routes     │
+│                                                                                            │
+│ Part B (duh-bot repo)                                                                      │
+│                                                                                            │
+│ 1. Verify directory structure created                                                      │
+│ 2. uv sync installs duh as editable dependency                                             │
+│ 3. PRD document is complete and actionable                                                 │
+│                                                                                            │
+│ ---                                                                                        │
+│ Critical Files (Part A)                                                                    │
+│                                                                                            │
+│ ┌───────────────────────────────────┬──────────────────────────────────────┐               │
+│ │               File                │                Change                │               │
+│ ├───────────────────────────────────┼──────────────────────────────────────┤               │
+│ │ LICENSE (new)                     │ AGPLv3 text                          │               │
+│ ├───────────────────────────────────┼──────────────────────────────────────┤               │
+│ │ README.md:130                     │ License: AGPL-3.0                    │               │
+│ ├───────────────────────────────────┼──────────────────────────────────────┤               │
+│ │ src/duh/api/app.py:34             │ extra_routers, extra_lifespan params │               │
+│ ├───────────────────────────────────┼──────────────────────────────────────┤               │
+│ │ src/duh/memory/models.py:41       │ password_hash nullable               │               │
+│ ├───────────────────────────────────┼──────────────────────────────────────┤               │
+│ │ src/duh/memory/models.py (User)   │ Add is_guest column                  │               │
+│ ├───────────────────────────────────┼──────────────────────────────────────┤               │
+│ │ src/duh/memory/models.py (Thread) │ Add is_public, slug columns          │               │
+│ ├───────────────────────────────────┼──────────────────────────────────────┤               │
+│ │ src/duh/api/auth.py               │ Add POST /api/auth/guest             │               │
+│ ├───────────────────────────────────┼──────────────────────────────────────┤               │
+│ │ src/duh/api/middleware.py         │ Exempt /api/auth/guest               │               │
+│ ├───────────────────────────────────┼──────────────────────────────────────┤               │
+│ │ src/duh/core/slugify.py (new)     │ generate_slug()                      │               │
+│ ├───────────────────────────────────┼──────────────────────────────────────┤               │
+│ │ src/duh/memory/repository.py      │ 3 new methods                        │               │
+│ ├───────────────────────────────────┼──────────────────────────────────────┤               │
+│ │ src/duh/memory/migrations.py      │ New column migrations                │               │
+│ └───────────────────────────────────┴──────────────────────────────────────┘               │
+╰────────────────────────────────────────────────────────────────────────────────────────────╯
+
+⏺ I'll start by reading the critical files to understand the current codebase, then
+  parallelize the work.
+
+⏺ Let me read the critical files first.
+
+⏺ Read 7 files (ctrl+o to expand)
+
+⏺ Now let me check existing test patterns and the core directory.
+
+⏺ Searched for 2 patterns, read 2 files (ctrl+o to expand)
+
+⏺ Let me read an existing test to understand patterns, and check the auth test.
+
+⏺ Read 3 files (ctrl+o to expand)
+
+⏺ Now let me check the conftest for the db_session fixture and the migrations test.
+
+⏺ Read 2 files (ctrl+o to expand)
+
+⏺ I have a clear picture of the codebase. I'll create a team to parallelize Part A (duh
+  composability) and Part B (duh-bot scaffold).
+
+⏺ I'll create a team with two agents: one for Part A (duh composability) and one for Part B
+  (duh-bot scaffold), then coordinate them.
+
+⏺ Now I'll spawn two agents in parallel to work on both parts simultaneously.
+
+⏺ 2 agents launched (ctrl+o to expand)
+   ├─ @part-a
+   │  ⎿  duh composability changes
+   └─ @part-b
+      ⎿  scaffold duh-bot repo
+
+⏺ Both agents are running in parallel:
+  - part-a: Implementing all composability changes in the duh repo (license, app factory,
+  models, auth, slugify, migrations, tests)
+  - part-b: Scaffolding the duh-bot repo with full directory structure and PRD
+
+  I'll wait for them to report back.
+
+
+⏺ Let me check what part-a has accomplished and what the current task status is.
+
+⏺ Part-a went idle - let me check if it needs guidance. Let me also check if part-b claimed
+  its task.
+
+⏺ Waiting for both agents to respond with their progress.
+
+                                                         
+⏺ Part-a keeps going idle. Let me send a more direct prompt.
+                                        
+⏺ The agents seem unresponsive. Let me check if any work was actually done, then take over    
+  directly.                                                                                   
+                                                                                              
+⏺ Bash(git diff --stat)                                                                       
+  ⎿   README.md                 | 2 +-                                                        
+      src/duh/api/auth.py       | 4 +++-                                                      
+      src/duh/api/middleware.py | 1 +                                     
+     … +2 lines (ctrl+o to expand)                                                            
+                                                                                              
+⏺ Read 1 file (ctrl+o to expand)                                                              
+                                                                                              
+⏺ Good - both agents did partial work. Let me shut them down and finish everything myself. Let
+   me see what was done.                                                  
+                                                                                              
+⏺ Bash(git diff)                                                                              
+  ⎿  diff --git a/README.md b/README.md
+     index 3ae4bf2..2f1adb0 100644                                                            
+     --- a/README.md                                                     
+     … +31 lines (ctrl+o to expand)                                                           
+                                                                                              
+⏺ Good progress from the agents. A1 (README), A3 (User model), A4 (Thread model), A5 partial
+  (login guard), and A6 (middleware) are done. Let me check what's missing and do it all now. 
+                                                                                              
+  Still needed:              
+  - A1: LICENSE file                                                                          
+  - A2: App factory extensibility
+  - A5: Guest auth endpoint  
+  - A7: Slug utility                 
+  - A8: Repository methods
+  - A9: Migrations
+  - A10: Tests
+
+  Let me also check what part-b created for duh-bot.
+
+⏺ Searched for 1 pattern, read 3 files (ctrl+o to expand)                 
+                                                               
+⏺ Let me check what was already created for slugify, and what's missing from duh-bot.         
+                                                                          
+⏺ Read 5 files (ctrl+o to expand)                                                             
+  ⎿  Found 2 new diagnostic issues in 1 file (ctrl+o to expand)                               
+                                                                                              
+⏺ Good, now I have a clear picture. The agents did A1 (README), A3 (User model), A4 (Thread   
+  model), A5 partial (login guard), A6 (middleware), A7 (slugify). Still need: LICENSE, app   
+  factory, guest auth endpoint, repository methods, migrations, and tests. Let me also check  
+  duh-bot status, then implement everything remaining.                                        
+                                                                                              
+⏺ Read 1 file (ctrl+o to expand)                                                              
+  ⎿  Found 6 new diagnostic issues in 1 file (ctrl+o to expand)                               
+  ⎿  API Error: 400 {"type":"error","error":{"type":"invalid_request_error","message":"Output 
+     blocked by content filtering policy"},"request_id":"req_011CYoRkPRdMC8bABjahBFyX"}       
+                                                                                              
+                                                                                              
+@part-a❯ Status: 5 steps done, 7 remaining before shutdown                                    
+  ⎿  API Error: 400 {"type":"error","error":{"type":"invalid_request_error","message":"Output 
+     blocked by content filtering policy"},"request_id":"req_011CYoRmhysHcDJvGuwjN2fE"}       
+                                                                                              
+                                                                                              
+@part-b❯ duh-bot scaffold complete: 32 files + PRD + git init                                 
+                                                                                              
+✻ Baked for 10m 37s                                                                           
+                                                                                              
+⏺ Part-b is done. Let me shut it down and finish Part A myself.                               
+  ⎿  Found 29 new diagnostic issues in 8 files (ctrl+o to expand)                             
+  ⎿  API Error: 400 {"type":"error","error":{"type":"invalid_request_error","message":"Output 
+     blocked by content filtering policy"},"request_id":"req_011CYoS2dGWgteGuMjcMNBVX"}       
+                                                                                              
+✻ Churned for 30s                                                                             
+  ⎿  API Error: 400 {"type":"error","error":{"type":"invalid_request_error","message":"Output 
+     blocked by content filtering policy"},"request_id":"req_011CYoS4PNuQ6Y5ToMKnQyfm"}       
+                                                                                              
+❯ continue!                                                                                   
+  ⎿  API Error: 400 {"type":"error","error":{"type":"invalid_request_error","message":"Output 
+     blocked by content filtering policy"},"request_id":"req_011CYoSP464nAxCQyKUeifep"}       
+                                                                                              
+❯ continue!                                                                                   
+  ⎿  API Error: 400 {"type":"error","error":{"type":"invalid_request_error","message":"Output 
+     blocked by content filtering policy"},"request_id":"req_011CYp2LWHnMkCH4qRSo4q9u"}       
+                                                                                              
+──────────────────────────────────────────────────────────────────────────────────────── ▪▪▪ ─
+❯                                                                                             
+──────────────────────────────────────────────────────────────────────────────────────────────
+  …/Software/duh on  ux-cleanup                                                               
+  eec2d4b  Opus 4.6  ██░░░ 50                                                                 
+  ⏵⏵ accept edits on (shift+tab to cycle)                                                     
+                                                                                              
+                                                                                              
+                                                                                              
+                                                                                              
+                                                                                              
+                                                                                              
+

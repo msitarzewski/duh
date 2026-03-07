@@ -23,6 +23,7 @@ from duh.memory.models import (
     ThreadSummary,
     Turn,
     TurnSummary,
+    User,
     Vote,
     _utcnow,
 )
@@ -444,6 +445,63 @@ class MemoryRepository:
         api_key.revoked_at = _utcnow()
         await self._session.flush()
         return api_key
+
+    # ── Guest / Slug / Public ──────────────────────────────────
+
+    async def get_or_create_guest(self, email: str) -> User:
+        """Get an existing guest user or create one. Flush but don't commit."""
+        stmt = select(User).where(User.email == email, User.is_guest == True)  # noqa: E712
+        result = await self._session.execute(stmt)
+        existing = result.scalar_one_or_none()
+        if existing is not None:
+            return existing
+        user = User(
+            email=email,
+            display_name=email.split("@")[0],
+            is_guest=True,
+        )
+        self._session.add(user)
+        await self._session.flush()
+        return user
+
+    async def get_thread_by_slug(self, slug: str) -> Thread | None:
+        """Load a thread by its URL slug with full eager loading."""
+        stmt = (
+            select(Thread)
+            .where(Thread.slug == slug)
+            .options(
+                selectinload(Thread.turns).selectinload(Turn.contributions),
+                selectinload(Thread.turns).selectinload(Turn.decision),
+                selectinload(Thread.turns).selectinload(Turn.summary),
+                selectinload(Thread.summary),
+            )
+        )
+        result = await self._session.execute(stmt)
+        return result.scalar_one_or_none()
+
+    async def list_public_threads(
+        self,
+        *,
+        limit: int = 50,
+        offset: int = 0,
+        search: str | None = None,
+        category: str | None = None,
+    ) -> list[Thread]:
+        """List public threads ordered by most recent first."""
+        stmt = (
+            select(Thread)
+            .where(Thread.is_public == True)  # noqa: E712
+            .order_by(Thread.created_at.desc())
+        )
+        if search is not None:
+            stmt = stmt.where(Thread.question.ilike(f"%{search}%"))
+        if category is not None:
+            stmt = stmt.join(Decision, Decision.thread_id == Thread.id).where(
+                Decision.category == category
+            )
+        stmt = stmt.limit(limit).offset(offset)
+        result = await self._session.execute(stmt)
+        return list(result.scalars().all())
 
     async def list_api_keys(self) -> list[APIKey]:
         """List all API keys ordered by creation date."""

@@ -16,8 +16,12 @@ duh asks multiple LLMs the same question, forces them to challenge each other's 
 uv add duh
 export ANTHROPIC_API_KEY=sk-ant-...
 export OPENAI_API_KEY=sk-...
+export GOOGLE_API_KEY=AIza...          # optional: Gemini models
+export PERPLEXITY_API_KEY=pplx-...     # optional: Sonar models (challenger-only)
 duh ask "What database should I use for a new SaaS product?"
 ```
+
+Or use a `.env` file (see `.env.example`).
 
 ## Features
 
@@ -127,4 +131,4 @@ If duh is useful to you, consider [sponsoring the project](https://github.com/sp
 
 ## License
 
-TBD
+[AGPL-3.0](LICENSE)

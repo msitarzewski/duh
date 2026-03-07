@@ -190,3 +190,8 @@ Phase 0 benchmark framework — fully functional, pilot-tested on 5 questions.
 | 2026-02-19 | v0.6.0 — "It's Honest" | **Complete** |
 | 2026-02-20 | Fix sign-out bug: replaced broken mousedown outside-click handler with backdrop pattern in TopBar | Pending verification |
 | 2026-02-20 | Auto-generate JWT secret in config loader for dev environments | Done |
+| 2026-03-07 | Password reset + .env support + TopBar z-index fix | Done |
+| 2026-03-07 | Z-index stacking context fix: tokens, isolate, click-outside pattern | Done |
+| 2026-03-07 | GPT-5.4 added to model catalog (1M ctx, $2.50/$15.00, no-temperature) | Done |
+| 2026-03-07 | .env.example updated with provider API key placeholders | Done |
+| 2026-03-07 | README updated with all provider env vars | Done |

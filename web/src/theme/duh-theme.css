@@ -40,6 +40,12 @@
   --radius-md: 10px;
   --transition-fast: 150ms ease-out;
 
+  /* Z-index scale */
+  --z-background: -1;
+  --z-dropdown: 100;
+  --z-overlay: 200;
+  --z-modal: 300;
+
   /* Typography */
   --font-ui: 'Inter', system-ui, -apple-system, sans-serif;
 }
