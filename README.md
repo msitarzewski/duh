@@ -21,19 +21,22 @@ duh ask "What database should I use for a new SaaS product?"
 
 ## Features
 
-- **Multi-model consensus** -- Claude, GPT, Gemini, and Mistral debate. Sycophantic challenges are detected and flagged.
+- **Multi-model consensus** -- Claude, GPT, Gemini, Mistral, and Perplexity debate. Sycophantic challenges are detected and flagged.
+- **Web UI** -- Real-time consensus streaming, thread browser, 3D decision space, calibration dashboard. `duh serve` serves both API and frontend.
+- **Epistemic confidence** -- Rigor scoring + domain-capped confidence. Calibration analysis with ECE tracking.
+- **Authentication** -- JWT auth with user accounts, RBAC (admin/contributor/viewer), password reset via email.
 - **Voting protocol** -- Fan out to all models in parallel, aggregate answers via majority or weighted synthesis.
 - **Query decomposition** -- Break complex questions into subtask DAGs, solve in parallel, synthesize results.
-- **REST API** -- Full HTTP API via `duh serve` with API key auth, rate limiting, and WebSocket streaming.
+- **REST API** -- Full HTTP API with API key auth, rate limiting, WebSocket streaming, and Prometheus metrics.
 - **MCP server** -- AI agent integration via `duh mcp` (Model Context Protocol).
 - **Python client** -- Async and sync client library for the REST API (`pip install duh-client`).
 - **Batch processing** -- Process multiple questions from a file (`duh batch`).
-- **Export** -- Export threads as JSON or Markdown (`duh export`).
-- **Mistral provider** -- Native Mistral AI support alongside Anthropic, OpenAI, and Google.
+- **Export** -- Export threads as JSON, Markdown, or PDF (`duh export`).
 - **Decision taxonomy** -- Auto-classify decisions by intent, category, and genus for structured recall.
 - **Outcome tracking** -- Record success/failure/partial feedback on past decisions.
 - **Tool-augmented reasoning** -- Models can call web search, read files, and execute code during consensus.
-- **Persistent memory** -- Every thread, contribution, decision, vote, and subtask stored in SQLite. Search with `duh recall`.
+- **Persistent memory** -- SQLite or PostgreSQL. Every thread, contribution, decision, vote, and subtask stored. Search with `duh recall`.
+- **Backup & restore** -- `duh backup` / `duh restore` with merge mode for SQLite and JSON export.
 - **Cost tracking** -- Per-model token costs in real-time. Configurable warn threshold and hard limit.
 - **Local models** -- Ollama and LM Studio via the OpenAI-compatible API. Mix cloud + local.
 - **Rich CLI** -- Styled panels, spinners, and formatted output.
@@ -59,6 +62,12 @@ duh batch questions.txt                 # Process multiple questions
 duh batch questions.jsonl --format json # Batch with JSON output
 duh export <thread-id>                  # Export thread as JSON
 duh export <thread-id> --format markdown # Export as Markdown
+duh export <thread-id> --format pdf     # Export as PDF
+duh backup ./backup.db                  # Backup database
+duh restore ./backup.db                 # Restore database
+duh calibration                         # Show confidence calibration
+duh user-create --email u@x.com --password ... # Create user
+duh user-list                           # List users
 ```
 
 ## How consensus works
@@ -109,7 +118,12 @@ Full documentation: [docs/](docs/index.md)
 - [Export](docs/export.md)
 - [Python API](docs/python-api/library-usage.md)
 - [Docker Guide](docs/guides/docker.md)
+- [Authentication](docs/guides/authentication.md)
 - [Config Reference](docs/reference/config-reference.md)
+
+## Sponsor
+
+If duh is useful to you, consider [sponsoring the project](https://github.com/sponsors/msitarzewski).
 
 ## License
 

@@ -1,3 +1,52 @@
+// ── Auth types ────────────────────────────────────────────
+
+export interface LoginRequest {
+  email: string
+  password: string
+}
+
+export interface RegisterRequest {
+  email: string
+  password: string
+  display_name: string
+}
+
+export interface TokenResponse {
+  access_token: string
+  token_type: string
+  user_id: string
+  role: string
+}
+
+export interface UserInfo {
+  id: string
+  email: string
+  display_name: string
+  role: string
+  is_active: boolean
+}
+
+export interface AuthStatusResponse {
+  auth_required: boolean
+}
+
+export interface ForgotPasswordRequest {
+  email: string
+}
+
+export interface ForgotPasswordResponse {
+  message: string
+}
+
+export interface ResetPasswordRequest {
+  token: string
+  new_password: string
+}
+
+export interface ResetPasswordResponse {
+  message: string
+}
+
 // ── Request types ─────────────────────────────────────────
 
 export interface AskRequest {
@@ -31,6 +80,8 @@ export interface ThreadSummary {
   question: string
   status: string
   created_at: string
+  has_outcome?: boolean
+  outcome?: string | null
 }
 
 export interface ThreadListResponse {
@@ -179,6 +230,7 @@ export type WSEventType =
   | 'phase_start'
   | 'phase_complete'
   | 'challenge'
+  | 'challenge_error'
   | 'commit'
   | 'complete'
   | 'error'
@@ -223,6 +275,12 @@ export interface WSComplete {
   dissent: string | null
   cost: number
   thread_id: string | null
+  overview: string | null
+}
+
+export interface WSChallengeError {
+  type: 'challenge_error'
+  model: string
 }
 
 export interface WSError {
@@ -234,6 +292,7 @@ export type WSEvent =
   | WSPhaseStart
   | WSPhaseComplete
   | WSChallenge
+  | WSChallengeError
   | WSCommit
   | WSComplete
   | WSError

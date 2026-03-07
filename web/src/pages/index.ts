@@ -1,3 +1,5 @@
+export { LoginPage } from './LoginPage'
+export { ResetPasswordPage } from './ResetPasswordPage'
 export { ConsensusPage } from './ConsensusPage'
 export { ThreadsPage } from './ThreadsPage'
 export { ThreadDetailPage } from './ThreadDetailPage'

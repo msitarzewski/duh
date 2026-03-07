@@ -126,10 +126,10 @@ class TestProtocol:
 
 
 class TestListModels:
-    async def test_returns_three_models(self):
+    async def test_returns_four_models(self):
         provider = PerplexityProvider(client=_make_client())
         models = await provider.list_models()
-        assert len(models) == 3
+        assert len(models) == 4
         assert all(isinstance(m, ModelInfo) for m in models)
 
     async def test_all_models_are_perplexity(self):
@@ -141,7 +141,12 @@ class TestListModels:
         provider = PerplexityProvider(client=_make_client())
         models = await provider.list_models()
         ids = {m.model_id for m in models}
-        assert ids == {"sonar", "sonar-pro", "sonar-deep-research"}
+        assert ids == {
+            "sonar",
+            "sonar-pro",
+            "sonar-reasoning-pro",
+            "sonar-deep-research",
+        }
 
     async def test_models_have_costs(self):
         provider = PerplexityProvider(client=_make_client())
@@ -190,7 +195,7 @@ class TestSend:
         await provider.send(msgs, "sonar-pro", max_tokens=1000, temperature=0.5)
         call_kwargs = client.chat.completions.create.call_args.kwargs
         assert call_kwargs["model"] == "sonar-pro"
-        assert call_kwargs["max_completion_tokens"] == 1000
+        assert call_kwargs["max_tokens"] == 1000
         assert call_kwargs["temperature"] == 0.5
         assert call_kwargs["messages"][0]["role"] == "system"
 

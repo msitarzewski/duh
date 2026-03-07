@@ -512,6 +512,35 @@ All → T15-T18 (Ship)
 
 ---
 
+### v0.6.0 — "It's Honest"
+
+**AI-time**: 1 session
+**Theme**: Close the gap between what's claimed and what actually works.
+
+#### What Ships
+
+- **Frontend auth integration**: Auth Zustand store, login/register page, route protection, user menu, dev mode detection
+- **API client auth**: Bearer token injection in all REST and WebSocket requests, 401 handling
+- **Batch feedback**: Inline Pass/Partial/Fail buttons on threads list for calibration data collection
+- **Epistemic confidence docs**: Rigor, domain caps, calibration, ECE explained
+- **Auth status endpoint**: `GET /api/auth/status` for frontend dev mode detection
+
+#### Tasks (9 tasks)
+
+1. Auth store (Zustand): token, user, login/register/logout, localStorage persistence
+2. API client auth: Bearer header injection, 401 clearing, auth API methods
+3. Login/Register page: glassmorphism form, mode toggle, error display
+4. Route protection: ProtectedRoute component, Shell user menu
+5. Dev mode: detect via /api/auth/status, guest access when no auth required
+6. Batch feedback: ThreadCard inline buttons, backend outcome enrichment
+7. Tests: 11 auth store tests + 8 auth component tests
+8. Documentation: web-ui.md auth section, authentication.md web UI section, epistemic-confidence.md
+9. Version bump: 0.6.0 across pyproject.toml, __init__.py, app.py, Sidebar
+
+> **v0.6.0 shipped 2026-02-19.** 1574 Python tests + 185 Vitest tests (1759 total). Frontend auth integration end-to-end. Batch feedback on threads list. Epistemic confidence documentation. All 9 tasks delivered.
+
+---
+
 ### v1.0.0 — "duh."
 
 **AI-time**: 5-8 days
@@ -911,6 +940,7 @@ Y = yes, N = no, ~ = partial, * = research only, not product
 | 2026-02-16 | 1.3 | v0.2.0 complete. All features shipped. Updated acceptance criteria and task status. Added Status column to overview table. |
 | 2026-02-17 | 1.4 | v0.3.0 and v0.4.0 complete. All features shipped. Updated acceptance criteria, task status, and completion notes for both versions. |
 | 2026-02-17 | 1.5 | v0.5.0 complete. All 18 tasks shipped. 6 providers, multi-user auth, PostgreSQL, metrics, backup/restore, Playwright E2E, load tests, production docs. |
+| 2026-02-19 | 1.6 | v0.6.0 complete. Frontend auth integration, batch feedback, epistemic confidence docs. Bridges the gap between v0.5 (backend auth) and v1.0. |
 
 ---
 

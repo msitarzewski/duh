@@ -171,7 +171,7 @@ class TestBackupJson:
         result = asyncio.run(_run())
         data = json.loads(result.read_text())
 
-        assert data["version"] == "0.5.0"
+        assert data["version"] == "0.6.0"
         assert "exported_at" in data
         # Verify exported_at is a valid ISO timestamp
         assert "T" in data["exported_at"]
@@ -263,7 +263,7 @@ class TestBackupCli:
         assert dest.exists()
 
         data = json.loads(dest.read_text())
-        assert data["version"] == "0.5.0"
+        assert data["version"] == "0.6.0"
         asyncio.run(engine.dispose())
 
     def test_backup_format_auto_sqlite(self, runner: CliRunner, tmp_path: Path) -> None:

@@ -13,6 +13,7 @@ interface ConsensusCompleteProps {
   dissent: string | null
   cost: number | null
   collapsible?: boolean
+  overview: string | null
 }
 
 export function generateExportMarkdown(
@@ -25,10 +26,18 @@ export function generateExportMarkdown(
   rounds: RoundData[],
   content: 'full' | 'decision',
   includeDissent: boolean,
+  overview?: string | null,
 ): string {
   const lines: string[] = []
   lines.push(`# Consensus: ${question ?? 'Unknown'}`)
   lines.push('')
+
+  if (overview) {
+    lines.push('## Executive Overview')
+    lines.push(overview)
+    lines.push('')
+  }
+
   lines.push('## Decision')
   lines.push(decision)
   lines.push('')
@@ -89,19 +98,19 @@ function downloadFile(content: string | Blob, filename: string, mimeType: string
   URL.revokeObjectURL(url)
 }
 
-export function ConsensusComplete({ decision, confidence, rigor, dissent, cost, collapsible }: ConsensusCompleteProps) {
+export function ConsensusComplete({ decision, confidence, rigor, dissent, cost, collapsible, overview }: ConsensusCompleteProps) {
   const [copied, setCopied] = useState(false)
   const [exportOpen, setExportOpen] = useState(false)
   const { question, rounds, threadId } = useConsensusStore()
 
   const handleCopy = async () => {
-    await navigator.clipboard.writeText(decision)
+    await navigator.clipboard.writeText(overview ?? decision)
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
   }
 
   const handleExportMarkdown = (content: 'full' | 'decision') => {
-    const md = generateExportMarkdown(question, decision, confidence, rigor, dissent, cost, rounds, content, true)
+    const md = generateExportMarkdown(question, decision, confidence, rigor, dissent, cost, rounds, content, true, overview)
     downloadFile(md, `consensus-${content}.md`, 'text/markdown')
     setExportOpen(false)
   }
@@ -129,7 +138,18 @@ export function ConsensusComplete({ decision, confidence, rigor, dissent, cost, 
 
   const body = (
     <>
-      <Markdown className="text-sm">{decision}</Markdown>
+      {overview ? (
+        <>
+          <Markdown className="text-sm">{overview}</Markdown>
+          <div className="mt-4">
+            <Disclosure header={<span className="font-mono text-xs text-[var(--color-text-dim)]">Full Decision</span>} defaultOpen={false}>
+              <Markdown className="text-sm">{decision}</Markdown>
+            </Disclosure>
+          </div>
+        </>
+      ) : (
+        <Markdown className="text-sm">{decision}</Markdown>
+      )}
 
       <div className="flex gap-2 mt-4">
         <GlowButton variant="ghost" size="sm" onClick={handleCopy}>

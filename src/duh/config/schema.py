@@ -101,12 +101,25 @@ class TaxonomyConfig(BaseModel):
     model_ref: str = ""
 
 
+class MailConfig(BaseModel):
+    """Mail (SMTP) configuration for transactional emails."""
+
+    host: str = ""
+    port: int = 587
+    username: str = ""
+    password: str = ""
+    encryption: str = ""  # "tls", "ssl", or "" for none
+    from_address: str = ""
+    from_name: str = "duh"
+
+
 class AuthConfig(BaseModel):
     """Authentication configuration."""
 
     jwt_secret: str = ""  # must be set in production
     token_expiry_hours: int = 24
     registration_enabled: bool = True
+    reset_token_expiry_minutes: int = 15
 
 
 class APIConfig(BaseModel):
@@ -153,3 +166,4 @@ class DuhConfig(BaseModel):
     taxonomy: TaxonomyConfig = Field(default_factory=TaxonomyConfig)
     api: APIConfig = Field(default_factory=APIConfig)
     auth: AuthConfig = Field(default_factory=AuthConfig)
+    mail: MailConfig = Field(default_factory=MailConfig)

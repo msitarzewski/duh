@@ -16,12 +16,16 @@ from duh.core.errors import (
     ProviderTimeoutError,
 )
 from duh.providers.base import (
-    ModelCapability,
     ModelInfo,
     ModelResponse,
     StreamChunk,
     TokenUsage,
     ToolCallData,
+)
+from duh.providers.catalog import (
+    MODEL_CATALOG,
+    NO_TEMPERATURE_MODELS,
+    PROVIDER_CAPS,
 )
 
 if TYPE_CHECKING:
@@ -30,55 +34,9 @@ if TYPE_CHECKING:
     from duh.providers.base import PromptMessage
 
 PROVIDER_ID = "openai"
-
-# Known OpenAI models with metadata.
-# Updated as new models release; list_models() returns these.
-_KNOWN_MODELS: list[dict[str, Any]] = [
-    {
-        "model_id": "gpt-5.2",
-        "display_name": "GPT-5.2",
-        "context_window": 400_000,
-        "max_output_tokens": 128_000,
-        "input_cost_per_mtok": 1.75,
-        "output_cost_per_mtok": 14.00,
-    },
-    {
-        "model_id": "gpt-5-mini",
-        "display_name": "GPT-5 mini",
-        "context_window": 400_000,
-        "max_output_tokens": 128_000,
-        "input_cost_per_mtok": 0.25,
-        "output_cost_per_mtok": 2.00,
-    },
-    {
-        "model_id": "o3",
-        "display_name": "o3",
-        "context_window": 200_000,
-        "max_output_tokens": 100_000,
-        "input_cost_per_mtok": 2.00,
-        "output_cost_per_mtok": 8.00,
-    },
-]
-
-_DEFAULT_CAPS = (
-    ModelCapability.TEXT
-    | ModelCapability.STREAMING
-    | ModelCapability.SYSTEM_PROMPT
-    | ModelCapability.JSON_MODE
-)
-
-# Reasoning models that don't support temperature, top_p, or
-# presence/frequency penalty.  Only temperature=1 (the default) is accepted.
-# Chat-class models (gpt-5.2, gpt-5-chat-latest, gpt-4.1) DO support these.
-# See: https://community.openai.com/t/temperature-in-gpt-5-models/1337133
-_NO_TEMPERATURE_MODELS = {
-    "o3",
-    "o3-mini",
-    "o4-mini",
-    "gpt-5",
-    "gpt-5-mini",
-    "gpt-5-nano",
-}
+_KNOWN_MODELS = MODEL_CATALOG[PROVIDER_ID]
+_DEFAULT_CAPS = PROVIDER_CAPS[PROVIDER_ID]
+_NO_TEMPERATURE_MODELS = NO_TEMPERATURE_MODELS
 
 
 def _map_error(e: openai.APIError) -> Exception:

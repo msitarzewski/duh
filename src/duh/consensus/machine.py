@@ -93,6 +93,7 @@ class ConsensusContext:
     confidence: float = 0.0
     rigor: float = 0.0
     dissent: str | None = None
+    overview: str | None = None
     converged: bool = False
 
     # History

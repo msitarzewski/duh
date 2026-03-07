@@ -1,7 +1,10 @@
+import { useEffect } from 'react'
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import { Shell } from '@/components/layout'
-import { ErrorBoundary } from '@/components/shared'
+import { ErrorBoundary, ProtectedRoute } from '@/components/shared'
 import {
+  LoginPage,
+  ResetPasswordPage,
   ConsensusPage,
   ThreadsPage,
   ThreadDetailPage,
@@ -10,14 +13,29 @@ import {
   PreferencesPage,
   SharePage,
 } from '@/pages'
+import { useAuthStore } from '@/stores'
 
 export function App() {
+  const initialize = useAuthStore((s) => s.initialize)
+
+  useEffect(() => {
+    initialize()
+  }, [initialize])
+
   return (
     <ErrorBoundary>
       <BrowserRouter>
         <Routes>
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/reset-password" element={<ResetPasswordPage />} />
           <Route path="/share/:id" element={<SharePage />} />
-          <Route element={<Shell />}>
+          <Route
+            element={
+              <ProtectedRoute>
+                <Shell />
+              </ProtectedRoute>
+            }
+          >
             <Route path="/" element={<ConsensusPage />} />
             <Route path="/threads" element={<ThreadsPage />} />
             <Route path="/threads/:id" element={<ThreadDetailPage />} />

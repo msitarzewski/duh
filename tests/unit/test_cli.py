@@ -30,7 +30,7 @@ class TestCliGroup:
         result = runner.invoke(cli, ["--version"])
         assert result.exit_code == 0
         assert "duh" in result.output
-        assert "0.5.0" in result.output
+        assert "0.6.0" in result.output
 
     def test_help(self, runner: CliRunner) -> None:
         result = runner.invoke(cli, ["--help"])
@@ -75,6 +75,7 @@ class TestAskCommand:
             1.0,
             None,
             0.0042,
+            None,
         )
 
         result = runner.invoke(cli, ["ask", "What database?"])
@@ -101,6 +102,7 @@ class TestAskCommand:
             1.0,
             "[model-a]: PostgreSQL would be better for scale.",
             0.01,
+            None,
         )
 
         result = runner.invoke(cli, ["ask", "What database?"])
@@ -121,7 +123,7 @@ class TestAskCommand:
         from duh.config.schema import DuhConfig
 
         mock_config.return_value = DuhConfig()
-        mock_run.return_value = ("Answer.", 1.0, 1.0, None, 0.0)
+        mock_run.return_value = ("Answer.", 1.0, 1.0, None, 0.0, None)
 
         result = runner.invoke(cli, ["ask", "Question?"])
 
@@ -140,7 +142,7 @@ class TestAskCommand:
 
         config = DuhConfig()
         mock_config.return_value = config
-        mock_run.return_value = ("Answer.", 1.0, 1.0, None, 0.0)
+        mock_run.return_value = ("Answer.", 1.0, 1.0, None, 0.0, None)
 
         result = runner.invoke(cli, ["ask", "--rounds", "5", "Question?"])
 
@@ -641,7 +643,7 @@ class TestAskIntegration:
 
         async def fake_ask(
             question: str, cfg: Any, **kwargs: Any
-        ) -> tuple[str, float, float, str | None, float]:
+        ) -> tuple[str, float, float, str | None, float, str | None]:
             pm = ProviderManager()
             await pm.register(provider)
             from duh.cli.app import _run_consensus

@@ -1,39 +1,54 @@
 # Active Context
 
-**Last Updated**: 2026-02-19
-**Current Phase**: UX cleanup and consensus engine hardening
-**Next Action**: PR ready for review.
+**Last Updated**: 2026-02-20
+**Current Phase**: v0.6.0 "It's Honest" — sign-out bug fix in progress
+**Next Action**: User needs to rebuild (`cd web && npm run build`) and test sign-out. If it works, PR ready.
 
-## What Just Shipped: UX Cleanup + Consensus Engine Improvements
+## v0.6.0 "It's Honest" — Complete (minus sign-out bug)
 
-### Thread Detail UX
-- All round sections collapsed by default when thread loads — decision stays open
-- Dissent inside decision block collapsed by default
-- `DissentBanner` gained `defaultOpen` prop for caller control
+All 9 tasks (T1-T9) implemented:
+- T1: Auth store (Zustand) — `web/src/stores/auth.ts`
+- T2: API client auth integration — Bearer token injection, 401 handling, WS token handshake
+- T3: Login page — `web/src/pages/LoginPage.tsx`
+- T4: Route protection — `web/src/components/shared/ProtectedRoute.tsx`, TopBar user menu
+- T5: Dev mode detection — `GET /api/auth/status` endpoint, guest fallback
+- T6: Batch feedback — inline Pass/Partial/Fail buttons on ThreadCard
+- T7: Frontend tests — 11 auth store + 8 auth component tests
+- T8: Documentation — web-ui auth, authentication guide, epistemic-confidence concept doc
+- T9: Version bump to 0.6.0
 
-### Consensus Engine Hardening
-- **max_tokens bumped 4096 -> 16384** for propose/challenge/revise phases — prevents LLM output truncation on long responses
-- **Token budget in system prompts** — LLMs now told their output budget so they can self-regulate length and end on complete thoughts
-- **Truncation detection** — `finish_reason` checked after each handler call; `truncated` flag sent via WebSocket; amber warning shown in PhaseCard UI
-- **Cross-provider challenger selection** — `select_challengers()` now prefers models from different providers (one per provider first, then fills). Prevents e.g. Opus proposing + two Sonnet variants challenging (same training biases)
+### Sign-Out Bug (IN PROGRESS)
 
-### Visual Polish
-- Export dropdown menus (both `ConsensusComplete` and `ExportMenu`) now use glass styling matching the design system (`glass-bg` + `backdrop-blur`)
+**Problem**: Clicking "Sign Out" in TopBar user menu dropdown does nothing — menu closes but user stays authenticated.
 
-### PDF Export Bug Fix
-- `_setup_fonts()` was missing the bold-italic (`BI`) TTF font variant — caused crash when dissent content contained bold markdown rendered in italic context
+**Root cause**: The outside-click handler used `document.addEventListener('mousedown', ...)` which was intercepting ALL mouse events inside the dropdown (including on the Sign Out button), closing the menu before the click handler could fire. User confirmed: "I can't right click to inspect — the interface disappears."
+
+**Fix applied** (`web/src/components/layout/TopBar.tsx`):
+- Removed the broken `mousedown` document listener entirely
+- Replaced with invisible backdrop pattern (`fixed inset-0 z-40` div behind dropdown)
+- Dropdown at `z-50` — clicks on menu items hit menu, clicks elsewhere hit backdrop
+- Sign Out uses plain `onClick` → `logout()` + `window.location.href = '/login'` (hard redirect)
+- Removed `useNavigate` dependency — hard redirect avoids React lifecycle race conditions
+- Removed `useRef` for menuRef — no longer needed
+
+**Status**: Code written and built (`npm run build` ran successfully). User needs to restart server or hard-refresh (Cmd+Shift+R) to test. Previous attempts failed because browser was serving cached old JS bundle.
+
+**If sign-out still fails after rebuild**: The `handleLogout` function is simple (`logout()` clears localStorage + Zustand, then `window.location.href` does hard redirect). If it still doesn't work, add `console.log('handleLogout called')` at the top of the function to verify it fires.
+
+### Other fix applied this session
+- Auto-generated JWT secret in `src/duh/config/loader.py:141-149` — generates `secrets.token_hex(32)` when no JWT secret configured, checks `DUH_JWT_SECRET` env var first. Note: tokens won't survive server restarts with auto-generated secret.
 
 ### Test Results
-- 1586 Python tests + 166 Vitest tests (1752 total)
+- 1586 Python tests + 185 Vitest tests (1771 total)
 - Build clean, all tests pass
 
 ---
 
 ## Current State
 
-- **Branch `ux-cleanup`** — ready for PR.
-- **1586 Python tests + 166 Vitest tests** (1752 total).
-- All previous features intact (v0.1–v0.5 + export + epistemic confidence + consensus nav).
+- **Branch `ux-cleanup`** — v0.6.0 features complete, sign-out fix pending user verification
+- **1586 Python tests + 185 Vitest tests** (1771 total)
+- All previous features intact (v0.1–v0.5 + export + epistemic confidence + consensus nav)
 
 ## Open Questions (Still Unresolved)
 

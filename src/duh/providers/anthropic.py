@@ -16,13 +16,13 @@ from duh.core.errors import (
     ProviderTimeoutError,
 )
 from duh.providers.base import (
-    ModelCapability,
     ModelInfo,
     ModelResponse,
     StreamChunk,
     TokenUsage,
     ToolCallData,
 )
+from duh.providers.catalog import MODEL_CATALOG, PROVIDER_CAPS
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
@@ -30,50 +30,8 @@ if TYPE_CHECKING:
     from duh.providers.base import PromptMessage
 
 PROVIDER_ID = "anthropic"
-
-# Known Claude models with metadata.
-# Updated as new models release; list_models() returns these.
-_KNOWN_MODELS: list[dict[str, Any]] = [
-    {
-        "model_id": "claude-opus-4-6",
-        "display_name": "Claude Opus 4.6",
-        "context_window": 200_000,
-        "max_output_tokens": 128_000,
-        "input_cost_per_mtok": 5.0,
-        "output_cost_per_mtok": 25.0,
-    },
-    {
-        "model_id": "claude-sonnet-4-6",
-        "display_name": "Claude Sonnet 4.6",
-        "context_window": 200_000,
-        "max_output_tokens": 64_000,
-        "input_cost_per_mtok": 3.0,
-        "output_cost_per_mtok": 15.0,
-    },
-    {
-        "model_id": "claude-sonnet-4-5-20250929",
-        "display_name": "Claude Sonnet 4.5",
-        "context_window": 200_000,
-        "max_output_tokens": 64_000,
-        "input_cost_per_mtok": 3.0,
-        "output_cost_per_mtok": 15.0,
-    },
-    {
-        "model_id": "claude-haiku-4-5-20251001",
-        "display_name": "Claude Haiku 4.5",
-        "context_window": 200_000,
-        "max_output_tokens": 64_000,
-        "input_cost_per_mtok": 1.0,
-        "output_cost_per_mtok": 5.0,
-    },
-]
-
-_DEFAULT_CAPS = (
-    ModelCapability.TEXT
-    | ModelCapability.STREAMING
-    | ModelCapability.SYSTEM_PROMPT
-    | ModelCapability.JSON_MODE
-)
+_KNOWN_MODELS = MODEL_CATALOG[PROVIDER_ID]
+_DEFAULT_CAPS = PROVIDER_CAPS[PROVIDER_ID]
 
 
 def _map_error(e: anthropic.APIError) -> Exception:

@@ -8,7 +8,7 @@ import { CostTicker } from './CostTicker'
 export function ConsensusPanel() {
   const {
     status, error, currentPhase, currentRound, rounds,
-    decision, confidence, rigor, dissent, cost,
+    decision, confidence, rigor, dissent, cost, overview,
     startConsensus, reset,
   } = useConsensusStore()
 
@@ -40,6 +40,7 @@ export function ConsensusPanel() {
             dissent={dissent}
             cost={cost}
             collapsible
+            overview={overview}
           />
         </div>
       )}

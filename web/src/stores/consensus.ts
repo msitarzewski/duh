@@ -13,6 +13,7 @@ export interface ChallengeEntry {
   model: string
   content: string
   truncated?: boolean
+  error?: boolean
 }
 
 export interface RoundData {
@@ -49,6 +50,7 @@ interface ConsensusState {
   dissent: string | null
   cost: number | null
   threadId: string | null
+  overview: string | null
 
   // Actions
   startConsensus: (question: string, rounds?: number, protocol?: string, modelSelection?: ModelSelectionOptions) => void
@@ -87,6 +89,7 @@ export const useConsensusStore = create<ConsensusState>((set, get) => ({
   dissent: null,
   cost: null,
   threadId: null,
+  overview: null as string | null,
 
   startConsensus: (question, rounds = 3, protocol = 'consensus', modelSelection?) => {
     set({
@@ -102,6 +105,7 @@ export const useConsensusStore = create<ConsensusState>((set, get) => ({
       dissent: null,
       cost: null,
       threadId: null,
+      overview: null,
     })
 
     ws.connect({
@@ -141,6 +145,7 @@ export const useConsensusStore = create<ConsensusState>((set, get) => ({
       dissent: null,
       cost: null,
       threadId: null,
+      overview: null,
     })
   },
 
@@ -223,6 +228,19 @@ function handleEvent(
       break
     }
 
+    case 'challenge_error': {
+      const found = getRound(state.rounds, state.currentRound)
+      if (!found) break
+      const [round, idx] = found
+
+      set({
+        rounds: updateRound(state.rounds, idx, {
+          challenges: [...round.challenges, { model: event.model, content: 'Challenge failed', error: true }],
+        }),
+      })
+      break
+    }
+
     case 'commit': {
       const found = getRound(state.rounds, state.currentRound)
       if (!found) break
@@ -248,6 +266,7 @@ function handleEvent(
         dissent: event.dissent,
         cost: event.cost,
         threadId: event.thread_id ?? null,
+        overview: event.overview ?? null,
       })
       break
     }

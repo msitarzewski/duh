@@ -41,7 +41,7 @@ def create_app(config: DuhConfig | None = None) -> FastAPI:
     app = FastAPI(
         title="duh",
         description="Multi-model consensus engine API",
-        version="0.5.0",
+        version="0.6.0",
         lifespan=lifespan,
     )
     app.state.config = config

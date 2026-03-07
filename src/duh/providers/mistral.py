@@ -17,13 +17,13 @@ from duh.core.errors import (
     ProviderTimeoutError,
 )
 from duh.providers.base import (
-    ModelCapability,
     ModelInfo,
     ModelResponse,
     StreamChunk,
     TokenUsage,
     ToolCallData,
 )
+from duh.providers.catalog import MODEL_CATALOG, PROVIDER_CAPS
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
@@ -31,48 +31,8 @@ if TYPE_CHECKING:
     from duh.providers.base import PromptMessage
 
 PROVIDER_ID = "mistral"
-
-_KNOWN_MODELS: list[dict[str, Any]] = [
-    {
-        "model_id": "mistral-large-latest",
-        "display_name": "Mistral Large",
-        "context_window": 128_000,
-        "max_output_tokens": 32_000,
-        "input_cost_per_mtok": 2.0,
-        "output_cost_per_mtok": 6.0,
-    },
-    {
-        "model_id": "mistral-medium-latest",
-        "display_name": "Mistral Medium",
-        "context_window": 128_000,
-        "max_output_tokens": 32_000,
-        "input_cost_per_mtok": 2.7,
-        "output_cost_per_mtok": 8.1,
-    },
-    {
-        "model_id": "mistral-small-latest",
-        "display_name": "Mistral Small",
-        "context_window": 128_000,
-        "max_output_tokens": 32_000,
-        "input_cost_per_mtok": 0.2,
-        "output_cost_per_mtok": 0.6,
-    },
-    {
-        "model_id": "codestral-latest",
-        "display_name": "Codestral",
-        "context_window": 256_000,
-        "max_output_tokens": 32_000,
-        "input_cost_per_mtok": 0.3,
-        "output_cost_per_mtok": 0.9,
-    },
-]
-
-_DEFAULT_CAPS = (
-    ModelCapability.TEXT
-    | ModelCapability.STREAMING
-    | ModelCapability.SYSTEM_PROMPT
-    | ModelCapability.JSON_MODE
-)
+_KNOWN_MODELS = MODEL_CATALOG[PROVIDER_ID]
+_DEFAULT_CAPS = PROVIDER_CAPS[PROVIDER_ID]
 
 
 def _map_error(e: Exception) -> Exception:

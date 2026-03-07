@@ -8,12 +8,15 @@ Handlers read from and write to :class:`ConsensusContext` and use
 from __future__ import annotations
 
 import asyncio
+import logging
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 from duh.consensus.machine import ChallengeResult, ConsensusState
 from duh.core.errors import ConsensusError, InsufficientModelsError
 from duh.providers.base import PromptMessage
+
+logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from duh.consensus.machine import ConsensusContext
@@ -548,8 +551,10 @@ async def handle_challenge(
     challenges: list[ChallengeResult] = []
     responses: list[ModelResponse] = []
 
-    for result in raw_results:
+    for i, result in enumerate(raw_results):
         if isinstance(result, BaseException):
+            failed_ref = challenger_models[i]
+            logger.warning("Challenger %s failed: %s", failed_ref, result)
             continue
         model_ref, framing, response = result
         challenges.append(
@@ -826,4 +831,55 @@ async def _classify_decision(
             "genus": str(data.get("genus", "")) if data.get("genus") else "",
         }
     except (JSONExtractionError, Exception):
+        return None
+
+
+async def generate_overview(
+    ctx: ConsensusContext,
+    provider_manager: ProviderManager,
+) -> str | None:
+    """Generate a concise executive overview of the consensus decision.
+
+    Uses the cheapest model with ~2000 max_tokens. Returns None on failure
+    so callers can gracefully degrade.
+    """
+    models = provider_manager.list_all_models()
+    if not models:
+        return None
+
+    cheapest = min(models, key=lambda m: m.input_cost_per_mtok)
+    provider, model_id = provider_manager.get_provider(cheapest.model_ref)
+
+    dissent_part = ""
+    if ctx.dissent:
+        dissent_part = f"\nDissenting view: {ctx.dissent}"
+
+    prompt = (
+        "Write a concise executive overview of this consensus decision "
+        "suitable for sharing on social media, a blog post, or LinkedIn. "
+        "Cover the question asked, the key points of debate, and the "
+        "conclusion reached. Write in a clear, engaging style. "
+        "Do not use hashtags.\n\n"
+        f"Question: {ctx.question}\n"
+        f"Decision: {ctx.decision}\n"
+        f"Confidence: {ctx.confidence:.0%}\n"
+        f"Rigor: {ctx.rigor:.0%}\n"
+        f"Rounds of debate: {len(ctx.round_history)}"
+        f"{dissent_part}"
+    )
+
+    try:
+        response = await provider.send(
+            [PromptMessage(role="user", content=prompt)],
+            model_id,
+            max_tokens=2000,
+            temperature=0.5,
+        )
+        provider_manager.record_usage(cheapest, response.usage)
+        overview = response.content.strip()
+        if overview:
+            ctx.overview = overview
+            return overview
+        return None
+    except Exception:
         return None

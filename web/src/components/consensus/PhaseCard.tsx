@@ -8,7 +8,7 @@ interface PhaseCardProps {
   models?: string[]
   content?: string | null
   isActive?: boolean
-  challenges?: Array<{ model: string; content: string; truncated?: boolean }>
+  challenges?: Array<{ model: string; content: string; truncated?: boolean; error?: boolean }>
   collapsible?: boolean
   defaultOpen?: boolean
   truncated?: boolean
@@ -43,12 +43,17 @@ export function PhaseCard({ phase, model, models, content, isActive, challenges,
           {challenges.map((ch, i) => (
             <Disclosure
               key={i}
-              defaultOpen={!collapsible}
-              header={<ModelBadge model={ch.model} />}
-              className="pl-3 border-l-2 border-[var(--color-amber)]/30"
+              defaultOpen={!collapsible && !ch.error}
+              header={
+                <>
+                  <ModelBadge model={ch.model} />
+                  {ch.error && <span className="text-[10px] font-mono text-[var(--color-danger)] ml-1">failed</span>}
+                </>
+              }
+              className={`pl-3 border-l-2 ${ch.error ? 'border-[var(--color-danger)]/30' : 'border-[var(--color-amber)]/30'}`}
             >
-              <div className="text-sm text-[var(--color-text-secondary)]">
-                <Markdown>{ch.content}</Markdown>
+              <div className={`text-sm ${ch.error ? 'text-[var(--color-danger)]' : 'text-[var(--color-text-secondary)]'}`}>
+                {ch.error ? <span className="font-mono text-xs">{ch.content}</span> : <Markdown>{ch.content}</Markdown>}
               </div>
             </Disclosure>
           ))}

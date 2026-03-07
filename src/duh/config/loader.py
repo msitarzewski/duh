@@ -20,6 +20,8 @@ import tomllib
 from pathlib import Path
 from typing import Any
 
+from dotenv import load_dotenv
+
 from duh.core.errors import ConfigError
 
 from .schema import DuhConfig
@@ -107,6 +109,9 @@ def load_config(
     Raises:
         ConfigError: On invalid TOML, missing files, or validation failure.
     """
+    # Load .env file (does not override existing env vars)
+    load_dotenv()
+
     merged: dict[str, Any] = {}
 
     # Discover and merge config files
@@ -137,5 +142,33 @@ def load_config(
 
     # Resolve API keys from env vars
     _resolve_api_keys(config)
+
+    # Auto-generate a dev JWT secret if none is configured
+    if not config.auth.jwt_secret:
+        env_secret = os.environ.get("DUH_JWT_SECRET")
+        if env_secret:
+            config.auth.jwt_secret = env_secret
+        else:
+            import secrets
+
+            config.auth.jwt_secret = secrets.token_hex(32)
+
+    # Resolve mail config from env vars (env always wins when set)
+    _mail_env_map = {
+        "host": "DUH_MAIL_HOST",
+        "port": "DUH_MAIL_PORT",
+        "username": "DUH_MAIL_USERNAME",
+        "password": "DUH_MAIL_PASSWORD",
+        "encryption": "DUH_MAIL_ENCRYPTION",
+        "from_address": "DUH_MAIL_FROM_ADDRESS",
+        "from_name": "DUH_MAIL_FROM_NAME",
+    }
+    for field, env_var in _mail_env_map.items():
+        env_val = os.environ.get(env_var)
+        if env_val:
+            if field == "port":
+                setattr(config.mail, field, int(env_val))
+            else:
+                setattr(config.mail, field, env_val)
 
     return config

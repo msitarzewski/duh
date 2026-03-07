@@ -16,13 +16,13 @@ from duh.core.errors import (
     ProviderTimeoutError,
 )
 from duh.providers.base import (
-    ModelCapability,
     ModelInfo,
     ModelResponse,
     StreamChunk,
     TokenUsage,
     ToolCallData,
 )
+from duh.providers.catalog import MODEL_CATALOG, PROVIDER_CAPS
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
@@ -30,48 +30,8 @@ if TYPE_CHECKING:
     from duh.providers.base import PromptMessage
 
 PROVIDER_ID = "google"
-
-_KNOWN_MODELS: list[dict[str, Any]] = [
-    {
-        "model_id": "gemini-3-pro-preview",
-        "display_name": "Gemini 3 Pro (Preview)",
-        "context_window": 1_048_576,
-        "max_output_tokens": 65_536,
-        "input_cost_per_mtok": 2.00,
-        "output_cost_per_mtok": 12.00,
-    },
-    {
-        "model_id": "gemini-3-flash-preview",
-        "display_name": "Gemini 3 Flash (Preview)",
-        "context_window": 1_048_576,
-        "max_output_tokens": 65_536,
-        "input_cost_per_mtok": 0.50,
-        "output_cost_per_mtok": 3.00,
-    },
-    {
-        "model_id": "gemini-2.5-pro",
-        "display_name": "Gemini 2.5 Pro",
-        "context_window": 1_048_576,
-        "max_output_tokens": 65_536,
-        "input_cost_per_mtok": 1.25,
-        "output_cost_per_mtok": 10.00,
-    },
-    {
-        "model_id": "gemini-2.5-flash",
-        "display_name": "Gemini 2.5 Flash",
-        "context_window": 1_048_576,
-        "max_output_tokens": 65_536,
-        "input_cost_per_mtok": 0.30,
-        "output_cost_per_mtok": 2.50,
-    },
-]
-
-_DEFAULT_CAPS = (
-    ModelCapability.TEXT
-    | ModelCapability.STREAMING
-    | ModelCapability.SYSTEM_PROMPT
-    | ModelCapability.JSON_MODE
-)
+_KNOWN_MODELS = MODEL_CATALOG[PROVIDER_ID]
+_DEFAULT_CAPS = PROVIDER_CAPS[PROVIDER_ID]
 
 
 def _map_error(e: Exception) -> Exception:

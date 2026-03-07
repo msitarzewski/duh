@@ -73,8 +73,9 @@ def test_provider_id():
 async def test_list_models():
     prov = GoogleProvider(client=_make_client())
     models = await prov.list_models()
-    assert len(models) == 4
+    assert len(models) == 5
     ids = {m.model_id for m in models}
+    assert "gemini-3.1-pro-preview" in ids
     assert "gemini-3-pro-preview" in ids
     assert "gemini-3-flash-preview" in ids
     assert "gemini-2.5-pro" in ids

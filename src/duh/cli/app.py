@@ -209,13 +209,14 @@ async def _run_consensus(
     panel: list[str] | None = None,
     proposer_override: str | None = None,
     challengers_override: list[str] | None = None,
-) -> tuple[str, float, float, str | None, float]:
+) -> tuple[str, float, float, str | None, float, str | None]:
     """Run the full consensus loop.
 
-    Returns (decision, confidence, rigor, dissent, total_cost).
+    Returns (decision, confidence, rigor, dissent, total_cost, overview).
     """
     from duh.consensus.convergence import check_convergence
     from duh.consensus.handlers import (
+        generate_overview,
         handle_challenge,
         handle_commit,
         handle_propose,
@@ -301,6 +302,9 @@ async def _run_consensus(
 
     sm.transition(ConsensusState.COMPLETE)
 
+    # Generate executive overview (best-effort)
+    await generate_overview(ctx, pm)
+
     # Show tool usage if any
     if display and ctx.tool_calls_log:
         display.show_tool_use(ctx.tool_calls_log)
@@ -311,6 +315,7 @@ async def _run_consensus(
         ctx.rigor,
         ctx.dissent,
         pm.total_cost,
+        ctx.overview,
     )
 
 
@@ -448,12 +453,14 @@ def ask(
         _error(str(e))
         return  # unreachable
 
-    decision, confidence, rigor, dissent, cost = result
+    decision, confidence, rigor, dissent, cost, overview = result
 
     from duh.cli.display import ConsensusDisplay
 
     display = ConsensusDisplay()
-    display.show_final_decision(decision, confidence, rigor, cost, dissent)
+    display.show_final_decision(
+        decision, confidence, rigor, cost, dissent, overview=overview
+    )
 
 
 async def _ask_async(
@@ -463,7 +470,7 @@ async def _ask_async(
     panel: list[str] | None = None,
     proposer_override: str | None = None,
     challengers_override: list[str] | None = None,
-) -> tuple[str, float, float, str | None, float]:
+) -> tuple[str, float, float, str | None, float, str | None]:
     """Async implementation for the ask command."""
     from duh.cli.display import ConsensusDisplay
 
@@ -570,10 +577,12 @@ async def _ask_auto_async(
 
         display = ConsensusDisplay()
         display.start()
-        decision, confidence, rigor, dissent, cost = await _run_consensus(
+        decision, confidence, rigor, dissent, cost, overview = await _run_consensus(
             question, config, pm, display=display
         )
-        display.show_final_decision(decision, confidence, rigor, cost, dissent)
+        display.show_final_decision(
+            decision, confidence, rigor, cost, dissent, overview=overview
+        )
 
 
 async def _ask_decompose_async(
@@ -646,8 +655,10 @@ async def _ask_decompose_async(
     # Single-subtask optimization: skip synthesis
     if len(subtask_specs) == 1:
         result = await _run_consensus(question, config, pm, display=display)
-        decision, confidence, rigor, dissent, cost = result
-        display.show_final_decision(decision, confidence, rigor, cost, dissent)
+        decision, confidence, rigor, dissent, cost, overview = result
+        display.show_final_decision(
+            decision, confidence, rigor, cost, dissent, overview=overview
+        )
         await engine.dispose()
         return
 
@@ -1139,12 +1150,14 @@ def _format_thread_markdown(
     *,
     content: str = "full",
     include_dissent: bool = True,
+    overview: str | None = None,
 ) -> str:
     """Format a thread as Markdown for export.
 
     Args:
         content: "full" for complete report, "decision" for decision only.
         include_dissent: Whether to include the dissent section.
+        overview: Optional executive overview to include before Decision.
     """
     lines: list[str] = []
     created = thread.created_at.strftime("%Y-%m-%d")
@@ -1160,6 +1173,12 @@ def _format_thread_markdown(
 
     lines.append(f"# Consensus: {thread.question}")
     lines.append("")
+
+    # Executive overview (before decision)
+    if overview:
+        lines.append("## Executive Overview")
+        lines.append(overview)
+        lines.append("")
 
     # Decision section
     if final_decision:
@@ -1234,6 +1253,7 @@ def _format_thread_pdf(
     *,
     content: str = "full",
     include_dissent: bool = True,
+    overview: str | None = None,
 ) -> bytes:
     """Format a thread as a research-paper quality PDF.
 
@@ -1552,6 +1572,25 @@ def _format_thread_pdf(
             pages=1,
         )
 
+    # -- Executive Overview section --
+    if overview:
+        pdf.start_section("Executive Overview")
+        pdf.set_font(pdf._font_family, "B", 15)
+        pdf.cell(0, 8, "Executive Overview")
+        pdf.ln(8)
+
+        overview_start_y = pdf.get_y()
+        pdf.set_left_margin(16)
+        pdf.set_x(16)
+        pdf.set_font(pdf._font_family, "", 11)
+        pdf.set_text_color(40, 40, 40)
+        _write_md(overview)
+        pdf.ln(4)
+
+        _draw_accent_bar(overview_start_y, pdf.get_y(), (40, 120, 200))
+        pdf.set_left_margin(10)
+        pdf.ln(4)
+
     # -- Decision section --
     if final_decision:
         pdf.start_section("Decision")
@@ -1764,6 +1803,7 @@ async def _models_async(config: DuhConfig) -> None:
             click.echo(
                 f"  {m.display_name} ({m.model_id})  "
                 f"ctx:{m.context_window:,}  "
+                f"max_out:{m.max_output_tokens:,}  "
                 f"in:${m.input_cost_per_mtok}/Mtok  "
                 f"out:${m.output_cost_per_mtok}/Mtok{suffix}"
             )
@@ -2260,9 +2300,14 @@ async def _batch_async(
                 confidence = vr.confidence
                 rigor = vr.rigor
             else:
-                decision, confidence, rigor, _dissent, _cost = await _run_consensus(
-                    question, config, pm
-                )
+                (
+                    decision,
+                    confidence,
+                    rigor,
+                    _dissent,
+                    _cost,
+                    _overview,
+                ) = await _run_consensus(question, config, pm)
 
             q_cost = pm.total_cost - cost_before
             total_cost += q_cost

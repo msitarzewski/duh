@@ -24,6 +24,7 @@ ENV/
 # Environment
 .env
 .env.*
+!.env.example
 
 # Phase 0 results
 results/
