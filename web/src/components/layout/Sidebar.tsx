@@ -42,7 +42,7 @@ export function Sidebar({ onClose }: { onClose?: () => void }) {
       </nav>
 
       <div className="px-4 py-3 border-t border-[var(--color-border)] text-[10px] text-[var(--color-text-dim)] font-mono">
-        v0.4.0
+        v0.6.0
       </div>
     </aside>
   )

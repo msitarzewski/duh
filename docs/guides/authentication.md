@@ -282,6 +282,35 @@ X-RateLimit-Remaining: 57
 X-RateLimit-Key: user:a1b2c3d4-...
 ```
 
+## Web UI Authentication
+
+The web UI integrates with the backend authentication system. It detects whether auth is required and adapts accordingly.
+
+### Dev mode (no auth required)
+
+When no API keys or users exist in the database, the API runs in open mode. The web UI detects this via `GET /api/auth/status` and automatically logs in as a guest user. No login page is shown.
+
+This is the default behavior when you first run `duh serve` -- you can start using the web UI immediately without setting up users.
+
+### Production mode (auth required)
+
+Once you create a user or API key, the web UI requires authentication:
+
+1. **Redirect to login**: All routes except `/share/:id` redirect to `/login` if the user is not authenticated
+2. **Login form**: Enter email and password to receive a JWT token
+3. **Token storage**: The JWT token is stored in `localStorage` (key: `duh_token`)
+4. **Auto-injection**: The API client automatically includes the token in all requests via the `Authorization: Bearer` header
+5. **WebSocket auth**: The token is included in the initial WebSocket handshake message
+6. **Session expiry**: On 401 responses, the stored token is cleared and the user is redirected to login
+
+### User menu
+
+When authenticated, the top bar shows the user's display name and role badge. Clicking it reveals a dropdown with the user's email and a sign-out button.
+
+### Registration
+
+The login page includes a toggle to switch between "Sign In" and "Create Account" modes. Registration can be disabled server-side by setting `registration_enabled = false` in `config.toml`.
+
 ## Security recommendations
 
 1. **Generate a strong JWT secret**: `openssl rand -hex 32`

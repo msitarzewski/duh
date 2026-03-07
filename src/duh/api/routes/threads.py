@@ -39,6 +39,8 @@ class ThreadSummaryResponse(BaseModel):
     question: str
     status: str
     created_at: str
+    has_outcome: bool = False
+    outcome: str | None = None
 
 
 class ThreadDetailResponse(BaseModel):
@@ -68,15 +70,21 @@ async def list_threads(
     async with db_factory() as session:
         repo = MemoryRepository(session)
         threads = await repo.list_threads(status=status, limit=limit, offset=offset)
-        results = [
-            ThreadSummaryResponse(
-                thread_id=t.id,
-                question=t.question,
-                status=t.status,
-                created_at=t.created_at.isoformat(),
+        results = []
+        for t in threads:
+            outcomes = await repo.get_outcomes_for_thread(t.id)
+            has_outcome = len(outcomes) > 0
+            outcome_val = outcomes[-1].result if outcomes else None
+            results.append(
+                ThreadSummaryResponse(
+                    thread_id=t.id,
+                    question=t.question,
+                    status=t.status,
+                    created_at=t.created_at.isoformat(),
+                    has_outcome=has_outcome,
+                    outcome=outcome_val,
+                )
             )
-            for t in threads
-        ]
     return ThreadListResponse(threads=results, total=len(results))
 
 
@@ -240,10 +248,15 @@ async def export_thread(
         votes = await repo.get_votes(thread_id)
 
     short_id = thread_id[:8]
+    overview_text = thread.summary.summary if thread.summary else None
 
     if format == "pdf":
         pdf_bytes = _format_thread_pdf(
-            thread, votes, content=content, include_dissent=dissent
+            thread,
+            votes,
+            content=content,
+            include_dissent=dissent,
+            overview=overview_text,
         )
         return StreamingResponse(
             io.BytesIO(pdf_bytes),
@@ -256,7 +269,11 @@ async def export_thread(
         )
 
     md_text = _format_thread_markdown(
-        thread, votes, content=content, include_dissent=dissent
+        thread,
+        votes,
+        content=content,
+        include_dissent=dissent,
+        overview=overview_text,
     )
     return StreamingResponse(
         io.BytesIO(md_text.encode()),

@@ -1,10 +1,10 @@
 # Progress
 
-**Last Updated**: 2026-02-18
+**Last Updated**: 2026-02-19
 
 ---
 
-## Current State: Consensus Nav + Collapsible Sections COMPLETE
+## Current State: v0.6.0 — "It's Honest" COMPLETE
 
 ### Consensus Navigation & Collapsible Sections
 
@@ -182,3 +182,11 @@ Phase 0 benchmark framework — fully functional, pilot-tested on 5 questions.
 | 2026-02-18 | Epistemic Confidence Phase A (rigor + domain caps + calibration) | Done |
 | 2026-02-18 | Consensus nav + collapsible sections + decision-first layout | Done |
 | 2026-02-19 | UX cleanup: collapse defaults, max_tokens 16384, cross-provider challengers, truncation detection, glass exports, PDF BI font fix | Done |
+| 2026-02-19 | v0.6 T1-T5: Frontend auth (auth store, API client auth, login page, route protection, dev mode) | Done |
+| 2026-02-19 | v0.6 T6: Batch feedback on threads list (inline Pass/Partial/Fail buttons, backend outcome enrichment) | Done |
+| 2026-02-19 | v0.6 T7: Frontend auth + feedback tests (11 auth store + 8 auth component tests) | Done |
+| 2026-02-19 | v0.6 T8: Documentation (web-ui auth, authentication guide, epistemic-confidence concept doc) | Done |
+| 2026-02-19 | v0.6 T9: Version bump to 0.6.0 | Done |
+| 2026-02-19 | v0.6.0 — "It's Honest" | **Complete** |
+| 2026-02-20 | Fix sign-out bug: replaced broken mousedown outside-click handler with backdrop pattern in TopBar | Pending verification |
+| 2026-02-20 | Auto-generate JWT secret in config loader for dev environments | Done |

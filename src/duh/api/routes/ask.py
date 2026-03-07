@@ -83,7 +83,7 @@ async def _handle_consensus(  # type: ignore[no-untyped-def]
     """Run the consensus protocol."""
     from duh.cli.app import _run_consensus
 
-    decision, confidence, rigor, dissent, cost = await _run_consensus(
+    decision, confidence, rigor, dissent, cost, _overview = await _run_consensus(
         body.question,
         config,
         pm,
@@ -153,7 +153,7 @@ async def _handle_decompose(body: AskRequest, config, pm) -> AskResponse:  # typ
     if len(subtask_specs) == 1:
         from duh.cli.app import _run_consensus
 
-        decision, confidence, rigor, dissent, cost = await _run_consensus(
+        decision, confidence, rigor, dissent, cost, _overview = await _run_consensus(
             body.question, config, pm
         )
         return AskResponse(

@@ -135,7 +135,7 @@ async def _handle_ask(args: dict) -> list[TextContent]:  # type: ignore[type-arg
             )
         ]
     else:
-        decision, confidence, rigor, dissent, cost = await _run_consensus(
+        decision, confidence, rigor, dissent, cost, _overview = await _run_consensus(
             question, config, pm
         )
         return [

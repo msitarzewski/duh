@@ -83,7 +83,7 @@ async def backup_json(session: AsyncSession, dest: Path) -> Path:
         pass
 
     data: dict[str, Any] = {
-        "version": "0.5.0",
+        "version": "0.6.0",
         "exported_at": datetime.now(UTC).isoformat(),
         "tables": {},
     }

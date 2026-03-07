@@ -54,7 +54,7 @@ def _make_json_backup(
     tmp_path: Path,
     tables: dict[str, list[dict[str, Any]]] | None = None,
     *,
-    version: str = "0.5.0",
+    version: str = "0.6.0",
     filename: str = "backup.json",
 ) -> Path:
     """Create a JSON backup file for testing."""
@@ -74,7 +74,7 @@ def _make_json_backup(
 class TestDetectBackupFormat:
     def test_json_file(self, tmp_path: Path) -> None:
         f = tmp_path / "backup.json"
-        f.write_text('{"version": "0.5.0", "tables": {}}')
+        f.write_text('{"version": "0.6.0", "tables": {}}')
         assert detect_backup_format(f) == "json"
 
     def test_json_array(self, tmp_path: Path) -> None:
@@ -346,7 +346,7 @@ class TestRestoreJson:
     def test_restore_validates_structure(self, tmp_path: Path) -> None:
         """Missing 'tables' key raises ValueError."""
         bad_backup = tmp_path / "bad.json"
-        bad_backup.write_text(json.dumps({"version": "0.5.0"}), encoding="utf-8")
+        bad_backup.write_text(json.dumps({"version": "0.6.0"}), encoding="utf-8")
 
         factory, engine = _make_async_session()
 

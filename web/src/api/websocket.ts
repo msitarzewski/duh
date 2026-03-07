@@ -34,6 +34,10 @@ export class ConsensusWebSocket {
         rounds: options.rounds ?? 3,
         protocol: options.protocol ?? 'consensus',
       }
+      const token = localStorage.getItem('duh_token')
+      if (token) {
+        payload.token = token
+      }
       if (options.modelSelection?.panel?.length) {
         payload.panel = options.modelSelection.panel
       }

@@ -1,6 +1,6 @@
 [project]
 name = "duh"
-version = "0.5.0"
+version = "0.6.0"
 description = "Multi-model consensus engine — because one LLM opinion isn't enough"
 requires-python = ">=3.11"
 dependencies = [
@@ -24,6 +24,7 @@ dependencies = [
     "pyjwt>=2.8",
     "asyncpg>=0.29",
     "fpdf2>=2.7",
+    "python-dotenv>=1.0",
 ]
 
 [project.scripts]

@@ -97,6 +97,7 @@ async def _stream_consensus(
     """Run consensus loop and stream events to WebSocket."""
     from duh.consensus.convergence import check_convergence
     from duh.consensus.handlers import (
+        generate_overview,
         handle_challenge,
         handle_commit,
         handle_propose,
@@ -155,6 +156,7 @@ async def _stream_consensus(
             }
         )
         challenge_resps = await handle_challenge(ctx, pm, challengers)
+        succeeded = {ch.model_ref for ch in ctx.challenges}
         for i, ch in enumerate(ctx.challenges):
             resp_truncated = (
                 i < len(challenge_resps) and challenge_resps[i].finish_reason != "stop"
@@ -167,6 +169,15 @@ async def _stream_consensus(
                     "truncated": resp_truncated,
                 }
             )
+        # Notify about challengers that failed
+        for ref in challengers:
+            if ref not in succeeded:
+                await ws.send_json(
+                    {
+                        "type": "challenge_error",
+                        "model": ref,
+                    }
+                )
         await ws.send_json({"type": "phase_complete", "phase": "CHALLENGE"})
 
         # REVISE
@@ -208,13 +219,16 @@ async def _stream_consensus(
 
     sm.transition(ConsensusState.COMPLETE)
 
+    # Generate executive overview (best-effort)
+    await generate_overview(ctx, pm)
+
     # Persist to DB if available
     thread_id: str | None = None
     db_factory = getattr(ws.app.state, "db_factory", None)
     if db_factory is not None:
         try:
             thread_id = await _persist_consensus(
-                db_factory, question, ctx.round_history
+                db_factory, question, ctx.round_history, ctx.overview
             )
         except Exception:
             logger.exception("Failed to persist consensus thread")
@@ -228,6 +242,7 @@ async def _stream_consensus(
             "dissent": ctx.dissent,
             "cost": pm.total_cost,
             "thread_id": thread_id,
+            "overview": ctx.overview,
         }
     )
     await ws.close()
@@ -237,6 +252,7 @@ async def _persist_consensus(
     db_factory: object,
     question: str,
     round_history: list[RoundResult],
+    overview: str | None = None,
 ) -> str:
     """Persist consensus round history to the database.
 
@@ -269,6 +285,9 @@ async def _persist_consensus(
                 rigor=rr.rigor,
                 dissent=rr.dissent,
             )
+
+        if overview:
+            await repo.save_thread_summary(thread.id, overview, "overview")
 
         await session.commit()
         return str(thread.id)

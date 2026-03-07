@@ -1,3 +1,5 @@
+export { useAuthStore } from './auth'
+export type { AuthStatus } from './auth'
 export { useConsensusStore } from './consensus'
 export type { ConsensusStatus, ChallengeEntry, RoundData } from './consensus'
 export { useThreadsStore } from './threads'

@@ -44,6 +44,7 @@ A live cost ticker shows cumulative spend during streaming. When consensus compl
 Browse and search all past consensus sessions.
 
 - **Thread list** -- Shows question, status, and creation date for each thread
+- **Batch feedback** -- Completed threads show inline Pass/Partial/Fail buttons for quick outcome recording. This feeds the calibration system without having to open each thread individually.
 - **Search** -- Filter threads by keyword
 - **Status filter** -- Filter by `active`, `complete`, or `failed`
 - **Thread detail** (/threads/:id) -- Drill into a specific thread to see the full debate history: every round's proposal, challenges, revision, and decision
@@ -74,6 +75,25 @@ Persistent UI settings stored in `localStorage`:
 | Protocol | Default protocol for new queries |
 | Cost threshold | USD limit before warning |
 | Sound effects | Toggle phase transition sounds |
+
+### Calibration (/calibration)
+
+Confidence calibration analysis. Shows how well duh's confidence scores predict actual outcomes.
+
+- **Calibration curve**: Buckets of predicted confidence vs. actual success rate
+- **ECE (Expected Calibration Error)**: How well-calibrated the predictions are (lower is better)
+- **Category filter**: Break down calibration by decision category (factual, technical, creative, etc.)
+
+The page requires outcome data to be useful. Use the batch feedback buttons on the Threads page or `duh feedback` CLI to record whether decisions were correct.
+
+### Login (/login)
+
+The login page appears when authentication is required (production mode). Features:
+
+- Toggle between "Sign In" and "Create Account" modes
+- Email and password form using the glassmorphism design system
+- Inline error messages for failed authentication
+- Automatic redirect to `/` on successful login
 
 ### Share (/share/:id)
 
@@ -117,12 +137,14 @@ The frontend uses a typed API client at `web/src/api/client.ts` that wraps `fetc
 
 The WebSocket client (`web/src/api/websocket.ts`) handles consensus streaming. It auto-detects `ws:` vs `wss:` based on the page protocol and connects to `/ws/ask` on the current host.
 
-State management uses four Zustand stores:
+State management uses six Zustand stores:
 
 | Store | Purpose |
 |-------|---------|
+| `auth` | JWT token, user info, login/logout, dev mode detection |
 | `consensus` | WebSocket connection, phase tracking, round data, final result |
-| `threads` | Thread list, search, pagination |
+| `threads` | Thread list, search, pagination, batch feedback |
+| `calibration` | Calibration buckets, ECE, accuracy metrics |
 | `decision-space` | Decision data, filters, timeline position |
 | `preferences` | User settings (persisted to localStorage) |
 

@@ -366,15 +366,27 @@ class ConsensusDisplay:
         rigor: float,
         cost: float,
         dissent: str | None,
+        *,
+        overview: str | None = None,
     ) -> None:
         """Display the final consensus decision (full, untruncated)."""
         self._console.print()
         self._console.rule(style="bright_white")
+
+        if overview:
+            self._console.print(
+                Panel(
+                    overview,
+                    title=("[bold bright_white]Executive Overview[/bold bright_white]"),
+                    border_style="bright_white",
+                )
+            )
+
         self._console.print(
             Panel(
                 decision,
                 title="[bold bright_white]Decision[/bold bright_white]",
-                border_style="bright_white",
+                border_style="dim",
             )
         )
         self._console.print(
