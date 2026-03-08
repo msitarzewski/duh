@@ -104,7 +104,15 @@ async def _handle_consensus(  # type: ignore[no-untyped-def]
     from duh.cli.app import _run_consensus
 
     use_native_search = config.tools.enabled and config.tools.web_search.native
-    decision, confidence, rigor, dissent, cost, _overview = await _run_consensus(
+    (
+        decision,
+        confidence,
+        rigor,
+        dissent,
+        cost,
+        _overview,
+        _citations,
+    ) = await _run_consensus(
         body.question,
         config,
         pm,
@@ -176,9 +184,15 @@ async def _handle_decompose(body: AskRequest, config, pm) -> AskResponse:  # typ
     if len(subtask_specs) == 1:
         from duh.cli.app import _run_consensus
 
-        decision, confidence, rigor, dissent, cost, _overview = await _run_consensus(
-            body.question, config, pm
-        )
+        (
+            decision,
+            confidence,
+            rigor,
+            dissent,
+            cost,
+            _overview,
+            _citations,
+        ) = await _run_consensus(body.question, config, pm)
         return AskResponse(
             decision=decision,
             confidence=confidence,

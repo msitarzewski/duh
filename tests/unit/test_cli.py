@@ -76,6 +76,7 @@ class TestAskCommand:
             None,
             0.0042,
             None,
+            [],
         )
 
         result = runner.invoke(cli, ["ask", "What database?"])
@@ -103,6 +104,7 @@ class TestAskCommand:
             "[model-a]: PostgreSQL would be better for scale.",
             0.01,
             None,
+            [],
         )
 
         result = runner.invoke(cli, ["ask", "What database?"])
@@ -123,7 +125,7 @@ class TestAskCommand:
         from duh.config.schema import DuhConfig
 
         mock_config.return_value = DuhConfig()
-        mock_run.return_value = ("Answer.", 1.0, 1.0, None, 0.0, None)
+        mock_run.return_value = ("Answer.", 1.0, 1.0, None, 0.0, None, [])
 
         result = runner.invoke(cli, ["ask", "Question?"])
 
@@ -142,7 +144,7 @@ class TestAskCommand:
 
         config = DuhConfig()
         mock_config.return_value = config
-        mock_run.return_value = ("Answer.", 1.0, 1.0, None, 0.0, None)
+        mock_run.return_value = ("Answer.", 1.0, 1.0, None, 0.0, None, [])
 
         result = runner.invoke(cli, ["ask", "--rounds", "5", "Question?"])
 
