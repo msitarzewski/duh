@@ -103,6 +103,7 @@ async def _handle_consensus(  # type: ignore[no-untyped-def]
     """Run the consensus protocol."""
     from duh.cli.app import _run_consensus
 
+    use_native_search = config.tools.enabled and config.tools.web_search.native
     decision, confidence, rigor, dissent, cost, _overview = await _run_consensus(
         body.question,
         config,
@@ -111,6 +112,7 @@ async def _handle_consensus(  # type: ignore[no-untyped-def]
         panel=body.panel,
         proposer_override=body.proposer,
         challengers_override=body.challengers,
+        web_search=use_native_search,
     )
 
     thread_id: str | None = None

@@ -58,10 +58,23 @@ def _make_response(
 
 
 def _make_client(response: Any = None) -> MagicMock:
-    """Create a mocked AsyncAnthropic client."""
+    """Create a mocked AsyncAnthropic client.
+
+    Mocks both ``messages.create`` (for direct calls) and
+    ``messages.stream`` (used by ``_collect_stream`` in ``send()``).
+    """
+    resp = response or _make_response()
     client = MagicMock(spec=anthropic.AsyncAnthropic)
     client.messages = MagicMock()
-    client.messages.create = AsyncMock(return_value=response or _make_response())
+    client.messages.create = AsyncMock(return_value=resp)
+
+    # _collect_stream uses: async with client.messages.stream(**kw) as s:
+    #     return await s.get_final_message()
+    stream_cm = MagicMock()
+    stream_cm.get_final_message = AsyncMock(return_value=resp)
+    stream_cm.__aenter__ = AsyncMock(return_value=stream_cm)
+    stream_cm.__aexit__ = AsyncMock(return_value=False)
+    client.messages.stream = MagicMock(return_value=stream_cm)
     return client
 
 
@@ -206,7 +219,7 @@ class TestSend:
             temperature=0.3,
             stop_sequences=["STOP"],
         )
-        call_kwargs = client.messages.create.call_args.kwargs
+        call_kwargs = client.messages.stream.call_args.kwargs
         assert call_kwargs["model"] == "claude-opus-4-6"
         assert call_kwargs["max_tokens"] == 1000
         assert call_kwargs["temperature"] == 0.3
@@ -275,7 +288,7 @@ class TestErrorMapping:
 
     async def test_send_raises_mapped_error(self):
         client = _make_client()
-        client.messages.create.side_effect = anthropic.AuthenticationError(
+        client.messages.stream.side_effect = anthropic.AuthenticationError(
             message="bad key",
             response=MagicMock(status_code=401, headers={}),
             body=None,

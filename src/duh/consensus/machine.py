@@ -41,6 +41,7 @@ class ChallengeResult:
     content: str
     sycophantic: bool = False
     framing: str = ""
+    citations: tuple[dict[str, str | None], ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -56,6 +57,7 @@ class RoundResult:
     confidence: float
     rigor: float = 0.0
     dissent: str | None = None
+    proposal_citations: tuple[dict[str, str | None], ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -86,6 +88,7 @@ class ConsensusContext:
     # Current round working data (cleared between rounds)
     proposal: str | None = None
     proposal_model: str | None = None
+    proposal_citations: list[dict[str, str | None]] = field(default_factory=list)
     challenges: list[ChallengeResult] = field(default_factory=list)
     revision: str | None = None
     revision_model: str | None = None
@@ -115,6 +118,7 @@ class ConsensusContext:
         """Reset working data for a new round."""
         self.proposal = None
         self.proposal_model = None
+        self.proposal_citations = []
         self.challenges = []
         self.revision = None
         self.revision_model = None
@@ -137,6 +141,7 @@ class ConsensusContext:
                 confidence=self.confidence,
                 rigor=self.rigor,
                 dissent=self.dissent,
+                proposal_citations=tuple(self.proposal_citations),
             )
         )
 

@@ -7,6 +7,7 @@ import type {
   ConsensusPhase,
   ClarifyingQuestion,
   ModelSelectionOptions,
+  Citation,
 } from '@/api/types'
 
 export type ConsensusStatus = 'idle' | 'connecting' | 'streaming' | 'complete' | 'error' | 'refining'
@@ -16,12 +17,14 @@ export interface ChallengeEntry {
   content: string
   truncated?: boolean
   error?: boolean
+  citations?: Citation[] | null
 }
 
 export interface RoundData {
   round: number
   proposer: string | null
   proposal: string | null
+  proposalCitations?: Citation[] | null
   challengers: string[]
   challenges: ChallengeEntry[]
   reviser: string | null
@@ -285,6 +288,7 @@ function handleEvent(
       const update: Partial<RoundData> = {}
       if (event.phase === 'PROPOSE') {
         update.proposal = event.content ?? null
+        update.proposalCitations = event.citations ?? null
         if (event.truncated) update.truncated = [...round.truncated, 'PROPOSE']
       } else if (event.phase === 'REVISE') {
         update.revision = event.content ?? null
@@ -303,7 +307,7 @@ function handleEvent(
       const truncatedUpdate = event.truncated ? [...round.truncated, `CHALLENGE:${event.model}`] : round.truncated
       set({
         rounds: updateRound(state.rounds, idx, {
-          challenges: [...round.challenges, { model: event.model, content: event.content, truncated: event.truncated }],
+          challenges: [...round.challenges, { model: event.model, content: event.content, truncated: event.truncated, citations: event.citations }],
           truncated: truncatedUpdate,
         }),
       })

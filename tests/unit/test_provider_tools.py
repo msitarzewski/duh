@@ -244,11 +244,16 @@ def _anth_make_response_with_tool_use(
 def _anth_make_client(response: Any = None) -> MagicMock:
     import anthropic
 
+    resp = response or _anth_make_response_with_tool_use(text="Hello")
     client = MagicMock(spec=anthropic.AsyncAnthropic)
     client.messages = MagicMock()
-    if response is None:
-        response = _anth_make_response_with_tool_use(text="Hello")
-    client.messages.create = AsyncMock(return_value=response)
+    client.messages.create = AsyncMock(return_value=resp)
+
+    stream_cm = MagicMock()
+    stream_cm.get_final_message = AsyncMock(return_value=resp)
+    stream_cm.__aenter__ = AsyncMock(return_value=stream_cm)
+    stream_cm.__aexit__ = AsyncMock(return_value=False)
+    client.messages.stream = MagicMock(return_value=stream_cm)
     return client
 
 
@@ -259,7 +264,7 @@ class TestAnthropicToolForwarding:
         client = _anth_make_client()
         provider = AnthropicProvider(client=client)
         await provider.send(USER_MSG, "claude-opus-4-6", tools=SAMPLE_TOOLS)
-        call_kwargs = client.messages.create.call_args.kwargs
+        call_kwargs = client.messages.stream.call_args.kwargs
         tools = call_kwargs["tools"]
         assert len(tools) == 1
         assert tools[0]["name"] == "web_search"
@@ -271,7 +276,7 @@ class TestAnthropicToolForwarding:
         client = _anth_make_client()
         provider = AnthropicProvider(client=client)
         await provider.send(USER_MSG, "claude-opus-4-6")
-        call_kwargs = client.messages.create.call_args.kwargs
+        call_kwargs = client.messages.stream.call_args.kwargs
         assert "tools" not in call_kwargs
 
 

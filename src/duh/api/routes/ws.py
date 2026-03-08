@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+import json
 import logging
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
@@ -103,7 +104,6 @@ async def _stream_consensus(
     from duh.consensus.convergence import check_convergence
     from duh.consensus.handlers import (
         generate_overview,
-        handle_challenge,
         handle_commit,
         handle_propose,
         handle_revise,
@@ -124,6 +124,7 @@ async def _stream_consensus(
     sm = ConsensusStateMachine(ctx)
 
     effective_panel = panel or config.consensus.panel or None
+    use_native_search = config.tools.enabled and config.tools.web_search.native
 
     for _round in range(config.general.max_rounds):
         # PROPOSE
@@ -138,18 +139,27 @@ async def _stream_consensus(
             }
         )
         propose_resp = await handle_propose(
-            ctx, pm, proposer, tool_registry=tool_registry
+            ctx,
+            pm,
+            proposer,
+            tool_registry=tool_registry,
+            web_search=use_native_search,
         )
+        propose_citations = [
+            {"url": c.url, "title": c.title} for c in (propose_resp.citations or [])
+        ]
+        ctx.proposal_citations = propose_citations
         await ws.send_json(
             {
                 "type": "phase_complete",
                 "phase": "PROPOSE",
                 "content": ctx.proposal or "",
                 "truncated": propose_resp.finish_reason != "stop",
+                "citations": propose_citations if propose_citations else None,
             }
         )
 
-        # CHALLENGE
+        # CHALLENGE — fan out in parallel, stream each result as it arrives
         sm.transition(ConsensusState.CHALLENGE)
         challengers = challengers_override or select_challengers(
             pm, proposer, panel=effective_panel
@@ -162,31 +172,14 @@ async def _stream_consensus(
                 "round": ctx.current_round,
             }
         )
-        challenge_resps = await handle_challenge(
-            ctx, pm, challengers, tool_registry=tool_registry
+        await _stream_challenges(
+            ws,
+            ctx,
+            pm,
+            challengers,
+            tool_registry=tool_registry,
+            web_search=use_native_search,
         )
-        succeeded = {ch.model_ref for ch in ctx.challenges}
-        for i, ch in enumerate(ctx.challenges):
-            resp_truncated = (
-                i < len(challenge_resps) and challenge_resps[i].finish_reason != "stop"
-            )
-            await ws.send_json(
-                {
-                    "type": "challenge",
-                    "model": ch.model_ref,
-                    "content": ch.content,
-                    "truncated": resp_truncated,
-                }
-            )
-        # Notify about challengers that failed
-        for ref in challengers:
-            if ref not in succeeded:
-                await ws.send_json(
-                    {
-                        "type": "challenge_error",
-                        "model": ref,
-                    }
-                )
         await ws.send_json({"type": "phase_complete", "phase": "CHALLENGE"})
 
         # REVISE
@@ -257,6 +250,98 @@ async def _stream_consensus(
     await ws.close()
 
 
+async def _stream_challenges(
+    ws: WebSocket,
+    ctx: object,
+    pm: object,
+    challengers: list[str],
+    *,
+    tool_registry: object | None = None,
+    web_search: bool = False,
+) -> None:
+    """Run challengers in parallel, streaming each result to WS as it arrives.
+
+    Updates ``ctx.challenges`` with results.
+    """
+    import asyncio
+
+    from duh.consensus.handlers import (
+        _FRAMING_ORDER,
+        _call_challenger,
+        detect_sycophancy,
+    )
+    from duh.consensus.machine import ChallengeResult
+
+    async def _run(idx: int, ref: str) -> tuple[int, tuple[str, str, Any]]:
+        result = await _call_challenger(
+            ctx,  # type: ignore[arg-type]
+            pm,  # type: ignore[arg-type]
+            ref,
+            _FRAMING_ORDER[idx % len(_FRAMING_ORDER)],
+            temperature=0.7,
+            max_tokens=32768,
+            tool_registry=tool_registry,  # type: ignore[arg-type]
+            web_search=web_search,
+        )
+        return idx, result
+
+    tasks = [asyncio.create_task(_run(i, ref)) for i, ref in enumerate(challengers)]
+
+    challenges: list[ChallengeResult] = []
+
+    for coro in asyncio.as_completed(tasks):
+        try:
+            _idx, (model_ref, framing, response) = await coro
+            citation_dicts = tuple(
+                {
+                    "url": c.url,
+                    "title": c.title,
+                    "snippet": c.snippet,
+                }
+                for c in (response.citations or [])
+            )
+            ch = ChallengeResult(
+                model_ref=model_ref,
+                content=response.content,
+                sycophantic=detect_sycophancy(response.content),
+                framing=framing,
+                citations=citation_dicts,
+            )
+            challenges.append(ch)
+
+            # Stream to client immediately
+            ch_citations = (
+                [{"url": c["url"], "title": c.get("title")} for c in ch.citations]
+                if ch.citations
+                else None
+            )
+            await ws.send_json(
+                {
+                    "type": "challenge",
+                    "model": ch.model_ref,
+                    "content": ch.content,
+                    "truncated": response.finish_reason != "stop",
+                    "citations": ch_citations,
+                }
+            )
+        except Exception:
+            logger.warning("Challenger failed", exc_info=True)
+
+    # Report failures
+    succeeded = {ch.model_ref for ch in challenges}
+    for ref in challengers:
+        if ref not in succeeded:
+            await ws.send_json({"type": "challenge_error", "model": ref})
+
+    if not challenges:
+        from duh.core.errors import ConsensusError
+
+        msg = "All challengers failed"
+        raise ConsensusError(msg)
+
+    ctx.challenges = challenges  # type: ignore[attr-defined]
+
+
 async def _persist_consensus(
     db_factory: object,
     question: str,
@@ -276,12 +361,36 @@ async def _persist_consensus(
 
         for rr in round_history:
             turn = await repo.create_turn(thread.id, rr.round_number, "COMMIT")
+            proposal_cit = None
+            if rr.proposal_citations:
+                proposal_cit = json.dumps(
+                    [
+                        {"url": c["url"], "title": c.get("title")}
+                        for c in rr.proposal_citations
+                    ]
+                )
             await repo.add_contribution(
-                turn.id, rr.proposal_model, "proposer", rr.proposal
+                turn.id,
+                rr.proposal_model,
+                "proposer",
+                rr.proposal,
+                citations_json=proposal_cit,
             )
             for ch in rr.challenges:
+                ch_cit = None
+                if ch.citations:
+                    ch_cit = json.dumps(
+                        [
+                            {"url": c["url"], "title": c.get("title")}
+                            for c in ch.citations
+                        ]
+                    )
                 await repo.add_contribution(
-                    turn.id, ch.model_ref, "challenger", ch.content
+                    turn.id,
+                    ch.model_ref,
+                    "challenger",
+                    ch.content,
+                    citations_json=ch_cit,
                 )
             await repo.add_contribution(
                 turn.id, rr.proposal_model, "reviser", rr.revision

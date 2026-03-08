@@ -3,12 +3,18 @@
 from __future__ import annotations
 
 import io
+import json
 
 from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 router = APIRouter(prefix="/api", tags=["threads"])
+
+
+class CitationResponse(BaseModel):
+    url: str
+    title: str | None = None
 
 
 class ContributionResponse(BaseModel):
@@ -18,6 +24,7 @@ class ContributionResponse(BaseModel):
     input_tokens: int = 0
     output_tokens: int = 0
     cost_usd: float = 0.0
+    citations: list[CitationResponse] | None = None
 
 
 class DecisionResponse(BaseModel):
@@ -116,43 +123,7 @@ async def get_thread(thread_id: str, request: Request) -> ThreadDetailResponse:
     if thread is None:
         raise HTTPException(status_code=404, detail=f"Thread not found: {thread_id}")
 
-    turns = []
-    for turn in thread.turns:
-        contribs = [
-            ContributionResponse(
-                model_ref=c.model_ref,
-                role=c.role,
-                content=c.content,
-                input_tokens=c.input_tokens,
-                output_tokens=c.output_tokens,
-                cost_usd=c.cost_usd,
-            )
-            for c in turn.contributions
-        ]
-        dec = None
-        if turn.decision:
-            dec = DecisionResponse(
-                content=turn.decision.content,
-                confidence=turn.decision.confidence,
-                rigor=turn.decision.rigor,
-                dissent=turn.decision.dissent,
-            )
-        turns.append(
-            TurnResponse(
-                round_number=turn.round_number,
-                state=turn.state,
-                contributions=contribs,
-                decision=dec,
-            )
-        )
-
-    return ThreadDetailResponse(
-        thread_id=thread.id,
-        question=thread.question,
-        status=thread.status,
-        created_at=thread.created_at.isoformat(),
-        turns=turns,
-    )
+    return _build_thread_detail(thread)
 
 
 @router.get("/share/{share_token}", response_model=ThreadDetailResponse)
@@ -171,8 +142,24 @@ async def get_shared_thread(share_token: str, request: Request) -> ThreadDetailR
             detail=f"Shared thread not found: {share_token}",
         )
 
+    return _build_thread_detail(thread)
+
+
+def _parse_citations(raw: str | None) -> list[CitationResponse] | None:
+    """Parse JSON-encoded citations from a contribution."""
+    if not raw:
+        return None
+    try:
+        items = json.loads(raw)
+        return [CitationResponse(url=c["url"], title=c.get("title")) for c in items]
+    except (json.JSONDecodeError, KeyError, TypeError):
+        return None
+
+
+def _build_thread_detail(thread: object) -> ThreadDetailResponse:
+    """Build a ThreadDetailResponse from a Thread ORM object."""
     turns = []
-    for turn in thread.turns:
+    for turn in thread.turns:  # type: ignore[attr-defined]
         contribs = [
             ContributionResponse(
                 model_ref=c.model_ref,
@@ -181,6 +168,7 @@ async def get_shared_thread(share_token: str, request: Request) -> ThreadDetailR
                 input_tokens=c.input_tokens,
                 output_tokens=c.output_tokens,
                 cost_usd=c.cost_usd,
+                citations=_parse_citations(getattr(c, "citations_json", None)),
             )
             for c in turn.contributions
         ]
@@ -202,10 +190,10 @@ async def get_shared_thread(share_token: str, request: Request) -> ThreadDetailR
         )
 
     return ThreadDetailResponse(
-        thread_id=thread.id,
-        question=thread.question,
-        status=thread.status,
-        created_at=thread.created_at.isoformat(),
+        thread_id=thread.id,  # type: ignore[attr-defined]
+        question=thread.question,  # type: ignore[attr-defined]
+        status=thread.status,  # type: ignore[attr-defined]
+        created_at=thread.created_at.isoformat(),  # type: ignore[attr-defined]
         turns=turns,
     )
 

@@ -18,6 +18,7 @@ PROVIDER_CAPS: dict[str, ModelCapability] = {
         | ModelCapability.STREAMING
         | ModelCapability.SYSTEM_PROMPT
         | ModelCapability.JSON_MODE
+        | ModelCapability.WEB_SEARCH
     ),
     "openai": (
         ModelCapability.TEXT
@@ -30,18 +31,21 @@ PROVIDER_CAPS: dict[str, ModelCapability] = {
         | ModelCapability.STREAMING
         | ModelCapability.SYSTEM_PROMPT
         | ModelCapability.JSON_MODE
+        | ModelCapability.WEB_SEARCH
     ),
     "mistral": (
         ModelCapability.TEXT
         | ModelCapability.STREAMING
         | ModelCapability.SYSTEM_PROMPT
         | ModelCapability.JSON_MODE
+        | ModelCapability.WEB_SEARCH
     ),
     "perplexity": (
         ModelCapability.TEXT
         | ModelCapability.STREAMING
         | ModelCapability.SYSTEM_PROMPT
         | ModelCapability.JSON_MODE
+        | ModelCapability.WEB_SEARCH
     ),
 }
 

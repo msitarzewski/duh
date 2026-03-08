@@ -23,6 +23,7 @@ class ModelCapability(enum.Flag):
     VISION = enum.auto()
     JSON_MODE = enum.auto()
     SYSTEM_PROMPT = enum.auto()
+    WEB_SEARCH = enum.auto()
 
 
 @dataclass(frozen=True, slots=True)
@@ -62,6 +63,15 @@ class TokenUsage:
 
 
 @dataclass(frozen=True, slots=True)
+class Citation:
+    """A single citation from a web search result."""
+
+    url: str
+    title: str | None = None
+    snippet: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
 class ToolCallData:
     """A tool call from a model response."""
 
@@ -81,6 +91,7 @@ class ModelResponse:
     latency_ms: float  # Wall-clock time for the call
     raw_response: object = field(default=None, repr=False)
     tool_calls: list[ToolCallData] | None = None
+    citations: list[Citation] | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -130,6 +141,7 @@ class ModelProvider(Protocol):
         stop_sequences: list[str] | None = None,
         response_format: str | None = None,
         tools: list[dict[str, object]] | None = None,
+        web_search: bool = False,
     ) -> ModelResponse:
         """Send a prompt and wait for complete response.
 
@@ -141,6 +153,7 @@ class ModelProvider(Protocol):
             stop_sequences: Sequences that stop generation.
             response_format: If ``"json"``, request JSON output mode.
             tools: Tool definitions for function calling.
+            web_search: Enable provider-native web search.
 
         Raises ProviderError on failure.
         """

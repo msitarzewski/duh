@@ -61,6 +61,7 @@ class WebSearchConfig(BaseModel):
     backend: str = "duckduckgo"
     api_key: str | None = None
     max_results: int = 5
+    native: bool = True
 
 
 class CodeExecutionConfig(BaseModel):

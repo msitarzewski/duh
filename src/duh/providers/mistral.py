@@ -115,6 +115,7 @@ class MistralProvider:
         stop_sequences: list[str] | None = None,
         response_format: str | None = None,
         tools: list[dict[str, object]] | None = None,
+        web_search: bool = False,
     ) -> ModelResponse:
         api_messages = _build_messages(messages)
 
@@ -140,6 +141,12 @@ class MistralProvider:
                 }
                 for t in tools
             ]
+        if web_search:
+            ws: dict[str, str] = {"type": "web_search"}
+            if "tools" in kwargs:
+                kwargs["tools"].append(ws)
+            else:
+                kwargs["tools"] = [ws]
 
         start = time.monotonic()
         try:

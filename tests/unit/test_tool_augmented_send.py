@@ -43,6 +43,7 @@ class _ToolMockProvider:
         stop_sequences: list[str] | None = None,
         response_format: str | None = None,
         tools: list[dict[str, object]] | None = None,
+        web_search: bool = False,
     ) -> ModelResponse:
         self.call_log.append(
             {"messages": messages, "tools": tools, "model_id": model_id}

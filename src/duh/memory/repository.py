@@ -125,6 +125,7 @@ class MemoryRepository:
         output_tokens: int = 0,
         cost_usd: float = 0.0,
         latency_ms: float = 0.0,
+        citations_json: str | None = None,
     ) -> Contribution:
         """Record a model's contribution to a turn."""
         contrib = Contribution(
@@ -136,6 +137,7 @@ class MemoryRepository:
             output_tokens=output_tokens,
             cost_usd=cost_usd,
             latency_ms=latency_ms,
+            citations_json=citations_json,
         )
         self._session.add(contrib)
         await self._session.flush()

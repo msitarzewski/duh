@@ -37,6 +37,11 @@ PROVIDER_ID = "openai"
 _KNOWN_MODELS = MODEL_CATALOG[PROVIDER_ID]
 _DEFAULT_CAPS = PROVIDER_CAPS[PROVIDER_ID]
 _NO_TEMPERATURE_MODELS = NO_TEMPERATURE_MODELS
+_SEARCH_MODELS: set[str] = {
+    "gpt-5-search-api",
+    "gpt-4o-search-preview",
+    "gpt-4o-mini-search-preview",
+}
 
 
 def _map_error(e: openai.APIError) -> Exception:
@@ -128,6 +133,7 @@ class OpenAIProvider:
         stop_sequences: list[str] | None = None,
         response_format: str | None = None,
         tools: list[dict[str, object]] | None = None,
+        web_search: bool = False,
     ) -> ModelResponse:
         api_messages = _build_messages(messages)
 
@@ -154,6 +160,8 @@ class OpenAIProvider:
                 }
                 for t in tools
             ]
+        if web_search and model_id in _SEARCH_MODELS:
+            kwargs["web_search_options"] = {}
 
         start = time.monotonic()
         try:

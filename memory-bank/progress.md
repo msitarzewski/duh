@@ -4,7 +4,36 @@
 
 ---
 
-## Current State: v0.6.0 — "It's Honest" COMPLETE
+## Current State: Post v0.6.0 — `question-refinement` Branch In Progress
+
+### Question Refinement + Native Web Search + Citations (2026-03-08)
+
+- **Question refinement**: pre-consensus clarification step (analyze → clarify → enrich → consensus)
+  - `src/duh/consensus/refine.py`, API routes (`/api/refine`, `/api/enrich`), CLI `--refine` flag
+  - Frontend: `RefinementPanel.tsx` tabbed UI, consensus store `'refining'` status
+  - Graceful fallback on failure → original question proceeds to consensus
+- **Native provider web search**: Anthropic/Google/Mistral/OpenAI/Perplexity use server-side search
+  - `web_search: bool` param on `ModelProvider.send()` protocol
+  - `config.tools.web_search.native` flag controls behavior
+  - DDG proxy still available as fallback for non-native providers
+- **Citations**: `Citation` dataclass on `ModelResponse`, extracted per provider, displayed in frontend
+  - `CitationList` shared component, `ConsensusNav` collapsible Sources sidebar section
+  - WS events include `citations` array for PROPOSE and CHALLENGE phases
+- **Tools enabled by default**: `web_search` (DuckDuckGo) wired through all paths (CLI, REST, WS)
+- **Provider tool format fix**: each provider transforms generic tool defs to native API format
+- **Sidebar UX**: new-question button + collapsible sidebar toggle
+- **Citation persistence**: `citations_json` on Contribution model, SQLite migration, thread detail API returns citations
+- **Domain-grouped Sources**: ConsensusNav + ThreadNav group citations by hostname with Disclosure, P/C/R role badges
+- **Anthropic streaming**: `send()` uses `_collect_stream()` internally to avoid 10-min timeout on large max_tokens
+- **Parallel challenge streaming**: `_stream_challenges()` sends each result to frontend as it completes via `asyncio.as_completed`
+- **max_tokens 32768**: bumped from 16384 across all handlers — citations are essential to trust
+- 1641 Python tests + 194 Vitest tests (1835 total), build clean
+
+### Z-index Fix + GPT-5.4 + .env Docs (2026-03-07)
+
+- Z-index stacking context fix, GPT-5.4 model catalog entry, .env.example provider keys
+- Password reset flow, SMTP mail module, JWT-scoped tokens
+- 1603 Python tests + 185 Vitest tests (1788 total)
 
 ### Consensus Navigation & Collapsible Sections
 
@@ -195,3 +224,9 @@ Phase 0 benchmark framework — fully functional, pilot-tested on 5 questions.
 | 2026-03-07 | GPT-5.4 added to model catalog (1M ctx, $2.50/$15.00, no-temperature) | Done |
 | 2026-03-07 | .env.example updated with provider API key placeholders | Done |
 | 2026-03-07 | README updated with all provider env vars | Done |
+| 2026-03-08 | Question refinement (analyze → clarify → enrich → consensus) | In Progress |
+| 2026-03-08 | Native provider web search (Anthropic/Google/Mistral/OpenAI/Perplexity) | In Progress |
+| 2026-03-08 | Citations extraction + frontend CitationList + ConsensusNav Sources | In Progress |
+| 2026-03-08 | Tools enabled by default (web_search wired through CLI/REST/WS) | In Progress |
+| 2026-03-08 | Provider tool format fix (generic → native transform per provider) | In Progress |
+| 2026-03-08 | Sidebar UX (new-question button, collapsible toggle) | In Progress |

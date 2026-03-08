@@ -112,6 +112,7 @@ export interface Contribution {
   input_tokens: number
   output_tokens: number
   cost_usd: number
+  citations?: Citation[] | null
 }
 
 export interface Decision {
@@ -240,6 +241,13 @@ export interface CalibrationResponse {
   ece: number
 }
 
+// ── Citation types ────────────────────────────────────────
+
+export interface Citation {
+  url: string
+  title?: string | null
+}
+
 // ── WebSocket event types ─────────────────────────────────
 
 export type WSEventType =
@@ -266,6 +274,7 @@ export interface WSPhaseComplete {
   phase: ConsensusPhase
   content?: string
   truncated?: boolean
+  citations?: Citation[] | null
 }
 
 export interface WSChallenge {
@@ -273,6 +282,7 @@ export interface WSChallenge {
   model: string
   content: string
   truncated?: boolean
+  citations?: Citation[] | null
 }
 
 export interface WSCommit {

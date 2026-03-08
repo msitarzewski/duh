@@ -71,6 +71,7 @@ class MockProvider:
         stop_sequences: list[str] | None = None,
         response_format: str | None = None,
         tools: list[dict[str, object]] | None = None,
+        web_search: bool = False,
     ) -> ModelResponse:
         self.call_log.append(
             {

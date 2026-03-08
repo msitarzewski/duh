@@ -143,6 +143,9 @@ class Contribution(Base):
     output_tokens: Mapped[int] = mapped_column(Integer, default=0)
     cost_usd: Mapped[float] = mapped_column(Float, default=0.0)
     latency_ms: Mapped[float] = mapped_column(Float, default=0.0)
+    citations_json: Mapped[str | None] = mapped_column(
+        Text, nullable=True, default=None
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
 
     turn: Mapped[Turn] = relationship(back_populates="contributions")

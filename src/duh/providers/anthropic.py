@@ -16,6 +16,7 @@ from duh.core.errors import (
     ProviderTimeoutError,
 )
 from duh.providers.base import (
+    Citation,
     ModelInfo,
     ModelResponse,
     StreamChunk,
@@ -112,6 +113,7 @@ class AnthropicProvider:
         stop_sequences: list[str] | None = None,
         response_format: str | None = None,
         tools: list[dict[str, object]] | None = None,
+        web_search: bool = False,
     ) -> ModelResponse:
         system, api_messages = _build_messages(messages)
 
@@ -133,21 +135,36 @@ class AnthropicProvider:
                 }
                 for t in tools
             ]
+        if web_search:
+            native_tool: dict[str, object] = {
+                "type": "web_search_20250305",
+                "name": "web_search",
+                "max_uses": 5,
+            }
+            if "tools" in kwargs:
+                kwargs["tools"].insert(0, native_tool)
+            else:
+                kwargs["tools"] = [native_tool]
 
         start = time.monotonic()
         try:
-            response = await self._client.messages.create(**kwargs)
+            # Use streaming internally to avoid Anthropic's 10-minute
+            # timeout on non-streaming requests with large max_tokens.
+            response = await self._collect_stream(kwargs)
         except anthropic.APIError as e:
             raise _map_error(e) from e
 
         latency_ms = (time.monotonic() - start) * 1000
 
-        # Extract text content and tool use blocks
-        content = ""
+        # Extract text content and tool use blocks.
+        # With server tools (e.g. web_search), there may be multiple text
+        # blocks interleaved with tool-use/result blocks — concatenate them.
+        text_parts: list[str] = []
         tool_calls_data: list[ToolCallData] = []
+        citations_data: list[Citation] = []
         for block in response.content:
             if hasattr(block, "text"):
-                content = block.text
+                text_parts.append(block.text)
             elif hasattr(block, "type") and block.type == "tool_use":
                 import json
 
@@ -158,6 +175,26 @@ class AnthropicProvider:
                         arguments=json.dumps(block.input),
                     )
                 )
+            elif hasattr(block, "type") and block.type == "web_search_tool_result":
+                # Extract citations from server-side web search results
+                search_content = getattr(block, "content", None)
+                if isinstance(search_content, list):
+                    for entry in search_content:
+                        entry_type = getattr(entry, "type", None)
+                        if entry_type == "web_search_result":
+                            url = getattr(entry, "url", None)
+                            if url:
+                                citations_data.append(
+                                    Citation(
+                                        url=url,
+                                        title=getattr(entry, "title", None),
+                                        snippet=getattr(
+                                            entry, "encrypted_content", None
+                                        ),
+                                    )
+                                )
+
+        content = "\n\n".join(text_parts)
 
         usage = TokenUsage(
             input_tokens=response.usage.input_tokens,
@@ -179,7 +216,18 @@ class AnthropicProvider:
             latency_ms=latency_ms,
             raw_response=response,
             tool_calls=tool_calls_data if tool_calls_data else None,
+            citations=citations_data if citations_data else None,
         )
+
+    async def _collect_stream(self, kwargs: dict[str, Any]) -> anthropic.types.Message:
+        """Stream a request and return the final Message.
+
+        Streaming avoids Anthropic's 10-minute timeout for large
+        max_tokens values while still returning a complete Message
+        object compatible with non-streaming response parsing.
+        """
+        async with self._client.messages.stream(**kwargs) as s:
+            return await s.get_final_message()
 
     async def stream(
         self,

@@ -96,6 +96,7 @@ export function ConsensusPanel() {
                     collapsible={isCompletedRound}
                     defaultOpen={false}
                     truncated={round.truncated.includes('PROPOSE')}
+                    citations={round.proposalCitations}
                   />
                 )}
 

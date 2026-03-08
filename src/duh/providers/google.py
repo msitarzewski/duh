@@ -16,6 +16,7 @@ from duh.core.errors import (
     ProviderTimeoutError,
 )
 from duh.providers.base import (
+    Citation,
     ModelInfo,
     ModelResponse,
     StreamChunk,
@@ -108,6 +109,7 @@ class GoogleProvider:
         stop_sequences: list[str] | None = None,
         response_format: str | None = None,
         tools: list[dict[str, object]] | None = None,
+        web_search: bool = False,
     ) -> ModelResponse:
         system, contents = _build_contents(messages)
 
@@ -131,6 +133,12 @@ class GoogleProvider:
             config_kwargs["tools"] = [
                 genai.types.Tool(function_declarations=func_decls)
             ]
+        if web_search:
+            # GoogleSearch grounding cannot coexist with function_declarations
+            # in the same request — replace function tools entirely.
+            config_kwargs["tools"] = [
+                genai.types.Tool(google_search=genai.types.GoogleSearch())
+            ]
 
         config = genai.types.GenerateContentConfig(**config_kwargs)
 
@@ -146,14 +154,19 @@ class GoogleProvider:
 
         latency_ms = (time.monotonic() - start) * 1000
 
-        # Extract text and function calls
-        content = response.text or ""
+        # Extract text and function calls.
+        # response.text can raise ValueError when grounding metadata is
+        # present, so we iterate parts directly.
+        text_parts: list[str] = []
         tool_calls_data: list[ToolCallData] = []
         if response.candidates:
             cand_content = response.candidates[0].content
             parts = cand_content.parts if cand_content else None
             if parts:
                 for part in parts:
+                    part_text = getattr(part, "text", None)
+                    if isinstance(part_text, str) and part_text:
+                        text_parts.append(part_text)
                     fc = getattr(part, "function_call", None)
                     if fc and fc.name:
                         import json
@@ -166,6 +179,26 @@ class GoogleProvider:
                                 arguments=json.dumps(args),
                             )
                         )
+        content = "\n\n".join(text_parts)
+
+        # Extract citations from grounding metadata (GoogleSearch)
+        citations_data: list[Citation] = []
+        if response.candidates:
+            cand = response.candidates[0]
+            grounding = getattr(cand, "grounding_metadata", None)
+            if grounding:
+                chunks = getattr(grounding, "grounding_chunks", None) or []
+                for chunk in chunks:
+                    web = getattr(chunk, "web", None)
+                    if web:
+                        uri = getattr(web, "uri", None)
+                        if uri:
+                            citations_data.append(
+                                Citation(
+                                    url=uri,
+                                    title=getattr(web, "title", None),
+                                )
+                            )
 
         input_tokens = 0
         output_tokens = 0
@@ -187,6 +220,7 @@ class GoogleProvider:
             latency_ms=latency_ms,
             raw_response=response,
             tool_calls=tool_calls_data if tool_calls_data else None,
+            citations=citations_data if citations_data else None,
         )
 
     async def stream(
