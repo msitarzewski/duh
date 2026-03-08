@@ -16,6 +16,7 @@ from duh.core.errors import (
     ProviderTimeoutError,
 )
 from duh.providers.base import (
+    Citation,
     ModelInfo,
     ModelResponse,
     StreamChunk,
@@ -123,6 +124,7 @@ class PerplexityProvider:
         stop_sequences: list[str] | None = None,
         response_format: str | None = None,
         tools: list[dict[str, object]] | None = None,
+        web_search: bool = False,
     ) -> ModelResponse:
         api_messages = _build_messages(messages)
         clamped = min(max_tokens, self._max_output_for(model_id))
@@ -138,7 +140,17 @@ class PerplexityProvider:
         if response_format == "json":
             kwargs["response_format"] = {"type": "json_object"}
         if tools:
-            kwargs["tools"] = tools
+            kwargs["tools"] = [
+                {
+                    "type": "function",
+                    "function": {
+                        "name": t["name"],
+                        "description": t.get("description", ""),
+                        "parameters": t.get("parameters") or t.get("input_schema", {}),
+                    },
+                }
+                for t in tools
+            ]
 
         start = time.monotonic()
         try:
@@ -178,10 +190,20 @@ class PerplexityProvider:
         model_info = self._resolve_model_info(model_id)
 
         # Capture citations from Perplexity response if present
-        citations = getattr(response, "citations", None)
+        raw_citations = getattr(response, "citations", None)
         raw = response
-        if citations is not None:
-            raw = {"response": response, "citations": citations}
+        if raw_citations is not None:
+            raw = {"response": response, "citations": raw_citations}
+
+        citations_data: list[Citation] = []
+        if isinstance(raw_citations, list):
+            for c in raw_citations:
+                if isinstance(c, str):
+                    citations_data.append(Citation(url=c))
+                elif hasattr(c, "url"):
+                    citations_data.append(
+                        Citation(url=c.url, title=getattr(c, "title", None))
+                    )
 
         return ModelResponse(
             content=content,
@@ -191,6 +213,7 @@ class PerplexityProvider:
             latency_ms=latency_ms,
             raw_response=raw,
             tool_calls=tool_calls_data,
+            citations=citations_data if citations_data else None,
         )
 
     async def stream(

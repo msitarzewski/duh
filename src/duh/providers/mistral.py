@@ -115,6 +115,7 @@ class MistralProvider:
         stop_sequences: list[str] | None = None,
         response_format: str | None = None,
         tools: list[dict[str, object]] | None = None,
+        web_search: bool = False,
     ) -> ModelResponse:
         api_messages = _build_messages(messages)
 
@@ -129,7 +130,23 @@ class MistralProvider:
         if response_format == "json":
             kwargs["response_format"] = {"type": "json_object"}
         if tools:
-            kwargs["tools"] = tools
+            kwargs["tools"] = [
+                {
+                    "type": "function",
+                    "function": {
+                        "name": t["name"],
+                        "description": t.get("description", ""),
+                        "parameters": t.get("parameters") or t.get("input_schema", {}),
+                    },
+                }
+                for t in tools
+            ]
+        if web_search:
+            ws: dict[str, str] = {"type": "web_search"}
+            if "tools" in kwargs:
+                kwargs["tools"].append(ws)
+            else:
+                kwargs["tools"] = [ws]
 
         start = time.monotonic()
         try:

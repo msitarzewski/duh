@@ -1,6 +1,6 @@
 # Architectural Decisions
 
-**Last Updated**: 2026-02-18
+**Last Updated**: 2026-03-08
 
 ---
 
@@ -354,3 +354,87 @@
 - Manual migration instructions in docs (user friction)
 **Consequences**: File-based SQLite databases auto-migrate on startup. Zero friction for local users. PostgreSQL still requires `alembic upgrade head`. Lightweight and self-contained.
 **References**: `src/duh/memory/migrations.py`, `src/duh/cli/app.py:107-110`
+
+---
+
+## 2026-03-08: Native Provider Web Search Over DDG Proxy
+
+**Status**: Approved
+**Context**: The original web search tool used DuckDuckGo as a proxy — every provider's tool calls went through DDG, which returned index pages rather than real content. Most major providers now offer server-side web search that returns higher-quality results with citations.
+**Decision**: Add `web_search: bool` parameter to the `ModelProvider.send()` protocol. When `config.tools.web_search.native` is true, each provider uses its native search capability: Anthropic (`web_search_20250305` server tool), Google (`GoogleSearch()` grounding), Mistral (`{"type": "web_search"}`), OpenAI (`web_search_options`), Perplexity (always native). DDG proxy remains as fallback for providers/models that don't support native search.
+**Alternatives**:
+- DDG-only (simpler, but returns low-quality index pages instead of real content)
+- Single search provider for all (e.g., Bing API — adds external dependency and API key)
+- Remove web search entirely (loses grounding capability)
+**Consequences**: Higher quality search results with real content. Citations extractable from provider responses. Each provider has different native search API shape — increases per-provider complexity. Google grounding and function declarations can't coexist (grounding replaces function tools).
+**References**: `src/duh/providers/anthropic.py`, `src/duh/providers/google.py`, `src/duh/providers/mistral.py`, `src/duh/providers/openai.py`, `src/duh/tools/augmented_send.py`
+
+---
+
+## 2026-03-08: Question Refinement Uses Most Expensive Model
+
+**Status**: Approved
+**Context**: Question refinement analyzes user questions before consensus to determine if clarification is needed. The analysis quality directly impacts downstream consensus quality — a poorly refined question wastes all subsequent model calls.
+**Decision**: `analyze_question()` and `enrich_question()` in `src/duh/consensus/refine.py` use the most expensive configured model (sorted by cost), not the cheapest. The refinement step is a single model call, so the cost difference is minimal compared to the full consensus round it precedes.
+**Alternatives**:
+- Cheapest model (saves tokens, but poor analysis leads to poor consensus)
+- User-configurable refinement model (adds UX complexity)
+- Multi-model refinement (overkill — single strong model is sufficient for question analysis)
+**Consequences**: Better question analysis quality. Marginal cost increase (one extra expensive model call). Graceful fallback on failure — original question proceeds to consensus unchanged.
+**References**: `src/duh/consensus/refine.py`, `src/duh/api/routes/ask.py`, `src/duh/cli/app.py`
+
+---
+
+## 2026-03-08: Tools Enabled by Default
+
+**Status**: Approved
+**Context**: Web search was originally opt-in. Users who didn't know about the `--tools` flag got ungrounded responses. Most queries benefit from web search grounding.
+**Decision**: `web_search` tool is enabled by default across CLI, REST API, and WebSocket paths. The `config.tools.web_search` section controls behavior. Native provider search is preferred when available.
+**Alternatives**:
+- Opt-in only (simpler, but most users miss it)
+- Always-on with no config (inflexible for cost-sensitive users)
+- Per-question tool selection (too much UX friction)
+**Consequences**: Better default experience — responses are grounded in current information. Slightly higher cost per query (search tool calls). Users can disable via config if needed.
+**References**: `src/duh/config/schema.py`, `src/duh/cli/app.py`, `src/duh/api/routes/ws.py`
+
+---
+
+## 2026-03-08: Citation Persistence on Contributions
+
+**Status**: Approved
+**Context**: Citations were emitted over WebSocket during live consensus but never persisted. Viewing a thread later from the Threads section showed no sources — undermining the trust value of native web search.
+**Decision**: Add `citations_json` TEXT column to the `Contribution` model (nullable, JSON-encoded list of `{url, title}`). Track `proposal_citations` on `ConsensusContext` and archive to `RoundResult`. Serialize and persist during `_persist_consensus`. Thread detail API returns parsed citations on `ContributionResponse`. ThreadNav shows domain-grouped sources matching ConsensusNav.
+**Alternatives**:
+- Separate Citation table with FK to Contribution (more normalized, but adds query complexity for marginal benefit)
+- Store citations only on Decision (loses per-role attribution)
+- Don't persist (simpler, but citations are essential to trust)
+**Consequences**: Citations survive beyond the WebSocket session. Thread detail view shows sources grouped by domain with role attribution (P/C/R). SQLite auto-migration handles existing databases. Slightly larger DB rows due to JSON text.
+**References**: `src/duh/memory/models.py:146`, `src/duh/api/routes/threads.py`, `src/duh/api/routes/ws.py`, `web/src/components/threads/ThreadNav.tsx`
+
+---
+
+## 2026-03-08: Anthropic Streaming Internally in send()
+
+**Status**: Approved
+**Context**: Increasing `max_tokens` to 32768 triggered Anthropic SDK's 10-minute timeout error: "Streaming is required for operations that may take longer than 10 minutes." The `send()` method used non-streaming `messages.create()`.
+**Decision**: `send()` now calls `_collect_stream()` which uses `messages.stream()` as a context manager and collects the final `Message` via `get_final_message()`. The returned object is identical to `messages.create()` output, so all downstream parsing (citations, tool calls, text concatenation) works unchanged.
+**Alternatives**:
+- Keep non-streaming and lower max_tokens (loses citation content to truncation)
+- Full streaming to frontend (larger change, separate concern)
+- Increase Anthropic client timeout (fragile, doesn't scale)
+**Consequences**: No more timeout errors at any max_tokens value. Test mocks must mock `messages.stream` context manager instead of `messages.create`. Marginal latency increase from stream overhead (negligible vs network time).
+**References**: `src/duh/providers/anthropic.py:222-229`
+
+---
+
+## 2026-03-08: Parallel Challenge Streaming via as_completed
+
+**Status**: Approved
+**Context**: Challengers were already running in parallel via `asyncio.gather` in `handle_challenge`, but the WebSocket handler sent all results after ALL challengers finished. Users saw nothing until the slowest challenger responded.
+**Decision**: New `_stream_challenges()` function in `ws.py` uses `asyncio.as_completed()` to send each challenge result to the frontend immediately as each completes. Builds `ChallengeResult` objects and updates `ctx.challenges` directly, bypassing `handle_challenge`.
+**Alternatives**:
+- Keep batched approach (simpler, but poor UX — users wait for slowest model)
+- Token-level streaming per challenger (much more complex, requires protocol changes)
+- Sequential challengers (defeats the purpose of multi-model)
+**Consequences**: First challenger to respond appears immediately. More engaging real-time experience. WS test mocks now patch `_stream_challenges` instead of `handle_challenge`. Challenge order in UI reflects completion speed, not configuration order.
+**References**: `src/duh/api/routes/ws.py:253-347`, `tests/unit/test_api_ws.py`

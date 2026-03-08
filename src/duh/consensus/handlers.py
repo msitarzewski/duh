@@ -166,7 +166,7 @@ def _token_budget_note(max_tokens: int) -> str:
 
 
 def build_propose_prompt(
-    ctx: ConsensusContext, *, max_tokens: int = 16384
+    ctx: ConsensusContext, *, max_tokens: int = 32768
 ) -> list[PromptMessage]:
     """Build prompt messages for the PROPOSE phase.
 
@@ -259,8 +259,9 @@ async def handle_propose(
     model_ref: str,
     *,
     temperature: float = 0.7,
-    max_tokens: int = 16384,
+    max_tokens: int = 32768,
     tool_registry: ToolRegistry | None = None,
+    web_search: bool = False,
 ) -> ModelResponse:
     """Execute the PROPOSE phase of consensus.
 
@@ -308,11 +309,16 @@ async def handle_propose(
             tool_registry,
             max_tokens=max_tokens,
             temperature=temperature,
+            web_search=web_search,
         )
         _log_tool_calls(ctx, response, "propose")
     else:
         response = await provider.send(
-            messages, model_id, max_tokens=max_tokens, temperature=temperature
+            messages,
+            model_id,
+            max_tokens=max_tokens,
+            temperature=temperature,
+            web_search=web_search,
         )
 
     # Record cost
@@ -333,7 +339,7 @@ def build_challenge_prompt(
     ctx: ConsensusContext,
     framing: str = "flaw",
     *,
-    max_tokens: int = 16384,
+    max_tokens: int = 32768,
 ) -> list[PromptMessage]:
     """Build prompt messages for the CHALLENGE phase.
 
@@ -459,6 +465,7 @@ async def _call_challenger(
     temperature: float,
     max_tokens: int,
     tool_registry: ToolRegistry | None = None,
+    web_search: bool = False,
 ) -> tuple[str, str, ModelResponse]:
     """Call a single challenger model.
 
@@ -477,11 +484,16 @@ async def _call_challenger(
             tool_registry,
             max_tokens=max_tokens,
             temperature=temperature,
+            web_search=web_search,
         )
         _log_tool_calls(ctx, response, "challenge")
     else:
         response = await provider.send(
-            messages, model_id, max_tokens=max_tokens, temperature=temperature
+            messages,
+            model_id,
+            max_tokens=max_tokens,
+            temperature=temperature,
+            web_search=web_search,
         )
 
     model_info = provider_manager.get_model_info(model_ref)
@@ -495,8 +507,9 @@ async def handle_challenge(
     challenger_models: list[str],
     *,
     temperature: float = 0.7,
-    max_tokens: int = 16384,
+    max_tokens: int = 32768,
     tool_registry: ToolRegistry | None = None,
+    web_search: bool = False,
 ) -> list[ModelResponse]:
     """Execute the CHALLENGE phase of consensus.
 
@@ -543,6 +556,7 @@ async def handle_challenge(
             temperature=temperature,
             max_tokens=max_tokens,
             tool_registry=tool_registry,
+            web_search=web_search,
         )
         for i, ref in enumerate(challenger_models)
     ]
@@ -557,12 +571,17 @@ async def handle_challenge(
             logger.warning("Challenger %s failed: %s", failed_ref, result)
             continue
         model_ref, framing, response = result
+        citation_dicts = tuple(
+            {"url": c.url, "title": c.title, "snippet": c.snippet}
+            for c in (response.citations or [])
+        )
         challenges.append(
             ChallengeResult(
                 model_ref=model_ref,
                 content=response.content,
                 sycophantic=detect_sycophancy(response.content),
                 framing=framing,
+                citations=citation_dicts,
             )
         )
         responses.append(response)
@@ -579,7 +598,7 @@ async def handle_challenge(
 
 
 def build_revise_prompt(
-    ctx: ConsensusContext, *, max_tokens: int = 16384
+    ctx: ConsensusContext, *, max_tokens: int = 32768
 ) -> list[PromptMessage]:
     """Build prompt messages for the REVISE phase.
 
@@ -611,7 +630,7 @@ async def handle_revise(
     model_ref: str | None = None,
     *,
     temperature: float = 0.7,
-    max_tokens: int = 16384,
+    max_tokens: int = 32768,
 ) -> ModelResponse:
     """Execute the REVISE phase of consensus.
 

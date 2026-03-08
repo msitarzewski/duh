@@ -26,6 +26,7 @@ async def tool_augmented_send(
     max_tool_rounds: int = 5,
     temperature: float = 0.7,
     max_tokens: int = 4096,
+    web_search: bool = False,
 ) -> ModelResponse:
     """Send a prompt with tool-use loop.
 
@@ -33,6 +34,9 @@ async def tool_augmented_send(
     2. If response has tool_calls, execute them via registry
     3. Feed tool results back as messages
     4. Repeat until text response or max_tool_rounds reached
+
+    When ``web_search=True``, the ``web_search`` tool definition is
+    filtered from the tools list (the provider handles search natively).
 
     Args:
         provider: The model provider to use.
@@ -42,6 +46,7 @@ async def tool_augmented_send(
         max_tool_rounds: Maximum tool-use iterations.
         temperature: Sampling temperature.
         max_tokens: Max output tokens.
+        web_search: Pass native web search flag to the provider.
 
     Returns:
         Final ModelResponse (text content or last tool round).
@@ -58,6 +63,11 @@ async def tool_augmented_send(
         for td in tool_defs
     ]
 
+    # When native web search is active, remove the DDG web_search tool
+    # so the model doesn't see both native and local search.
+    if web_search:
+        tools_param = [t for t in tools_param if t["name"] != "web_search"]
+
     current_messages = list(messages)
 
     for _round in range(max_tool_rounds):
@@ -67,6 +77,7 @@ async def tool_augmented_send(
             max_tokens=max_tokens,
             temperature=temperature,
             tools=tools_param if tools_param else None,
+            web_search=web_search,
         )
 
         # If no tool calls, return the response as-is

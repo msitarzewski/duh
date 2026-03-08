@@ -5,6 +5,7 @@ import type {
   CalibrationResponse,
   CostResponse,
   DecisionSpaceResponse,
+  EnrichResponse,
   FeedbackRequest,
   FeedbackResponse,
   ForgotPasswordRequest,
@@ -13,6 +14,7 @@ import type {
   LoginRequest,
   ModelsResponse,
   RecallResponse,
+  RefineResponse,
   RegisterRequest,
   ResetPasswordRequest,
   ResetPasswordResponse,
@@ -105,6 +107,24 @@ export const api = {
   // Health
   health(): Promise<HealthResponse> {
     return request('/health')
+  },
+
+  // Refinement
+  refine(question: string, maxQuestions?: number): Promise<RefineResponse> {
+    return request('/refine', {
+      method: 'POST',
+      body: JSON.stringify({ question, max_questions: maxQuestions }),
+    })
+  },
+
+  enrich(
+    originalQuestion: string,
+    clarifications: { question: string; answer: string }[],
+  ): Promise<EnrichResponse> {
+    return request('/enrich', {
+      method: 'POST',
+      body: JSON.stringify({ original_question: originalQuestion, clarifications }),
+    })
   },
 
   // Consensus

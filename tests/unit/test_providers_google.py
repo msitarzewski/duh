@@ -44,6 +44,16 @@ def _make_response(
 ) -> MagicMock:
     resp = MagicMock()
     resp.text = text
+    # Build candidates with text parts so the provider can extract
+    # content from parts (needed for grounding-safe parsing).
+    text_part = MagicMock()
+    text_part.text = text
+    text_part.function_call = None
+    cand_content = MagicMock()
+    cand_content.parts = [text_part]
+    candidate = MagicMock()
+    candidate.content = cand_content
+    resp.candidates = [candidate]
     resp.usage_metadata = MagicMock()
     resp.usage_metadata.prompt_token_count = prompt_tokens
     resp.usage_metadata.candidates_token_count = candidate_tokens
@@ -179,6 +189,7 @@ async def test_send_no_usage_metadata():
 async def test_send_empty_text():
     resp = _make_response()
     resp.text = None
+    resp.candidates[0].content.parts[0].text = None
     client = _make_client(resp)
     prov = GoogleProvider(client=client)
     result = await prov.send(

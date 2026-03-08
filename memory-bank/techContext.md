@@ -1,6 +1,6 @@
 # Technical Context
 
-**Last Updated**: 2026-02-17
+**Last Updated**: 2026-03-08
 
 ---
 
@@ -124,6 +124,61 @@ Most local providers already speak the OpenAI-compatible API, so the Ollama/LM S
 - FastAPI mounts `web/dist/` as static files with SPA fallback route
 - Docker: Node.js 22 build stage copies dist/ to runtime image
 
+## Native Provider Web Search (2026-03-08)
+
+**Rationale**: DuckDuckGo proxy returned index pages, not real content. Major providers now offer server-side search with higher quality results and extractable citations.
+
+- `web_search: bool` param on `ModelProvider.send()` protocol
+- `config.tools.web_search.native` flag (default: true)
+- Per-provider implementation:
+  - **Anthropic**: `web_search_20250305` server tool in tools[] — skip generic→native transform for entries with `type` key
+  - **Google**: `GoogleSearch()` grounding replaces function tools (can't coexist with `function_declarations`)
+  - **Mistral**: `{"type": "web_search"}` appended to tools list
+  - **OpenAI**: `web_search_options={}` only for `_SEARCH_MODELS` set; standard models fall back to DDG
+  - **Perplexity**: no-op (always searches natively)
+- `tool_augmented_send`: filters DDG `web_search` tool when native=True, passes `web_search` flag to provider
+
+## Citations (2026-03-08)
+
+**Rationale**: Native web search returns structured citation data. Surfacing sources improves trust and verifiability.
+
+- `Citation` dataclass (url, title, snippet) on `ModelResponse.citations`
+- Extraction per provider:
+  - **Anthropic**: `web_search_tool_result` blocks → `web_search_result` entries
+  - **Google**: `candidate.grounding_metadata.grounding_chunks[].web` → uri/title
+  - **Perplexity**: `response.citations` list (strings or objects)
+- WebSocket: `phase_complete` (PROPOSE) and `challenge` events include `citations` array
+- Frontend: `CitationList` shared component (numbered deduped links, hostname fallback), `ConsensusNav` collapsible Sources
+
+## Question Refinement (2026-03-08)
+
+**Rationale**: Ambiguous or underspecified questions produce low-quality consensus. A pre-consensus refinement step catches missing context.
+
+- `src/duh/consensus/refine.py` — `analyze_question()` + `enrich_question()`
+- Uses most expensive configured model (quality matters more than cost for a single call)
+- API: `POST /api/refine`, `POST /api/enrich`
+- CLI: `duh ask --refine "question"` (default `--no-refine`)
+- Frontend: consensus store `'refining'` status → `RefinementPanel.tsx` (tabbed UI, Skip button)
+- Graceful fallback: any failure → proceed with original question
+
+## Anthropic Streaming Internals (2026-03-08)
+
+**Rationale**: Anthropic SDK requires streaming for requests that may exceed 10 minutes. With `max_tokens=32768`, non-streaming `messages.create()` hit this limit.
+
+- `AnthropicProvider.send()` now calls `_collect_stream()` internally
+- Uses `messages.stream()` context manager → `get_final_message()` returns identical `Message` object
+- All downstream parsing (citations, tool calls, text blocks) unchanged
+- Test mocks must mock `messages.stream` (async context manager), not `messages.create`
+
+## Parallel Challenge Streaming (2026-03-08)
+
+**Rationale**: Challengers ran in parallel but results were batched. Users saw nothing until the slowest challenger responded.
+
+- `_stream_challenges()` in `ws.py` uses `asyncio.as_completed()`
+- Each challenge result sent to WebSocket immediately as it finishes
+- Builds `ChallengeResult` objects and updates `ctx.challenges` directly
+- WS test mocks now patch `_stream_challenges` instead of `handle_challenge`
+
 ## Key Technical Patterns
 
 ### Async-First
@@ -153,10 +208,10 @@ React app built by Vite to `web/dist/`, served by FastAPI as static files. SPA f
 ## Decided (v0.4)
 
 - **Project structure**: `src/duh/` with cli/, consensus/, providers/, memory/, config/, core/, tools/, api/, mcp/ + `web/` with src/, theme, api, stores, components, pages
-- **Testing**: pytest + pytest-asyncio + pytest-cov (1318 tests), Vitest + @testing-library/react (117 tests), asyncio_mode=auto
+- **Testing**: pytest + pytest-asyncio + pytest-cov (1641 tests), Vitest + @testing-library/react (194 tests), asyncio_mode=auto
 - **CI/CD**: GitHub Actions (lint, typecheck, test) + docs deployment to GitHub Pages
 - **Provider interface**: `typing.Protocol` (structural typing), stateless adapters
-- **5 providers shipping**: Anthropic (3 models), OpenAI (3 models), Google (4 models), Mistral (4 models) — 14 total
+- **6 providers shipping**: Anthropic, OpenAI, Google, Mistral, Perplexity — with native web search per provider
 - **Memory schema**: SQLAlchemy ORM — Thread, Turn, Contribution, TurnSummary, ThreadSummary, Decision, Outcome, Subtask, Vote, APIKey
 - **Configuration**: TOML with Pydantic validation, layered merge (defaults < user < project < env < CLI)
 - **Error handling**: DuhError hierarchy with ProviderError, ConsensusError, ConfigError, StorageError
@@ -175,7 +230,11 @@ React app built by Vite to `web/dist/`, served by FastAPI as static files. SPA f
 - **Markdown rendering**: react-markdown + remark-gfm + rehype-highlight in `Markdown` shared component
 - **Light/dark mode**: `prefers-color-scheme` auto-detection + `.theme-dark`/`.theme-light` manual override classes
 - **Documentation**: MkDocs Material, deployed to GitHub Pages
-- **50 Python source files + 66 frontend source files**, mypy strict clean, ruff clean, 0 TS errors
+- **~63 Python source files + ~81 frontend source files**, mypy strict clean, ruff clean, 0 TS errors
+- **Question refinement**: pre-consensus clarification step (analyze → clarify → enrich → consensus)
+- **Native web search**: per-provider server-side search with citation extraction
+- **Citations**: `Citation` dataclass, `CitationList` component, ConsensusNav Sources sidebar
+- **Tools by default**: web_search enabled across CLI/REST/WS paths
 
 ## Dependencies
 

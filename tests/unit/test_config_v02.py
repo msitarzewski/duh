@@ -34,7 +34,7 @@ class TestCodeExecutionConfig:
 class TestToolsConfig:
     def test_defaults(self) -> None:
         cfg = ToolsConfig()
-        assert cfg.enabled is False
+        assert cfg.enabled is True
         assert cfg.max_rounds == 5
         assert cfg.web_search.backend == "duckduckgo"
         assert cfg.code_execution.enabled is False
@@ -93,6 +93,6 @@ class TestDuhConfigV02:
         assert cfg.cost.hard_limit == 10.00
         assert "anthropic" in cfg.providers
         # v0.2 fields have safe defaults
-        assert cfg.tools.enabled is False
+        assert cfg.tools.enabled is True
         assert cfg.voting.enabled is False
         assert cfg.taxonomy.enabled is False

@@ -127,7 +127,7 @@ class TestDuhConfigAPIIntegration:
         assert cfg.general.max_rounds == 3
         assert cfg.cost.hard_limit == 10.00
         assert "anthropic" in cfg.providers
-        assert cfg.tools.enabled is False
+        assert cfg.tools.enabled is True
         assert cfg.api.host == "127.0.0.1"
 
 

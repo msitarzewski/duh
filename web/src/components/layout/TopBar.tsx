@@ -3,7 +3,7 @@ import { api } from '@/api/client'
 import { useAuthStore } from '@/stores'
 import { Badge } from '@/components/shared'
 
-export function TopBar({ onMenuClick }: { onMenuClick?: () => void }) {
+export function TopBar({ onMenuClick, showSidebarToggle }: { onMenuClick?: () => void; showSidebarToggle?: boolean }) {
   const [healthy, setHealthy] = useState<boolean | null>(null)
   const { user, authRequired, logout } = useAuthStore()
   const [menuOpen, setMenuOpen] = useState(false)
@@ -47,11 +47,12 @@ export function TopBar({ onMenuClick }: { onMenuClick?: () => void }) {
       <div className="flex items-center gap-3">
         <button
           onClick={onMenuClick}
-          className="lg:hidden text-[var(--color-text-secondary)] hover:text-[var(--color-text)] p-1"
-          aria-label="Toggle menu"
+          className={`${showSidebarToggle ? '' : 'lg:hidden'} text-[var(--color-text-secondary)] hover:text-[var(--color-text)] p-1`}
+          aria-label="Toggle sidebar"
         >
-          <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5">
-            <path d="M3 5h14M3 10h14M3 15h14" />
+          <svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+            <rect x="1.5" y="2" width="13" height="12" rx="2" />
+            <path d="M5.5 2v12" />
           </svg>
         </button>
       </div>

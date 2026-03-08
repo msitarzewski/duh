@@ -1,6 +1,7 @@
-import { GlassPanel, Markdown, Disclosure } from '@/components/shared'
+import { GlassPanel, Markdown, Disclosure, CitationList } from '@/components/shared'
 import { ModelBadge } from './ModelBadge'
 import { StreamingText } from './StreamingText'
+import type { Citation } from '@/api/types'
 
 interface PhaseCardProps {
   phase: string
@@ -8,13 +9,14 @@ interface PhaseCardProps {
   models?: string[]
   content?: string | null
   isActive?: boolean
-  challenges?: Array<{ model: string; content: string; truncated?: boolean; error?: boolean }>
+  challenges?: Array<{ model: string; content: string; truncated?: boolean; error?: boolean; citations?: Citation[] | null }>
   collapsible?: boolean
   defaultOpen?: boolean
   truncated?: boolean
+  citations?: Citation[] | null
 }
 
-export function PhaseCard({ phase, model, models, content, isActive, challenges, collapsible, defaultOpen = true, truncated }: PhaseCardProps) {
+export function PhaseCard({ phase, model, models, content, isActive, challenges, collapsible, defaultOpen = true, truncated, citations }: PhaseCardProps) {
   const header = (
     <>
       <span className="font-mono text-xs text-[var(--color-primary)] font-semibold">{phase}</span>
@@ -35,6 +37,9 @@ export function PhaseCard({ phase, model, models, content, isActive, challenges,
           ) : (
             <Markdown>{content}</Markdown>
           )}
+          {!isActive && citations && citations.length > 0 && (
+            <CitationList citations={citations} />
+          )}
         </div>
       )}
 
@@ -54,6 +59,9 @@ export function PhaseCard({ phase, model, models, content, isActive, challenges,
             >
               <div className={`text-sm ${ch.error ? 'text-[var(--color-danger)]' : 'text-[var(--color-text-secondary)]'}`}>
                 {ch.error ? <span className="font-mono text-xs">{ch.content}</span> : <Markdown>{ch.content}</Markdown>}
+                {!ch.error && ch.citations && ch.citations.length > 0 && (
+                  <CitationList citations={ch.citations} />
+                )}
               </div>
             </Disclosure>
           ))}

@@ -1,25 +1,29 @@
 import { useConsensusStore } from '@/stores'
-import { GlassPanel, GlowButton } from '@/components/shared'
+import { GlassPanel, GlowButton, Skeleton } from '@/components/shared'
 import { QuestionInput } from './QuestionInput'
 import { PhaseCard } from './PhaseCard'
 import { ConsensusComplete } from './ConsensusComplete'
 import { CostTicker } from './CostTicker'
+import { RefinementPanel } from './RefinementPanel'
 
 export function ConsensusPanel() {
   const {
     status, error, currentPhase, currentRound, rounds,
     decision, confidence, rigor, dissent, cost, overview,
-    startConsensus, reset,
+    clarifyingQuestions, clarificationAnswers,
+    submitQuestion, answerClarification, submitClarifications, skipRefinement,
+    reset,
   } = useConsensusStore()
 
   const isActive = status === 'connecting' || status === 'streaming'
+  const isRefining = status === 'refining'
   const isComplete = status === 'complete'
 
   return (
     <div className="space-y-4">
       <QuestionInput
-        onSubmit={(q, r, p, ms) => startConsensus(q, r, p, ms)}
-        disabled={isActive}
+        onSubmit={(q, r, p, ms) => submitQuestion(q, r, p, ms)}
+        disabled={isActive || isRefining}
       />
 
       {status === 'error' && error && (
@@ -29,6 +33,27 @@ export function ConsensusPanel() {
             <GlowButton variant="ghost" size="sm" onClick={reset}>Dismiss</GlowButton>
           </div>
         </GlassPanel>
+      )}
+
+      {isRefining && clarifyingQuestions.length === 0 && (
+        <GlassPanel padding="sm">
+          <div className="flex items-center gap-2">
+            <Skeleton className="h-4 w-4 rounded-full" />
+            <span className="text-sm font-mono text-[var(--color-text-dim)]">
+              Analyzing question...
+            </span>
+          </div>
+        </GlassPanel>
+      )}
+
+      {isRefining && clarifyingQuestions.length > 0 && (
+        <RefinementPanel
+          questions={clarifyingQuestions}
+          answers={clarificationAnswers}
+          onAnswer={answerClarification}
+          onSubmit={submitClarifications}
+          onSkip={skipRefinement}
+        />
       )}
 
       {isComplete && decision && confidence !== null && (
@@ -71,6 +96,7 @@ export function ConsensusPanel() {
                     collapsible={isCompletedRound}
                     defaultOpen={false}
                     truncated={round.truncated.includes('PROPOSE')}
+                    citations={round.proposalCitations}
                   />
                 )}
 

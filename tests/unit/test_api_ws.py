@@ -113,10 +113,33 @@ def _apply_handler_patches(
         propose_mock = AsyncMock(side_effect=mock_propose)
 
     stack.enter_context(patch(f"{_HANDLERS}.handle_propose", propose_mock))
+
+    # _stream_challenges in ws.py replaces the old handle_challenge call
+    async def mock_stream_challenges(ws, ctx, pm, challengers, **kwargs):
+        ctx.challenges = [
+            ChallengeResult(
+                model_ref=ref,
+                content=challenge_content,
+                sycophantic=False,
+                framing="flaw",
+            )
+            for ref in challengers
+        ]
+        for ch in ctx.challenges:
+            await ws.send_json(
+                {
+                    "type": "challenge",
+                    "model": ch.model_ref,
+                    "content": ch.content,
+                    "truncated": False,
+                    "citations": None,
+                }
+            )
+
     stack.enter_context(
         patch(
-            f"{_HANDLERS}.handle_challenge",
-            AsyncMock(side_effect=mock_challenge),
+            "duh.api.routes.ws._stream_challenges",
+            AsyncMock(side_effect=mock_stream_challenges),
         )
     )
     stack.enter_context(

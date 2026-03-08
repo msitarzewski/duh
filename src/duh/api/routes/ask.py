@@ -15,6 +15,25 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api", tags=["consensus"])
 
 
+class RefineRequest(BaseModel):
+    question: str
+    max_questions: int = 4
+
+
+class RefineResponse(BaseModel):
+    needs_refinement: bool
+    questions: list[dict[str, str | None]] = []
+
+
+class EnrichRequest(BaseModel):
+    original_question: str
+    clarifications: list[dict[str, str]]
+
+
+class EnrichResponse(BaseModel):
+    enriched_question: str
+
+
 class AskRequest(BaseModel):
     question: str
     protocol: str = "consensus"  # consensus, voting, auto
@@ -46,6 +65,7 @@ async def ask(body: AskRequest, request: Request) -> AskResponse | JSONResponse:
     config.general.max_rounds = body.rounds
 
     db_factory = getattr(request.app.state, "db_factory", None)
+    tool_registry = getattr(request.app.state, "tool_registry", None)
 
     try:
         if body.decompose:
@@ -55,7 +75,7 @@ async def ask(body: AskRequest, request: Request) -> AskResponse | JSONResponse:
             return await _handle_voting(body, config, pm)
 
         # Default: consensus
-        return await _handle_consensus(body, config, pm, db_factory)
+        return await _handle_consensus(body, config, pm, db_factory, tool_registry)
 
     except ProviderError as exc:
         logger.exception("Provider error during /api/ask")
@@ -78,18 +98,21 @@ async def ask(body: AskRequest, request: Request) -> AskResponse | JSONResponse:
 
 
 async def _handle_consensus(  # type: ignore[no-untyped-def]
-    body: AskRequest, config, pm, db_factory=None
+    body: AskRequest, config, pm, db_factory=None, tool_registry=None
 ) -> AskResponse:
     """Run the consensus protocol."""
     from duh.cli.app import _run_consensus
 
+    use_native_search = config.tools.enabled and config.tools.web_search.native
     decision, confidence, rigor, dissent, cost, _overview = await _run_consensus(
         body.question,
         config,
         pm,
+        tool_registry=tool_registry,
         panel=body.panel,
         proposer_override=body.proposer,
         challengers_override=body.challengers,
+        web_search=use_native_search,
     )
 
     thread_id: str | None = None
@@ -203,3 +226,26 @@ async def _persist_result(
         )
         await session.commit()
         return str(thread.id)
+
+
+@router.post("/refine", response_model=RefineResponse)
+async def refine(body: RefineRequest, request: Request) -> RefineResponse:
+    """Analyze a question for ambiguity and suggest clarifications."""
+    from duh.consensus.refine import analyze_question
+
+    pm = request.app.state.provider_manager
+    result = await analyze_question(body.question, pm, max_questions=body.max_questions)
+    return RefineResponse(
+        needs_refinement=result.get("needs_refinement", False),
+        questions=result.get("questions", []),
+    )
+
+
+@router.post("/enrich", response_model=EnrichResponse)
+async def enrich(body: EnrichRequest, request: Request) -> EnrichResponse:
+    """Rewrite a question incorporating clarification answers."""
+    from duh.consensus.refine import enrich_question
+
+    pm = request.app.state.provider_manager
+    enriched = await enrich_question(body.original_question, body.clarifications, pm)
+    return EnrichResponse(enriched_question=enriched)

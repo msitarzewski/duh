@@ -49,6 +49,14 @@ async def ensure_schema(engine: AsyncEngine) -> None:
                 "ALTER TABLE users ADD COLUMN is_guest BOOLEAN DEFAULT 0"
             )
 
+        # ── contributions table ──
+        contrib_cols = await _get_columns(conn, "contributions")
+        if "citations_json" not in contrib_cols:
+            logger.info("Adding 'citations_json' column to contributions table")
+            await conn.exec_driver_sql(
+                "ALTER TABLE contributions ADD COLUMN citations_json TEXT DEFAULT NULL"
+            )
+
         # ── threads table ──
         thread_cols = await _get_columns(conn, "threads")
         if "is_public" not in thread_cols:

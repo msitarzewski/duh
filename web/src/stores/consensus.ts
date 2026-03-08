@@ -1,25 +1,30 @@
 import { create } from 'zustand'
 import { ConsensusWebSocket } from '@/api/websocket'
+import { api } from '@/api/client'
 import type {
   WSEvent,
   WSPhaseStart,
   ConsensusPhase,
+  ClarifyingQuestion,
   ModelSelectionOptions,
+  Citation,
 } from '@/api/types'
 
-export type ConsensusStatus = 'idle' | 'connecting' | 'streaming' | 'complete' | 'error'
+export type ConsensusStatus = 'idle' | 'connecting' | 'streaming' | 'complete' | 'error' | 'refining'
 
 export interface ChallengeEntry {
   model: string
   content: string
   truncated?: boolean
   error?: boolean
+  citations?: Citation[] | null
 }
 
 export interface RoundData {
   round: number
   proposer: string | null
   proposal: string | null
+  proposalCitations?: Citation[] | null
   challengers: string[]
   challenges: ChallengeEntry[]
   reviser: string | null
@@ -52,7 +57,18 @@ interface ConsensusState {
   threadId: string | null
   overview: string | null
 
+  // Refinement
+  clarifyingQuestions: ClarifyingQuestion[]
+  clarificationAnswers: Record<number, string>
+  pendingRounds: number
+  pendingProtocol: string
+  pendingModelSelection: ModelSelectionOptions | undefined
+
   // Actions
+  submitQuestion: (question: string, rounds?: number, protocol?: string, modelSelection?: ModelSelectionOptions) => void
+  answerClarification: (index: number, answer: string) => void
+  submitClarifications: () => void
+  skipRefinement: () => void
   startConsensus: (question: string, rounds?: number, protocol?: string, modelSelection?: ModelSelectionOptions) => void
   reset: () => void
   disconnect: () => void
@@ -76,20 +92,101 @@ function createEmptyRound(round: number): RoundData {
   }
 }
 
-export const useConsensusStore = create<ConsensusState>((set, get) => ({
-  status: 'idle',
-  error: null,
-  currentPhase: null,
+const initialState = {
+  status: 'idle' as ConsensusStatus,
+  error: null as string | null,
+  currentPhase: null as ConsensusPhase | null,
   currentRound: 0,
-  rounds: [],
-  question: null,
-  decision: null,
-  confidence: null,
-  rigor: null,
-  dissent: null,
-  cost: null,
-  threadId: null,
+  rounds: [] as RoundData[],
+  question: null as string | null,
+  decision: null as string | null,
+  confidence: null as number | null,
+  rigor: null as number | null,
+  dissent: null as string | null,
+  cost: null as number | null,
+  threadId: null as string | null,
   overview: null as string | null,
+  clarifyingQuestions: [] as ClarifyingQuestion[],
+  clarificationAnswers: {} as Record<number, string>,
+  pendingRounds: 3,
+  pendingProtocol: 'consensus',
+  pendingModelSelection: undefined as ModelSelectionOptions | undefined,
+}
+
+export const useConsensusStore = create<ConsensusState>((set, get) => ({
+  ...initialState,
+
+  submitQuestion: async (question, rounds = 3, protocol = 'consensus', modelSelection?) => {
+    set({
+      ...initialState,
+      status: 'refining',
+      question,
+      pendingRounds: rounds,
+      pendingProtocol: protocol,
+      pendingModelSelection: modelSelection,
+    })
+
+    try {
+      const result = await api.refine(question)
+      if (result.needs_refinement && result.questions.length > 0) {
+        set({ clarifyingQuestions: result.questions })
+      } else {
+        get().startConsensus(question, rounds, protocol, modelSelection)
+      }
+    } catch {
+      // Refinement failed — proceed directly to consensus
+      get().startConsensus(question, rounds, protocol, modelSelection)
+    }
+  },
+
+  answerClarification: (index, answer) => {
+    set((state) => ({
+      clarificationAnswers: { ...state.clarificationAnswers, [index]: answer },
+    }))
+  },
+
+  submitClarifications: async () => {
+    const state = get()
+    const { question, clarifyingQuestions, clarificationAnswers } = state
+    if (!question) return
+
+    set({ status: 'refining', clarifyingQuestions: [], clarificationAnswers: {} })
+
+    const clarifications = clarifyingQuestions.map((q, i) => ({
+      question: q.question,
+      answer: clarificationAnswers[i] || '',
+    }))
+
+    try {
+      const result = await api.enrich(question, clarifications)
+      get().startConsensus(
+        result.enriched_question,
+        state.pendingRounds,
+        state.pendingProtocol,
+        state.pendingModelSelection,
+      )
+    } catch {
+      // Enrichment failed — use original question
+      get().startConsensus(
+        question,
+        state.pendingRounds,
+        state.pendingProtocol,
+        state.pendingModelSelection,
+      )
+    }
+  },
+
+  skipRefinement: () => {
+    const state = get()
+    if (state.question) {
+      get().startConsensus(
+        state.question,
+        state.pendingRounds,
+        state.pendingProtocol,
+        state.pendingModelSelection,
+      )
+    }
+  },
 
   startConsensus: (question, rounds = 3, protocol = 'consensus', modelSelection?) => {
     set({
@@ -106,6 +203,8 @@ export const useConsensusStore = create<ConsensusState>((set, get) => ({
       cost: null,
       threadId: null,
       overview: null,
+      clarifyingQuestions: [],
+      clarificationAnswers: {},
     })
 
     ws.connect({
@@ -132,21 +231,7 @@ export const useConsensusStore = create<ConsensusState>((set, get) => ({
 
   reset: () => {
     ws.close()
-    set({
-      status: 'idle',
-      error: null,
-      currentPhase: null,
-      currentRound: 0,
-      rounds: [],
-      question: null,
-      decision: null,
-      confidence: null,
-      rigor: null,
-      dissent: null,
-      cost: null,
-      threadId: null,
-      overview: null,
-    })
+    set(initialState)
   },
 
   disconnect: () => {
@@ -203,6 +288,7 @@ function handleEvent(
       const update: Partial<RoundData> = {}
       if (event.phase === 'PROPOSE') {
         update.proposal = event.content ?? null
+        update.proposalCitations = event.citations ?? null
         if (event.truncated) update.truncated = [...round.truncated, 'PROPOSE']
       } else if (event.phase === 'REVISE') {
         update.revision = event.content ?? null
@@ -221,7 +307,7 @@ function handleEvent(
       const truncatedUpdate = event.truncated ? [...round.truncated, `CHALLENGE:${event.model}`] : round.truncated
       set({
         rounds: updateRound(state.rounds, idx, {
-          challenges: [...round.challenges, { model: event.model, content: event.content, truncated: event.truncated }],
+          challenges: [...round.challenges, { model: event.model, content: event.content, truncated: event.truncated, citations: event.citations }],
           truncated: truncatedUpdate,
         }),
       })

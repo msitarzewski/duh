@@ -20,7 +20,7 @@ _extra_lifespans: dict[int, Callable[[FastAPI], AsyncContextManager[None]] | Non
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     """Lifespan handler: set up DB + providers on startup, tear down on shutdown."""
-    from duh.cli.app import _create_db, _setup_providers
+    from duh.cli.app import _create_db, _setup_providers, _setup_tools
 
     config: DuhConfig = app.state.config
     factory, engine = await _create_db(config)
@@ -29,6 +29,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.db_factory = factory
     app.state.engine = engine
     app.state.provider_manager = pm
+    app.state.tool_registry = _setup_tools(config)
 
     extra = getattr(app.state, "extra_lifespan", None)
     if extra is not None:
