@@ -125,7 +125,14 @@ class AnthropicProvider:
         if stop_sequences:
             kwargs["stop_sequences"] = stop_sequences
         if tools:
-            kwargs["tools"] = tools
+            kwargs["tools"] = [
+                {
+                    "name": t["name"],
+                    "description": t.get("description", ""),
+                    "input_schema": t.get("input_schema") or t.get("parameters", {}),
+                }
+                for t in tools
+            ]
 
         start = time.monotonic()
         try:

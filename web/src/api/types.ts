@@ -47,6 +47,22 @@ export interface ResetPasswordResponse {
   message: string
 }
 
+// ── Refinement types ──────────────────────────────────────
+
+export interface ClarifyingQuestion {
+  question: string
+  hint?: string | null
+}
+
+export interface RefineResponse {
+  needs_refinement: boolean
+  questions: ClarifyingQuestion[]
+}
+
+export interface EnrichResponse {
+  enriched_question: string
+}
+
 // ── Request types ─────────────────────────────────────────
 
 export interface AskRequest {

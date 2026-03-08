@@ -129,7 +129,17 @@ class MistralProvider:
         if response_format == "json":
             kwargs["response_format"] = {"type": "json_object"}
         if tools:
-            kwargs["tools"] = tools
+            kwargs["tools"] = [
+                {
+                    "type": "function",
+                    "function": {
+                        "name": t["name"],
+                        "description": t.get("description", ""),
+                        "parameters": t.get("parameters") or t.get("input_schema", {}),
+                    },
+                }
+                for t in tools
+            ]
 
         start = time.monotonic()
         try:

@@ -74,7 +74,7 @@ class CodeExecutionConfig(BaseModel):
 class ToolsConfig(BaseModel):
     """Tool framework configuration."""
 
-    enabled: bool = False
+    enabled: bool = True
     max_rounds: int = 5
     web_search: WebSearchConfig = Field(default_factory=WebSearchConfig)
     code_execution: CodeExecutionConfig = Field(default_factory=CodeExecutionConfig)

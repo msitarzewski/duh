@@ -386,6 +386,11 @@ def cli(ctx: click.Context, config_path: str | None) -> None:
     default=None,
     help="Restrict to these models only (comma-separated model refs).",
 )
+@click.option(
+    "--refine/--no-refine",
+    default=False,
+    help="Pre-consensus question refinement (ask clarifying questions).",
+)
 @click.pass_context
 def ask(
     ctx: click.Context,
@@ -397,6 +402,7 @@ def ask(
     proposer: str | None,
     challengers: str | None,
     panel: str | None,
+    refine: bool,
 ) -> None:
     """Run a consensus query.
 
@@ -414,6 +420,14 @@ def ask(
     # Parse model selection overrides
     panel_list = panel.split(",") if panel else None
     challengers_list = challengers.split(",") if challengers else None
+
+    # Question refinement (pre-consensus clarification)
+    if refine:
+        try:
+            question = asyncio.run(_refine_question(question, config))
+        except DuhError as e:
+            _error(str(e))
+            return
 
     # Determine effective protocol
     effective_protocol = protocol or config.general.protocol
@@ -461,6 +475,31 @@ def ask(
     display.show_final_decision(
         decision, confidence, rigor, cost, dissent, overview=overview
     )
+
+
+async def _refine_question(question: str, config: DuhConfig) -> str:
+    """Run question refinement interactively on the CLI."""
+    from duh.consensus.refine import analyze_question, enrich_question
+
+    pm = await _setup_providers(config)
+    if not pm.list_all_models():
+        return question
+
+    result = await analyze_question(question, pm)
+    if not result.get("needs_refinement"):
+        return question
+
+    questions = result.get("questions", [])
+    click.echo("\nClarifying questions:")
+    clarifications = []
+    for q in questions:
+        hint = f" ({q['hint']})" if q.get("hint") else ""
+        answer = click.prompt(f"  {q['question']}{hint}")
+        clarifications.append({"question": q["question"], "answer": answer})
+
+    enriched = await enrich_question(question, clarifications, pm)
+    click.echo(f"\nRefined question: {enriched}\n")
+    return enriched
 
 
 async def _ask_async(

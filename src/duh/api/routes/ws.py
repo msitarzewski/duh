@@ -11,6 +11,7 @@ if TYPE_CHECKING:
     from duh.config.schema import DuhConfig
     from duh.consensus.machine import RoundResult
     from duh.providers.manager import ProviderManager
+    from duh.tools.registry import ToolRegistry
 
 logger = logging.getLogger(__name__)
 
@@ -63,6 +64,8 @@ async def ws_ask(websocket: WebSocket) -> None:
         pm: ProviderManager = websocket.app.state.provider_manager
         config.general.max_rounds = rounds
 
+        tool_registry = getattr(websocket.app.state, "tool_registry", None)
+
         await _stream_consensus(
             websocket,
             question,
@@ -71,6 +74,7 @@ async def ws_ask(websocket: WebSocket) -> None:
             panel=panel,
             proposer_override=proposer_override,
             challengers_override=challengers_raw,
+            tool_registry=tool_registry,
         )
 
     except WebSocketDisconnect:
@@ -93,6 +97,7 @@ async def _stream_consensus(
     panel: list[str] | None = None,
     proposer_override: str | None = None,
     challengers_override: list[str] | None = None,
+    tool_registry: ToolRegistry | None = None,
 ) -> None:
     """Run consensus loop and stream events to WebSocket."""
     from duh.consensus.convergence import check_convergence
@@ -132,7 +137,9 @@ async def _stream_consensus(
                 "round": ctx.current_round,
             }
         )
-        propose_resp = await handle_propose(ctx, pm, proposer)
+        propose_resp = await handle_propose(
+            ctx, pm, proposer, tool_registry=tool_registry
+        )
         await ws.send_json(
             {
                 "type": "phase_complete",
@@ -155,7 +162,9 @@ async def _stream_consensus(
                 "round": ctx.current_round,
             }
         )
-        challenge_resps = await handle_challenge(ctx, pm, challengers)
+        challenge_resps = await handle_challenge(
+            ctx, pm, challengers, tool_registry=tool_registry
+        )
         succeeded = {ch.model_ref for ch in ctx.challenges}
         for i, ch in enumerate(ctx.challenges):
             resp_truncated = (

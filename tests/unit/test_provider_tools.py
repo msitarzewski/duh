@@ -18,17 +18,15 @@ from duh.providers.openai import OpenAIProvider
 
 # ── Shared fixtures ──────────────────────────────────────────────
 
+# Generic tool format (as produced by tool_augmented_send)
 SAMPLE_TOOLS: list[dict[str, object]] = [
     {
-        "type": "function",
-        "function": {
-            "name": "web_search",
-            "description": "Search the web",
-            "parameters": {
-                "type": "object",
-                "properties": {"query": {"type": "string"}},
-                "required": ["query"],
-            },
+        "name": "web_search",
+        "description": "Search the web",
+        "parameters": {
+            "type": "object",
+            "properties": {"query": {"type": "string"}},
+            "required": ["query"],
         },
     }
 ]
@@ -90,7 +88,11 @@ class TestOpenAIToolForwarding:
         provider = OpenAIProvider(client=client)
         await provider.send(USER_MSG, "gpt-5.2", tools=SAMPLE_TOOLS)
         call_kwargs = client.chat.completions.create.call_args.kwargs
-        assert call_kwargs["tools"] is SAMPLE_TOOLS
+        tools = call_kwargs["tools"]
+        assert len(tools) == 1
+        assert tools[0]["type"] == "function"
+        assert tools[0]["function"]["name"] == "web_search"
+        assert tools[0]["function"]["parameters"]["type"] == "object"
 
     async def test_no_tools_param_omitted(self) -> None:
         client = _oai_make_client()
@@ -258,7 +260,10 @@ class TestAnthropicToolForwarding:
         provider = AnthropicProvider(client=client)
         await provider.send(USER_MSG, "claude-opus-4-6", tools=SAMPLE_TOOLS)
         call_kwargs = client.messages.create.call_args.kwargs
-        assert call_kwargs["tools"] is SAMPLE_TOOLS
+        tools = call_kwargs["tools"]
+        assert len(tools) == 1
+        assert tools[0]["name"] == "web_search"
+        assert tools[0]["input_schema"]["type"] == "object"
 
     async def test_no_tools_param_omitted(self) -> None:
         from duh.providers.anthropic import AnthropicProvider
@@ -454,10 +459,19 @@ _PATCH_CONFIG = patch(
     side_effect=_mock_genai_config,
 )
 
+_PATCH_FUNC_DECL = patch(
+    "duh.providers.google.genai.types.FunctionDeclaration",
+    side_effect=lambda **kwargs: MagicMock(**kwargs),
+)
+
+_PATCH_TOOL = patch(
+    "duh.providers.google.genai.types.Tool",
+    side_effect=lambda **kwargs: MagicMock(**kwargs),
+)
+
 
 class TestGoogleToolForwarding:
-    @_PATCH_CONFIG
-    async def test_tools_param_forwarded(self, _mock_cfg: Any) -> None:
+    async def test_tools_param_forwarded(self) -> None:
         from duh.providers.google import GoogleProvider
 
         client = _google_make_client()
@@ -465,7 +479,9 @@ class TestGoogleToolForwarding:
         await provider.send(USER_MSG, "gemini-2.5-flash", tools=SAMPLE_TOOLS)
         call_kwargs = client.aio.models.generate_content.call_args
         config = call_kwargs.kwargs["config"]
-        assert config.tools is SAMPLE_TOOLS
+        # Google wraps tools in genai.types.Tool with function_declarations
+        assert config.tools is not None
+        assert len(config.tools) == 1
 
     async def test_no_tools_param_not_in_config(self) -> None:
         from duh.providers.google import GoogleProvider
@@ -490,8 +506,10 @@ class TestGoogleToolForwarding:
 
 
 class TestGoogleToolCallParsing:
+    @_PATCH_TOOL
+    @_PATCH_FUNC_DECL
     @_PATCH_CONFIG
-    async def test_single_function_call_parsed(self, _mock_cfg: Any) -> None:
+    async def test_single_function_call_parsed(self, *_mocks: Any) -> None:
         from duh.providers.google import GoogleProvider
 
         response = _google_make_response_with_function_calls(
@@ -508,8 +526,10 @@ class TestGoogleToolCallParsing:
         assert tc.id == "google-web_search"
         assert json.loads(tc.arguments) == {"query": "cats"}
 
+    @_PATCH_TOOL
+    @_PATCH_FUNC_DECL
     @_PATCH_CONFIG
-    async def test_multiple_function_calls_parsed(self, _mock_cfg: Any) -> None:
+    async def test_multiple_function_calls_parsed(self, *_mocks: Any) -> None:
         from duh.providers.google import GoogleProvider
 
         response = _google_make_response_with_function_calls(
@@ -524,8 +544,10 @@ class TestGoogleToolCallParsing:
         assert resp.tool_calls is not None
         assert len(resp.tool_calls) == 2
 
+    @_PATCH_TOOL
+    @_PATCH_FUNC_DECL
     @_PATCH_CONFIG
-    async def test_no_function_calls_returns_none(self, _mock_cfg: Any) -> None:
+    async def test_no_function_calls_returns_none(self, *_mocks: Any) -> None:
         from duh.providers.google import GoogleProvider
 
         response = _google_make_response_with_function_calls(text="No tools needed")
@@ -534,8 +556,10 @@ class TestGoogleToolCallParsing:
         resp = await provider.send(USER_MSG, "gemini-2.5-flash", tools=SAMPLE_TOOLS)
         assert resp.tool_calls is None
 
+    @_PATCH_TOOL
+    @_PATCH_FUNC_DECL
     @_PATCH_CONFIG
-    async def test_function_call_with_no_args(self, _mock_cfg: Any) -> None:
+    async def test_function_call_with_no_args(self, *_mocks: Any) -> None:
         from duh.providers.google import GoogleProvider
 
         response = _google_make_response_with_function_calls(

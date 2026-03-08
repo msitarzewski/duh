@@ -120,7 +120,17 @@ class GoogleProvider:
         if response_format == "json":
             config_kwargs["response_mime_type"] = "application/json"
         if tools:
-            config_kwargs["tools"] = tools
+            func_decls = [
+                genai.types.FunctionDeclaration(
+                    name=str(t["name"]),
+                    description=str(t.get("description", "")),
+                    parameters=t.get("parameters") or t.get("input_schema", {}),  # type: ignore[arg-type]
+                )
+                for t in tools
+            ]
+            config_kwargs["tools"] = [
+                genai.types.Tool(function_declarations=func_decls)
+            ]
 
         config = genai.types.GenerateContentConfig(**config_kwargs)
 
