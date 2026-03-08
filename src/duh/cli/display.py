@@ -357,6 +357,61 @@ class ConsensusDisplay:
             )
         )
 
+    # ── Citations ──────────────────────────────────────────────
+
+    def show_citations(
+        self,
+        citations: Sequence[dict[str, str | None]],
+    ) -> None:
+        """Display deduplicated citations grouped by hostname."""
+        if not citations:
+            return
+
+        from urllib.parse import urlparse
+
+        # Deduplicate by URL
+        seen: set[str] = set()
+        unique: list[dict[str, str | None]] = []
+        for c in citations:
+            url = c.get("url") or ""
+            if url and url not in seen:
+                seen.add(url)
+                unique.append(c)
+
+        if not unique:
+            return
+
+        # Group by hostname
+        groups: dict[str, list[dict[str, str | None]]] = {}
+        for c in unique:
+            url = c.get("url") or ""
+            try:
+                host = urlparse(url).netloc or url
+            except Exception:
+                host = url
+            groups.setdefault(host, []).append(c)
+
+        # Sort groups by count descending
+        sorted_groups = sorted(groups.items(), key=lambda kv: len(kv[1]), reverse=True)
+
+        parts: list[str] = []
+        idx = 1
+        for host, group in sorted_groups:
+            for c in group:
+                title = c.get("title") or host
+                url = c.get("url") or ""
+                parts.append(f"  [{idx}] {title}\n      {url}")
+                idx += 1
+
+        body = "\n".join(parts)
+        self._console.print(
+            Panel(
+                body,
+                title=f"[bold cyan]Sources[/bold cyan] ({len(unique)})",
+                border_style="cyan",
+            )
+        )
+
     # ── Final output ──────────────────────────────────────────
 
     def show_final_decision(

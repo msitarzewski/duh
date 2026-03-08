@@ -210,10 +210,12 @@ async def _run_consensus(
     proposer_override: str | None = None,
     challengers_override: list[str] | None = None,
     web_search: bool = False,
-) -> tuple[str, float, float, str | None, float, str | None]:
+) -> tuple[
+    str, float, float, str | None, float, str | None, list[dict[str, str | None]]
+]:
     """Run the full consensus loop.
 
-    Returns (decision, confidence, rigor, dissent, total_cost, overview).
+    Returns (decision, confidence, rigor, dissent, total_cost, overview, citations).
     """
     from duh.consensus.convergence import check_convergence
     from duh.consensus.handlers import (
@@ -332,6 +334,17 @@ async def _run_consensus(
     if display and ctx.tool_calls_log:
         display.show_tool_use(ctx.tool_calls_log)
 
+    # Collect all citations across rounds
+    all_citations: list[dict[str, str | None]] = []
+    for rr in ctx.round_history:
+        all_citations.extend(rr.proposal_citations)
+        for ch in rr.challenges:
+            all_citations.extend(ch.citations)
+    # Include current round (may not be archived yet)
+    all_citations.extend(ctx.proposal_citations)
+    for ch in ctx.challenges:
+        all_citations.extend(ch.citations)
+
     return (
         ctx.decision or "",
         ctx.confidence,
@@ -339,6 +352,7 @@ async def _run_consensus(
         ctx.dissent,
         pm.total_cost,
         ctx.overview,
+        all_citations,
     )
 
 
@@ -490,7 +504,7 @@ def ask(
         _error(str(e))
         return  # unreachable
 
-    decision, confidence, rigor, dissent, cost, overview = result
+    decision, confidence, rigor, dissent, cost, overview, citations = result
 
     from duh.cli.display import ConsensusDisplay
 
@@ -498,6 +512,7 @@ def ask(
     display.show_final_decision(
         decision, confidence, rigor, cost, dissent, overview=overview
     )
+    display.show_citations(citations)
 
 
 async def _refine_question(question: str, config: DuhConfig) -> str:
@@ -532,7 +547,9 @@ async def _ask_async(
     panel: list[str] | None = None,
     proposer_override: str | None = None,
     challengers_override: list[str] | None = None,
-) -> tuple[str, float, float, str | None, float, str | None]:
+) -> tuple[
+    str, float, float, str | None, float, str | None, list[dict[str, str | None]]
+]:
     """Async implementation for the ask command."""
     from duh.cli.display import ConsensusDisplay
 
@@ -641,12 +658,19 @@ async def _ask_auto_async(
 
         display = ConsensusDisplay()
         display.start()
-        decision, confidence, rigor, dissent, cost, overview = await _run_consensus(
-            question, config, pm, display=display
-        )
+        (
+            decision,
+            confidence,
+            rigor,
+            dissent,
+            cost,
+            overview,
+            citations,
+        ) = await _run_consensus(question, config, pm, display=display)
         display.show_final_decision(
             decision, confidence, rigor, cost, dissent, overview=overview
         )
+        display.show_citations(citations)
 
 
 async def _ask_decompose_async(
@@ -719,10 +743,11 @@ async def _ask_decompose_async(
     # Single-subtask optimization: skip synthesis
     if len(subtask_specs) == 1:
         result = await _run_consensus(question, config, pm, display=display)
-        decision, confidence, rigor, dissent, cost, overview = result
+        decision, confidence, rigor, dissent, cost, overview, citations = result
         display.show_final_decision(
             decision, confidence, rigor, cost, dissent, overview=overview
         )
+        display.show_citations(citations)
         await engine.dispose()
         return
 
@@ -2371,6 +2396,7 @@ async def _batch_async(
                     _dissent,
                     _cost,
                     _overview,
+                    _citations,
                 ) = await _run_consensus(question, config, pm)
 
             q_cost = pm.total_cost - cost_before
