@@ -55,7 +55,7 @@ function shortModel(model: string): string {
 }
 
 export function ConsensusNav() {
-  const { status, rounds, currentRound, currentPhase } = useConsensusStore()
+  const { status, rounds, currentRound, currentPhase, followups, submitQuestion } = useConsensusStore()
 
   if (rounds.length === 0) return null
 
@@ -75,6 +75,9 @@ export function ConsensusNav() {
         for (const c of ch.citations ?? []) {
           if (!seen.has(c.url)) { seen.add(c.url); tagged.push({ ...c, role: 'challenge' }) }
         }
+      }
+      for (const c of round.revisionCitations ?? []) {
+        if (!seen.has(c.url)) { seen.add(c.url); tagged.push({ ...c, role: 'revise' }) }
       }
     }
     // Group by hostname
@@ -212,6 +215,32 @@ export function ConsensusNav() {
                   </Disclosure>
                 ))}
               </div>
+            </Disclosure>
+          </div>
+        )}
+
+        {followups?.length > 0 && (
+          <div className="pt-2 mt-2 border-t border-[var(--color-border)]">
+            <Disclosure
+              header={
+                <span className="font-mono text-[10px] text-[var(--color-text-dim)] uppercase tracking-wide">
+                  Follow up ({followups.length})
+                </span>
+              }
+              defaultOpen
+            >
+              <ul className="space-y-2 mt-1.5">
+                {followups.map((q, i) => (
+                  <li key={i}>
+                    <button
+                      className="text-left text-[11px] leading-snug text-[var(--color-text-secondary)] hover:text-[var(--color-primary)] transition-colors"
+                      onClick={() => submitQuestion(q)}
+                    >
+                      {q}
+                    </button>
+                  </li>
+                ))}
+              </ul>
             </Disclosure>
           </div>
         )}

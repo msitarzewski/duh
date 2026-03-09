@@ -4,9 +4,31 @@
 
 ---
 
-## Current State: Post v0.6.0 — `question-refinement` Branch In Progress
+## Current State: Post PR #14 — Follow-ups, Revision Citations, CLI Persistence
 
-### Question Refinement + Native Web Search + Citations (2026-03-08)
+### Follow-up Questions + Revision Citations + CLI Persistence + Provider Updates (2026-03-09)
+
+- **Follow-up questions**: `generate_followups()` uses cheapest model w/ JSON mode to suggest 3 follow-up questions after consensus
+  - `followups` on ConsensusContext, `followups_json` TEXT on Thread model + migration
+  - `_run_consensus` now returns 8-tuple (was 7, added `followups`)
+  - All callers updated: CLI, REST, WS, MCP, batch, decompose
+  - Frontend: clickable follow-ups in ConsensusNav + ThreadNav (Disclosure), triggers new consensus
+  - WS `complete` event includes `followups`, thread detail API returns them
+- **Revision citations**: `handle_revise()` now accepts `tool_registry` + `web_search`, extracts citations
+  - `revision_citations` on ConsensusContext + RoundResult, persisted to DB
+  - `handle_propose()` now extracts proposal_citations directly in handler
+  - WS sends revision citations in REVISE phase, ConsensusNav includes them in Sources
+- **CLI persistence**: new `persist_consensus()` in `app.py` — CLI `ask` saves full round history to DB
+  - `_ask_async` creates DB factory, disposes engine in finally block
+- **CLI enhancements**: top-level `--rounds` and `--challengers` cascade to subcommands
+  - `_parse_challengers()` accepts int count or comma-separated model refs
+- **Calibration date filters**: frontend category + since/until date inputs on CalibrationDashboard
+- **OpenAI**: `reasoning_effort: "high"` for GPT-5.x models (when no tools), gpt-5.2 in NO_TEMPERATURE_MODELS
+- **Perplexity**: retry logic for APIConnectionError (2 attempts, 1s delay)
+- **Alembic**: `DUH_DATABASE_URL` env var overrides alembic.ini
+- Tests: new TestShowCitations (8), TestShowFinalDecisionOverview (2), calibration date filter tests (4), all 8-tuple updates
+
+### Question Refinement + Native Web Search + Citations (2026-03-08, merged PR #13 + #14)
 
 - **Question refinement**: pre-consensus clarification step (analyze → clarify → enrich → consensus)
   - `src/duh/consensus/refine.py`, API routes (`/api/refine`, `/api/enrich`), CLI `--refine` flag
@@ -224,9 +246,18 @@ Phase 0 benchmark framework — fully functional, pilot-tested on 5 questions.
 | 2026-03-07 | GPT-5.4 added to model catalog (1M ctx, $2.50/$15.00, no-temperature) | Done |
 | 2026-03-07 | .env.example updated with provider API key placeholders | Done |
 | 2026-03-07 | README updated with all provider env vars | Done |
-| 2026-03-08 | Question refinement (analyze → clarify → enrich → consensus) | In Progress |
-| 2026-03-08 | Native provider web search (Anthropic/Google/Mistral/OpenAI/Perplexity) | In Progress |
-| 2026-03-08 | Citations extraction + frontend CitationList + ConsensusNav Sources | In Progress |
-| 2026-03-08 | Tools enabled by default (web_search wired through CLI/REST/WS) | In Progress |
-| 2026-03-08 | Provider tool format fix (generic → native transform per provider) | In Progress |
-| 2026-03-08 | Sidebar UX (new-question button, collapsible toggle) | In Progress |
+| 2026-03-08 | Question refinement (analyze → clarify → enrich → consensus) | Done (PR #13) |
+| 2026-03-08 | Native provider web search (Anthropic/Google/Mistral/OpenAI/Perplexity) | Done (PR #13) |
+| 2026-03-08 | Citations extraction + frontend CitationList + ConsensusNav Sources | Done (PR #13) |
+| 2026-03-08 | Tools enabled by default (web_search wired through CLI/REST/WS) | Done (PR #13) |
+| 2026-03-08 | Provider tool format fix (generic → native transform per provider) | Done (PR #13) |
+| 2026-03-08 | Sidebar UX (new-question button, collapsible toggle) | Done (PR #13) |
+| 2026-03-08 | README rewrite + CLI citation display (7-tuple _run_consensus) | Done (PR #14) |
+| 2026-03-09 | Follow-up questions (generate, persist, display, clickable) | In Progress |
+| 2026-03-09 | Revision citations (handle_revise with tools/search, persist, display) | In Progress |
+| 2026-03-09 | CLI DB persistence (persist_consensus, _ask_async DB factory) | In Progress |
+| 2026-03-09 | CLI top-level --rounds/--challengers cascade + _parse_challengers | In Progress |
+| 2026-03-09 | Calibration date filters (frontend category/since/until) | In Progress |
+| 2026-03-09 | OpenAI reasoning_effort for GPT-5.x, gpt-5.2 catalog | In Progress |
+| 2026-03-09 | Perplexity retry logic for APIConnectionError | In Progress |
+| 2026-03-09 | Alembic DUH_DATABASE_URL env var support | In Progress |

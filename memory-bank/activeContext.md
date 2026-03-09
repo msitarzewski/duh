@@ -1,79 +1,84 @@
 # Active Context
 
-**Last Updated**: 2026-03-08
-**Current Phase**: `question-refinement` branch — pre-consensus question refinement, native web search, citations, tools-by-default
-**Next Action**: Branch in progress, uncommitted changes staged
+**Last Updated**: 2026-03-09
+**Current Phase**: Post PR #14 merge — follow-up questions, revision citations, CLI persistence, calibration filters, provider updates
+**Next Action**: Commit and push uncommitted work to new branch
 
-## Latest Work (2026-03-08)
+## Latest Work (2026-03-09)
 
-### Question Refinement
-- Pre-consensus clarification step: analyze question → ask clarifying questions → enrich with answers → proceed to consensus
-- `src/duh/consensus/refine.py` — `analyze_question()` + `enrich_question()`, uses MOST EXPENSIVE model (not cheapest)
-- API: `POST /api/refine` → `RefineResponse{needs_refinement, questions[]}`, `POST /api/enrich` → `EnrichResponse{enriched_question}`
-- CLI: `duh ask --refine "question"` — interactive `click.prompt()` loop, default `--no-refine`
-- Frontend: consensus store `'refining'` status, `submitQuestion` → refine → clarify → enrich → `startConsensus`
-- `RefinementPanel.tsx` — tabbed UI inside GlassPanel, checkmarks on answered tabs, Skip + Start Consensus buttons
-- Graceful fallback: any failure → proceed to consensus with original question
+### Follow-up Questions (new end-to-end feature)
+- `generate_followups()` in `src/duh/consensus/handlers.py:930` — uses cheapest model with JSON mode to suggest 3 follow-up questions after consensus completes
+- Prompt asks for different angles: deeper technical detail, practical implications, risks/edge cases, related decisions
+- `followups` field added to `ConsensusContext` in `machine.py`
+- `_run_consensus` returns 8-tuple now (was 7): `(decision, confidence, rigor, dissent, cost, overview, citations, followups)`
+- All callers updated: CLI ask, CLI auto, CLI decompose, CLI batch, REST API, WebSocket, MCP server
+- **Persistence**: `followups_json` TEXT column on Thread model + SQLite auto-migration in `ensure_schema()`
+- **Thread detail API**: returns `followups` parsed from `followups_json`
+- **WebSocket**: sends `followups` in `complete` event, persists via `_persist_consensus`
+- **Frontend**: `ConsensusNav` + `ThreadNav` show clickable follow-ups in Disclosure section
+  - Clicking a follow-up calls `submitQuestion()` to start a new consensus
+  - `consensus.ts` store: `followups` state, included in reset
+  - `types.ts`: `followups` on `ThreadDetail` and `WSComplete`
 
-### Native Provider Web Search
-- Providers use server-side search instead of DDG proxy when `config.tools.web_search.native` is true
-- `web_search: bool` param added to `ModelProvider.send()` protocol
-- Anthropic: `web_search_20250305` server tool in tools[]
-- Google: `GoogleSearch()` grounding (replaces function tools — can't coexist)
-- Mistral: `{"type": "web_search"}` appended to tools
-- OpenAI: `web_search_options={}` only for `_SEARCH_MODELS` set; others fall back to DDG
-- Perplexity: no-op (always searches natively)
-- `tool_augmented_send`: filters DDG `web_search` tool when native=True, passes flag to provider
+### Revision Citations (enhancement to existing citation system)
+- `revision_citations` field added to both `ConsensusContext` and `RoundResult` in `machine.py`
+- `handle_revise()` now accepts `tool_registry` + `web_search` params — enables tool-augmented revision with web search
+- `handle_revise()` extracts citations from response into `ctx.revision_citations`
+- `handle_propose()` now extracts `proposal_citations` directly in handler (moved from ws.py)
+- WebSocket sends revision citations in REVISE `phase_complete` event
+- `_persist_consensus` saves revision citations to DB as `citations_json` on reviser contribution
+- `ConsensusPanel.tsx` passes `revisionCitations` to REVISE phase card
+- `ConsensusNav.tsx` includes revision citations in Sources section (role: 'revise')
+- `_run_consensus` citation collection now includes revision citations from both round history and current round
 
-### Citations — Persisted + Domain-Grouped
-- `Citation` dataclass (url, title, snippet) on `ModelResponse.citations`
-- Extraction per provider: Anthropic (`web_search_tool_result`), Google (grounding metadata), Perplexity (`response.citations`)
-- **Persistence**: `citations_json` TEXT column on `Contribution` model, SQLite auto-migration via `ensure_schema()`
-- `proposal_citations` tracked on `ConsensusContext` → archived to `RoundResult` → persisted via `_persist_consensus`
-- Thread detail API returns `citations` on `ContributionResponse`
-- **Domain-grouped Sources nav**: ConsensusNav (live) + ThreadNav (stored) group citations by hostname
-  - Nested Disclosure: outer "Sources (17)" → inner "wikipedia.org (3)" → P/C/R role badges per citation
-  - P (green) = propose, C (amber) = challenge, R (blue) = revise
-- `CitationList` shared component for inline display below content
+### CLI Enhancements
+- Top-level `--rounds` and `--challengers` options on `cli()` group cascade to subcommands (subcommand wins if both set)
+- `_parse_challengers()` accepts either int count or comma-separated model refs (e.g. `3` or `openai:gpt-5,google:gemini-2.5-pro`)
+- `challenger_count` param flows through `_run_consensus` → `select_challengers(count=N)`
+- **CLI DB persistence**: new `persist_consensus()` function in `app.py` — CLI `ask` command now persists full consensus round history to DB (proposals, challenges, revisions, citations, decisions, overview, followups)
+- `_ask_async` creates DB factory via `_create_db()`, disposes engine in `finally` block
+- Top-level `--rounds` also cascades into `batch` subcommand
 
-### Anthropic Streaming + max_tokens
-- `AnthropicProvider.send()` now uses streaming internally via `_collect_stream()` — avoids 10-minute timeout
-- `max_tokens` bumped from 16384 → 32768 across all 6 handler defaults (propose, challenge, revise, commit, voting, decomposition)
-- Citations are part of the value — truncating them undermines trust
+### Calibration Date Filters (frontend)
+- `CalibrationDashboard.tsx`: category dropdown + since/until date inputs + Apply button
+- `INTENT_CATEGORIES` constant: `['factual', 'technical', 'creative', 'judgment', 'strategic']`
+- `calibration.ts` store: `since`/`until` state + `setSince`/`setUntil` setters, passed to API call
+- Store tests: 4 new tests for date filter state and API param passing
 
-### Parallel Challenge Streaming
-- `_stream_challenges()` in `ws.py` uses `asyncio.as_completed()` to send each challenge result to the frontend as it finishes
-- Previously: all challengers ran in parallel but results were batched after all completed
-- Now: first challenger to respond appears immediately in the UI
+### Provider Updates
+- **OpenAI**: `_REASONING_EFFORT_MODELS` set (gpt-5, gpt-5-mini, gpt-5-nano, gpt-5.2, gpt-5.4) — sends `reasoning_effort: "high"` when no function tools present (incompatible with tools on /v1/chat/completions)
+- **OpenAI**: also sends `reasoning_effort: "high"` in structured output path (`_send_structured`)
+- **OpenAI**: `gpt-5.2` added to `NO_TEMPERATURE_MODELS` in `catalog.py`
+- **Perplexity**: retry logic for `APIConnectionError` — 2 attempts, 1s delay between retries
+- **Perplexity**: `APIConnectionError` mapped to `ProviderTimeoutError`
 
-### Tools Enabled by Default
-- `web_search` tool wired through CLI, REST, and WebSocket paths by default
-- Provider tool format fix: `tool_augmented_send` builds generic `{name, description, parameters}` — each provider transforms to native format in `send()`
+### Infrastructure
+- `alembic/env.py`: `DUH_DATABASE_URL` env var overrides `alembic.ini` — `_resolve_url()` used in offline, online sync, and online async migration paths
+- `.gitignore`: `npm/like-duh/node_modules/` added
 
-### Sidebar UX
-- New-question button (Heroicons pencil-square) + collapsible sidebar toggle
-- Shell manages `desktopSidebarOpen` (default true) + `mobileSidebarOpen` separately
-- TopBar shows sidebar toggle when desktop sidebar collapsed or always on mobile
-
-### Test Results
-- 1641 Python tests + 194 Vitest tests (1835 total)
-- Build clean, all tests pass
+### Test Updates
+- All test files updated for 8-tuple `_run_consensus` return value
+- `test_cli_display.py`: new `TestShowCitations` class (8 tests — empty, single, dedup, grouping, sort, title fallback, no-url skip, numbered)
+- `test_cli_display.py`: new `TestShowFinalDecisionOverview` class (2 tests — shows/hides overview panel)
+- `test_cli_tools.py`: mock return values corrected from 4-tuple to 8-tuple
+- `test_providers_openai.py`: test switched from `gpt-5.2` to `gpt-4o` (since 5.2 now has special reasoning_effort behavior)
+- `stores.test.ts`: 4 new calibration date filter tests
+- `test_cli_batch.py`, `test_cli_voting.py`, `test_mcp_server.py`: 8-tuple updates
 
 ---
 
 ## Current State
 
-- **Branch `question-refinement`** — in progress, not yet merged
-- **1641 Python tests + 194 Vitest tests** (1835 total)
-- All previous features intact (v0.1–v0.6)
-- Prior work merged: z-index fix, GPT-5.4, .env docs, password reset
+- **Branch `main`** — uncommitted changes across 29 files (+828/-63)
+- All previous features intact (v0.1-v0.6, question-refinement PR #13, messaging-refinement PR #14)
+- Prior merged: question refinement, native web search, citations, tools-by-default, sidebar UX, README rewrite, CLI citation display
 
 ## Open Questions (Still Unresolved)
 
 - Licensing (MIT vs Apache 2.0)
 - Output licensing for multi-provider synthesized content
-- Vector search solution for SQLite (sqlite-vss vs ChromaDB vs FAISS) — v1.0 decision
+- Vector search solution for SQLite (sqlite-vss vs ChromaDB vs FAISS) -- v1.0 decision
 - Client library packaging: monorepo `client/` dir vs separate repo?
 - MCP server transport: stdio vs SSE vs streamable HTTP?
-- Hosted demo economics (try.duh.dev) — deferred to post-1.0
-- A2A protocol — deferred to post-1.0
+- Hosted demo economics (try.duh.dev) -- deferred to post-1.0
+- A2A protocol -- deferred to post-1.0

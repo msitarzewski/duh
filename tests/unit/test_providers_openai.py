@@ -239,13 +239,13 @@ class TestSend:
         ]
         await provider.send(
             msgs,
-            "gpt-5.2",
+            "gpt-4o",
             max_tokens=1000,
             temperature=0.3,
             stop_sequences=["STOP"],
         )
         call_kwargs = client.chat.completions.create.call_args.kwargs
-        assert call_kwargs["model"] == "gpt-5.2"
+        assert call_kwargs["model"] == "gpt-4o"
         assert call_kwargs["max_completion_tokens"] == 1000
         assert call_kwargs["temperature"] == 0.3
         assert call_kwargs["stop"] == ["STOP"]

@@ -13,10 +13,14 @@ interface CalibrationState {
 
   // Filters
   category: string | null
+  since: string | null
+  until: string | null
 
   // Actions
   fetchCalibration: () => Promise<void>
   setCategory: (category: string | null) => void
+  setSince: (since: string | null) => void
+  setUntil: (until: string | null) => void
 }
 
 export const useCalibrationStore = create<CalibrationState>((set, get) => ({
@@ -29,13 +33,17 @@ export const useCalibrationStore = create<CalibrationState>((set, get) => ({
   error: null,
 
   category: null,
+  since: null,
+  until: null,
 
   fetchCalibration: async () => {
     set({ loading: true, error: null })
     try {
-      const { category } = get()
-      const params: { category?: string } = {}
+      const { category, since, until } = get()
+      const params: { category?: string; since?: string; until?: string } = {}
       if (category) params.category = category
+      if (since) params.since = since
+      if (until) params.until = until
 
       const data = await api.calibration(params)
       set({
@@ -53,5 +61,13 @@ export const useCalibrationStore = create<CalibrationState>((set, get) => ({
 
   setCategory: (category) => {
     set({ category })
+  },
+
+  setSince: (since) => {
+    set({ since })
+  },
+
+  setUntil: (until) => {
+    set({ until })
   },
 }))

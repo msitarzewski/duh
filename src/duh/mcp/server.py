@@ -143,6 +143,7 @@ async def _handle_ask(args: dict) -> list[TextContent]:  # type: ignore[type-arg
             cost,
             _overview,
             _citations,
+            _followups,
         ) = await _run_consensus(question, config, pm)
         return [
             TextContent(

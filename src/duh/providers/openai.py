@@ -43,6 +43,16 @@ _SEARCH_MODELS: set[str] = {
     "gpt-4o-mini-search-preview",
 }
 
+# GPT-5.x models support reasoning_effort but don't always reason by default.
+# Dedicated reasoning models (o3, o3-mini, o4-mini) always reason at full capacity.
+_REASONING_EFFORT_MODELS: set[str] = {
+    "gpt-5",
+    "gpt-5-mini",
+    "gpt-5-nano",
+    "gpt-5.2",
+    "gpt-5.4",
+}
+
 
 def _map_error(e: openai.APIError) -> Exception:
     """Map OpenAI SDK errors to duh error hierarchy."""
@@ -160,6 +170,11 @@ class OpenAIProvider:
                 }
                 for t in tools
             ]
+        else:
+            # reasoning_effort is incompatible with function tools on
+            # /v1/chat/completions for gpt-5.x models.
+            if model_id in _REASONING_EFFORT_MODELS:
+                kwargs["reasoning_effort"] = "high"
         if web_search and model_id in _SEARCH_MODELS:
             kwargs["web_search_options"] = {}
 
@@ -229,6 +244,8 @@ class OpenAIProvider:
         }
         if model_id not in _NO_TEMPERATURE_MODELS:
             kwargs["temperature"] = temperature
+        if model_id in _REASONING_EFFORT_MODELS:
+            kwargs["reasoning_effort"] = "high"
         if stop_sequences:
             kwargs["stop"] = stop_sequences
 

@@ -386,3 +386,145 @@ class TestFullRound:
         # Stats
         assert "3 models" in out
         assert "$0.0500" in out
+
+
+# ── show_citations ───────────────────────────────────────────
+
+
+class TestShowCitations:
+    def test_empty_citations_no_output(self) -> None:
+        display, buf = _make_display()
+        display.show_citations([])
+        assert _output(buf) == ""
+
+    def test_single_citation(self) -> None:
+        display, buf = _make_display()
+        display.show_citations(
+            [
+                {"url": "https://example.com/page", "title": "Example Page"},
+            ]
+        )
+        out = _output(buf)
+        assert "Sources" in out
+        assert "(1)" in out
+        assert "Example Page" in out
+        assert "https://example.com/page" in out
+
+    def test_deduplicates_by_url(self) -> None:
+        display, buf = _make_display()
+        display.show_citations(
+            [
+                {"url": "https://example.com/a", "title": "Page A"},
+                {"url": "https://example.com/a", "title": "Page A duplicate"},
+                {"url": "https://example.com/b", "title": "Page B"},
+            ]
+        )
+        out = _output(buf)
+        assert "(2)" in out  # 2 unique URLs
+        assert "Page A" in out
+        assert "Page A duplicate" not in out
+        assert "Page B" in out
+
+    def test_groups_by_hostname(self) -> None:
+        display, buf = _make_display()
+        display.show_citations(
+            [
+                {"url": "https://docs.python.org/a", "title": "Doc A"},
+                {"url": "https://docs.python.org/b", "title": "Doc B"},
+                {"url": "https://example.com/x", "title": "Example"},
+            ]
+        )
+        out = _output(buf)
+        assert "(3)" in out
+        # Both python.org docs should appear (grouped by host, sorted by count)
+        assert "Doc A" in out
+        assert "Doc B" in out
+        assert "Example" in out
+
+    def test_sorts_groups_by_count_descending(self) -> None:
+        display, buf = _make_display()
+        display.show_citations(
+            [
+                {"url": "https://a.com/1", "title": "A1"},
+                {"url": "https://b.com/1", "title": "B1"},
+                {"url": "https://b.com/2", "title": "B2"},
+                {"url": "https://b.com/3", "title": "B3"},
+            ]
+        )
+        out = _output(buf)
+        # b.com has 3 citations, should appear first (lower index numbers)
+        b1_pos = out.index("B1")
+        a1_pos = out.index("A1")
+        assert b1_pos < a1_pos
+
+    def test_title_falls_back_to_hostname(self) -> None:
+        display, buf = _make_display()
+        display.show_citations(
+            [
+                {"url": "https://example.com/page", "title": None},
+            ]
+        )
+        out = _output(buf)
+        assert "example.com" in out
+
+    def test_no_url_entries_skipped(self) -> None:
+        display, buf = _make_display()
+        display.show_citations(
+            [
+                {"url": "", "title": "No URL"},
+                {"url": None, "title": "Also no URL"},
+            ]
+        )
+        # All entries have empty/None URLs, so nothing to show
+        assert _output(buf) == ""
+
+    def test_mixed_valid_and_empty_urls(self) -> None:
+        display, buf = _make_display()
+        display.show_citations(
+            [
+                {"url": "", "title": "Skip me"},
+                {"url": "https://example.com/real", "title": "Real"},
+            ]
+        )
+        out = _output(buf)
+        assert "(1)" in out
+        assert "Real" in out
+        assert "Skip me" not in out
+
+    def test_numbered_entries(self) -> None:
+        display, buf = _make_display()
+        display.show_citations(
+            [
+                {"url": "https://a.com/1", "title": "First"},
+                {"url": "https://a.com/2", "title": "Second"},
+            ]
+        )
+        out = _output(buf)
+        assert "[1]" in out
+        assert "[2]" in out
+
+
+# ── show_final_decision with overview ────────────────────────
+
+
+class TestShowFinalDecisionOverview:
+    def test_shows_overview_when_provided(self) -> None:
+        display, buf = _make_display()
+        display.show_final_decision(
+            "Decision text.",
+            0.9,
+            1.0,
+            0.05,
+            None,
+            overview="Executive summary here.",
+        )
+        out = _output(buf)
+        assert "Executive Overview" in out
+        assert "Executive summary here." in out
+        assert "Decision text." in out
+
+    def test_no_overview_panel_when_none(self) -> None:
+        display, buf = _make_display()
+        display.show_final_decision("Answer.", 1.0, 1.0, 0.0, None, overview=None)
+        out = _output(buf)
+        assert "Executive Overview" not in out

@@ -58,6 +58,7 @@ class RoundResult:
     rigor: float = 0.0
     dissent: str | None = None
     proposal_citations: tuple[dict[str, str | None], ...] = ()
+    revision_citations: tuple[dict[str, str | None], ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -92,11 +93,13 @@ class ConsensusContext:
     challenges: list[ChallengeResult] = field(default_factory=list)
     revision: str | None = None
     revision_model: str | None = None
+    revision_citations: list[dict[str, str | None]] = field(default_factory=list)
     decision: str | None = None
     confidence: float = 0.0
     rigor: float = 0.0
     dissent: str | None = None
     overview: str | None = None
+    followups: list[str] = field(default_factory=list)
     converged: bool = False
 
     # History
@@ -122,6 +125,7 @@ class ConsensusContext:
         self.challenges = []
         self.revision = None
         self.revision_model = None
+        self.revision_citations = []
         self.decision = None
         self.confidence = 0.0
         self.rigor = 0.0
@@ -142,6 +146,7 @@ class ConsensusContext:
                 rigor=self.rigor,
                 dissent=self.dissent,
                 proposal_citations=tuple(self.proposal_citations),
+                revision_citations=tuple(self.revision_citations),
             )
         )
 

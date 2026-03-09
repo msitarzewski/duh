@@ -58,3 +58,6 @@ memory-bank/setup.md
 web/node_modules/
 web/dist/
 
+# npm wrapper
+npm/like-duh/node_modules/
+

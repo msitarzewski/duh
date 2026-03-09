@@ -328,6 +328,10 @@ async def handle_propose(
     # Update context
     ctx.proposal = response.content
     ctx.proposal_model = model_ref
+    ctx.proposal_citations = [
+        {"url": c.url, "title": c.title, "snippet": c.snippet}
+        for c in (response.citations or [])
+    ]
 
     return response
 
@@ -631,6 +635,8 @@ async def handle_revise(
     *,
     temperature: float = 0.7,
     max_tokens: int = 32768,
+    tool_registry: ToolRegistry | None = None,
+    web_search: bool = False,
 ) -> ModelResponse:
     """Execute the REVISE phase of consensus.
 
@@ -680,9 +686,27 @@ async def handle_revise(
     messages = build_revise_prompt(ctx, max_tokens=max_tokens)
     provider, model_id = provider_manager.get_provider(reviser_ref)
 
-    response = await provider.send(
-        messages, model_id, max_tokens=max_tokens, temperature=temperature
-    )
+    if tool_registry is not None:
+        from duh.tools.augmented_send import tool_augmented_send
+
+        response = await tool_augmented_send(
+            provider,
+            model_id,
+            messages,
+            tool_registry,
+            max_tokens=max_tokens,
+            temperature=temperature,
+            web_search=web_search,
+        )
+        _log_tool_calls(ctx, response, "revise")
+    else:
+        response = await provider.send(
+            messages,
+            model_id,
+            max_tokens=max_tokens,
+            temperature=temperature,
+            web_search=web_search,
+        )
 
     # Record cost
     model_info = provider_manager.get_model_info(reviser_ref)
@@ -691,6 +715,10 @@ async def handle_revise(
     # Update context
     ctx.revision = response.content
     ctx.revision_model = reviser_ref
+    ctx.revision_citations = [
+        {"url": c.url, "title": c.title, "snippet": c.snippet}
+        for c in (response.citations or [])
+    ]
 
     return response
 
@@ -902,3 +930,65 @@ async def generate_overview(
         return None
     except Exception:
         return None
+
+
+async def generate_followups(
+    ctx: ConsensusContext,
+    provider_manager: ProviderManager,
+    *,
+    count: int = 3,
+) -> list[str]:
+    """Generate suggested follow-up questions based on the consensus.
+
+    Uses the cheapest model with JSON mode to produce follow-up
+    questions that dig deeper into the decision, explore gaps, or
+    investigate related angles the user might care about.
+
+    Returns an empty list on failure so callers can gracefully degrade.
+    """
+    import json as _json
+
+    models = provider_manager.list_all_models()
+    if not models:
+        return []
+
+    cheapest = min(models, key=lambda m: m.input_cost_per_mtok)
+    provider, model_id = provider_manager.get_provider(cheapest.model_ref)
+
+    challenges_summary = ""
+    for ch in ctx.challenges:
+        challenges_summary += f"\n- [{ch.model_ref}] ({ch.framing}): {ch.content[:200]}"
+
+    prompt = (
+        f"Given this consensus decision, suggest {count} follow-up questions "
+        "the user should ask next. Each question should explore a different "
+        "angle: deeper technical detail, practical implications, risks or "
+        "edge cases, or related decisions that follow from this one.\n\n"
+        "Make questions specific and actionable, not generic. They should "
+        "build on the debate that happened, not repeat it.\n\n"
+        f"Original question: {ctx.question}\n"
+        f"Decision: {ctx.decision}\n"
+        f"Confidence: {ctx.confidence:.0%}\n"
+        f"Key challenges:{challenges_summary or ' (none)'}\n"
+        f"Dissent: {ctx.dissent or 'None'}\n\n"
+        f'Return JSON: {{"questions": ["question1", "question2", ...]}}'
+    )
+
+    try:
+        response = await provider.send(
+            [PromptMessage(role="user", content=prompt)],
+            model_id,
+            max_tokens=1000,
+            temperature=0.7,
+            response_format="json",
+        )
+        provider_manager.record_usage(cheapest, response.usage)
+        data = _json.loads(response.content)
+        questions = data.get("questions", [])
+        if isinstance(questions, list):
+            followups = [q for q in questions if isinstance(q, str)][:count]
+            ctx.followups = followups
+            return followups
+        return []
+    except Exception:
+        return []

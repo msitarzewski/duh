@@ -145,17 +145,13 @@ async def _stream_consensus(
             tool_registry=tool_registry,
             web_search=use_native_search,
         )
-        propose_citations = [
-            {"url": c.url, "title": c.title} for c in (propose_resp.citations or [])
-        ]
-        ctx.proposal_citations = propose_citations
         await ws.send_json(
             {
                 "type": "phase_complete",
                 "phase": "PROPOSE",
                 "content": ctx.proposal or "",
                 "truncated": propose_resp.finish_reason != "stop",
-                "citations": propose_citations if propose_citations else None,
+                "citations": ctx.proposal_citations or None,
             }
         )
 
@@ -193,13 +189,16 @@ async def _stream_consensus(
                 "round": ctx.current_round,
             }
         )
-        revise_resp = await handle_revise(ctx, pm)
+        revise_resp = await handle_revise(
+            ctx, pm, tool_registry=tool_registry, web_search=use_native_search
+        )
         await ws.send_json(
             {
                 "type": "phase_complete",
                 "phase": "REVISE",
                 "content": ctx.revision or "",
                 "truncated": revise_resp.finish_reason != "stop",
+                "citations": ctx.revision_citations or None,
             }
         )
 
@@ -221,8 +220,11 @@ async def _stream_consensus(
 
     sm.transition(ConsensusState.COMPLETE)
 
-    # Generate executive overview (best-effort)
+    # Generate executive overview and follow-up questions (best-effort)
     await generate_overview(ctx, pm)
+    from duh.consensus.handlers import generate_followups
+
+    await generate_followups(ctx, pm)
 
     # Persist to DB if available
     thread_id: str | None = None
@@ -230,7 +232,11 @@ async def _stream_consensus(
     if db_factory is not None:
         try:
             thread_id = await _persist_consensus(
-                db_factory, question, ctx.round_history, ctx.overview
+                db_factory,
+                question,
+                ctx.round_history,
+                ctx.overview,
+                followups=ctx.followups or None,
             )
         except Exception:
             logger.exception("Failed to persist consensus thread")
@@ -245,6 +251,7 @@ async def _stream_consensus(
             "cost": pm.total_cost,
             "thread_id": thread_id,
             "overview": ctx.overview,
+            "followups": ctx.followups if ctx.followups else None,
         }
     )
     await ws.close()
@@ -347,6 +354,7 @@ async def _persist_consensus(
     question: str,
     round_history: list[RoundResult],
     overview: str | None = None,
+    followups: list[str] | None = None,
 ) -> str:
     """Persist consensus round history to the database.
 
@@ -392,8 +400,20 @@ async def _persist_consensus(
                     ch.content,
                     citations_json=ch_cit,
                 )
+            rev_cit = None
+            if rr.revision_citations:
+                rev_cit = json.dumps(
+                    [
+                        {"url": c["url"], "title": c.get("title")}
+                        for c in rr.revision_citations
+                    ]
+                )
             await repo.add_contribution(
-                turn.id, rr.proposal_model, "reviser", rr.revision
+                turn.id,
+                rr.proposal_model,
+                "reviser",
+                rr.revision,
+                citations_json=rev_cit,
             )
             await repo.save_decision(
                 turn.id,
@@ -406,6 +426,9 @@ async def _persist_consensus(
 
         if overview:
             await repo.save_thread_summary(thread.id, overview, "overview")
+
+        if followups:
+            thread.followups_json = json.dumps(followups)
 
         await session.commit()
         return str(thread.id)

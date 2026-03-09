@@ -1,4 +1,5 @@
 import { GlassPanel, Disclosure } from '@/components/shared'
+import { useConsensusStore } from '@/stores/consensus'
 import { useThreadsStore } from '@/stores/threads'
 import type { Citation } from '@/api/types'
 
@@ -145,7 +146,41 @@ export function ThreadNav() {
             </Disclosure>
           </div>
         )}
+
+        <FollowupSection followups={thread.followups} />
       </nav>
     </GlassPanel>
+  )
+}
+
+function FollowupSection({ followups }: { followups?: string[] }) {
+  const submitQuestion = useConsensusStore((s) => s.submitQuestion)
+
+  if (!followups || followups.length === 0) return null
+
+  return (
+    <div className="pt-2 mt-2 border-t border-[var(--color-border)]">
+      <Disclosure
+        header={
+          <span className="font-mono text-[10px] text-[var(--color-text-dim)] uppercase tracking-wide">
+            Follow up ({followups.length})
+          </span>
+        }
+        defaultOpen
+      >
+        <ul className="space-y-2 mt-1.5">
+          {followups.map((q, i) => (
+            <li key={i}>
+              <button
+                className="text-left text-[11px] leading-snug text-[var(--color-text-secondary)] hover:text-[var(--color-primary)] transition-colors"
+                onClick={() => submitQuestion(q)}
+              >
+                {q}
+              </button>
+            </li>
+          ))}
+        </ul>
+      </Disclosure>
+    </div>
   )
 }
