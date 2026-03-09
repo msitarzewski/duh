@@ -25,7 +25,7 @@ def upgrade() -> None:
         sa.Column("display_name", sa.String(100), nullable=False),
         sa.Column("role", sa.String(20), nullable=False, server_default="contributor"),
         sa.Column(
-            "is_active", sa.Boolean(), nullable=False, server_default=sa.text("1")
+            "is_active", sa.Boolean(), nullable=False, server_default=sa.text("true")
         ),
         sa.Column("created_at", sa.DateTime(), nullable=False),
         sa.Column("updated_at", sa.DateTime(), nullable=False),
