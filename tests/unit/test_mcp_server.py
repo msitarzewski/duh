@@ -177,7 +177,7 @@ class TestHandleAsk:
             patch(
                 "duh.cli.app._run_consensus",
                 new_callable=AsyncMock,
-                return_value=("Use SQLite.", 0.9, 1.0, "minor dissent", 0.05, None, []),
+                return_value=("Use SQLite.", 0.9, 1.0, "minor dissent", 0.05, None, [], []),
             ),
         ):
             result = await _handle_ask({"question": "What DB?", "rounds": 2})

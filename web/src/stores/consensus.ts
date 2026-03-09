@@ -29,6 +29,7 @@ export interface RoundData {
   challenges: ChallengeEntry[]
   reviser: string | null
   revision: string | null
+  revisionCitations?: Citation[] | null
   confidence: number | null
   rigor: number | null
   dissent: string | null
@@ -56,6 +57,7 @@ interface ConsensusState {
   cost: number | null
   threadId: string | null
   overview: string | null
+  followups: string[]
 
   // Refinement
   clarifyingQuestions: ClarifyingQuestion[]
@@ -106,6 +108,7 @@ const initialState = {
   cost: null as number | null,
   threadId: null as string | null,
   overview: null as string | null,
+  followups: [] as string[],
   clarifyingQuestions: [] as ClarifyingQuestion[],
   clarificationAnswers: {} as Record<number, string>,
   pendingRounds: 3,
@@ -203,6 +206,7 @@ export const useConsensusStore = create<ConsensusState>((set, get) => ({
       cost: null,
       threadId: null,
       overview: null,
+      followups: [],
       clarifyingQuestions: [],
       clarificationAnswers: {},
     })
@@ -292,6 +296,7 @@ function handleEvent(
         if (event.truncated) update.truncated = [...round.truncated, 'PROPOSE']
       } else if (event.phase === 'REVISE') {
         update.revision = event.content ?? null
+        update.revisionCitations = event.citations ?? null
         if (event.truncated) update.truncated = [...round.truncated, 'REVISE']
       }
 
@@ -353,6 +358,7 @@ function handleEvent(
         cost: event.cost,
         threadId: event.thread_id ?? null,
         overview: event.overview ?? null,
+        followups: event.followups ?? [],
       })
       break
     }

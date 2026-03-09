@@ -120,6 +120,7 @@ export function ConsensusPanel() {
                     collapsible={isCompletedRound}
                     defaultOpen={false}
                     truncated={round.truncated.includes('REVISE')}
+                    citations={round.revisionCitations}
                   />
                 )}
 

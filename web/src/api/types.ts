@@ -135,6 +135,7 @@ export interface ThreadDetail {
   status: string
   created_at: string
   turns: Turn[]
+  followups?: string[]
 }
 
 export interface RecallResult {
@@ -302,6 +303,7 @@ export interface WSComplete {
   cost: number
   thread_id: string | null
   overview: string | null
+  followups: string[] | null
 }
 
 export interface WSChallengeError {

@@ -77,6 +77,7 @@ class TestAskCommand:
             0.0042,
             None,
             [],
+            [],
         )
 
         result = runner.invoke(cli, ["ask", "What database?"])
@@ -105,6 +106,7 @@ class TestAskCommand:
             0.01,
             None,
             [],
+            [],
         )
 
         result = runner.invoke(cli, ["ask", "What database?"])
@@ -125,7 +127,7 @@ class TestAskCommand:
         from duh.config.schema import DuhConfig
 
         mock_config.return_value = DuhConfig()
-        mock_run.return_value = ("Answer.", 1.0, 1.0, None, 0.0, None, [])
+        mock_run.return_value = ("Answer.", 1.0, 1.0, None, 0.0, None, [], [])
 
         result = runner.invoke(cli, ["ask", "Question?"])
 
@@ -144,7 +146,7 @@ class TestAskCommand:
 
         config = DuhConfig()
         mock_config.return_value = config
-        mock_run.return_value = ("Answer.", 1.0, 1.0, None, 0.0, None, [])
+        mock_run.return_value = ("Answer.", 1.0, 1.0, None, 0.0, None, [], [])
 
         result = runner.invoke(cli, ["ask", "--rounds", "5", "Question?"])
 
@@ -645,7 +647,7 @@ class TestAskIntegration:
 
         async def fake_ask(
             question: str, cfg: Any, **kwargs: Any
-        ) -> tuple[str, float, float, str | None, float, str | None]:
+        ) -> tuple[str, float, float, str | None, float, str | None, list[dict[str, str | None]], list[str]]:
             pm = ProviderManager()
             await pm.register(provider)
             from duh.cli.app import _run_consensus

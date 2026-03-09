@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import asyncio
 import contextlib
+import logging
 import time
 from typing import TYPE_CHECKING, Any
 
@@ -30,6 +32,11 @@ if TYPE_CHECKING:
 
     from duh.providers.base import PromptMessage
 
+logger = logging.getLogger(__name__)
+
+_MAX_RETRIES = 2
+_RETRY_DELAY = 1.0  # seconds
+
 PROVIDER_ID = "perplexity"
 _KNOWN_MODELS = MODEL_CATALOG[PROVIDER_ID]
 _DEFAULT_CAPS = PROVIDER_CAPS[PROVIDER_ID]
@@ -47,6 +54,8 @@ def _map_error(e: openai.APIError) -> Exception:
                 with contextlib.suppress(ValueError):
                     retry_after = float(raw)
         return ProviderRateLimitError(PROVIDER_ID, retry_after=retry_after)
+    if isinstance(e, openai.APIConnectionError):
+        return ProviderTimeoutError(PROVIDER_ID, f"Connection error: {e}")
     if isinstance(e, openai.APITimeoutError):
         return ProviderTimeoutError(PROVIDER_ID, str(e))
     if isinstance(e, openai.InternalServerError):
@@ -153,10 +162,29 @@ class PerplexityProvider:
             ]
 
         start = time.monotonic()
-        try:
-            response = await self._client.chat.completions.create(**kwargs)
-        except openai.APIError as e:
-            raise _map_error(e) from e
+        last_exc: openai.APIError | None = None
+        response = None
+        for attempt in range(_MAX_RETRIES):
+            try:
+                response = await self._client.chat.completions.create(**kwargs)
+                break
+            except openai.APIConnectionError as e:
+                last_exc = e
+                if attempt < _MAX_RETRIES - 1:
+                    logger.warning(
+                        "Perplexity connection error (attempt %d/%d), "
+                        "retrying in %.0fs: %s",
+                        attempt + 1,
+                        _MAX_RETRIES,
+                        _RETRY_DELAY,
+                        e,
+                    )
+                    await asyncio.sleep(_RETRY_DELAY)
+            except openai.APIError as e:
+                raise _map_error(e) from e
+        if response is None:
+            assert last_exc is not None
+            raise _map_error(last_exc) from last_exc
 
         latency_ms = (time.monotonic() - start) * 1000
 

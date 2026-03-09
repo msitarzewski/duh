@@ -147,7 +147,7 @@ class TestAskProtocolFlag:
         from duh.config.schema import DuhConfig
 
         mock_config.return_value = DuhConfig()
-        mock_run.return_value = ("Answer.", 1.0, 1.0, None, 0.0, None, [])
+        mock_run.return_value = ("Answer.", 1.0, 1.0, None, 0.0, None, [], [])
 
         result = runner.invoke(cli, ["ask", "Question?"])
         assert result.exit_code == 0

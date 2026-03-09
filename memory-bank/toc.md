@@ -4,7 +4,7 @@
 - [projectbrief.md](./projectbrief.md) — Vision, tenets, architecture, build sequence
 - [techContext.md](./techContext.md) — Tech stack decisions with rationale (Python, Docker, SQLAlchemy, frontend, tools, etc.)
 - [decisions.md](./decisions.md) — Architectural decisions with context, alternatives, and consequences (26 ADRs)
-- [activeContext.md](./activeContext.md) — Current state, question-refinement branch in progress
+- [activeContext.md](./activeContext.md) — Current state, post PR #14 — follow-ups, revision citations, CLI persistence
 - [progress.md](./progress.md) — Milestone tracking, what's built, what's next
 - [competitive-landscape.md](./competitive-landscape.md) — Research on existing tools, frameworks, and academic work
 - [quick-start.md](./quick-start.md) — Session entry point, v0.5 complete, key file references

@@ -35,9 +35,17 @@ def _expand_url(section: dict[str, str]) -> dict[str, str]:
     return section
 
 
+def _resolve_url() -> str:
+    """Return database URL from env var, falling back to alembic.ini."""
+    env_url = os.environ.get("DUH_DATABASE_URL")
+    if env_url:
+        return env_url
+    return config.get_main_option("sqlalchemy.url") or ""
+
+
 def run_migrations_offline() -> None:
     """Run migrations in 'offline' mode."""
-    url = config.get_main_option("sqlalchemy.url")
+    url = _resolve_url()
     context.configure(
         url=url,
         target_metadata=target_metadata,
@@ -59,6 +67,8 @@ def do_run_migrations(connection) -> None:  # type: ignore[no-untyped-def]
 async def run_async_migrations() -> None:
     """Run migrations in 'online' mode with async engine."""
     section = _expand_url(config.get_section(config.config_ini_section, {}))
+    section["sqlalchemy.url"] = _resolve_url()
+    section = _expand_url(section)
     connectable = async_engine_from_config(
         section,
         prefix="sqlalchemy.",
@@ -74,6 +84,8 @@ async def run_async_migrations() -> None:
 def run_migrations_online() -> None:
     """Run migrations in 'online' mode (sync or async)."""
     section = _expand_url(config.get_section(config.config_ini_section, {}))
+    section["sqlalchemy.url"] = _resolve_url()
+    section = _expand_url(section)
     url = section.get("sqlalchemy.url", "")
 
     if _is_async_url(url):

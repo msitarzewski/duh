@@ -56,6 +56,7 @@ class ThreadDetailResponse(BaseModel):
     status: str
     created_at: str
     turns: list[TurnResponse] = Field(default_factory=list)
+    followups: list[str] = Field(default_factory=list)
 
 
 class ThreadListResponse(BaseModel):
@@ -189,12 +190,23 @@ def _build_thread_detail(thread: object) -> ThreadDetailResponse:
             )
         )
 
+    # Parse followups from JSON
+    followups_raw = getattr(thread, "followups_json", None)
+    followups: list[str] = []
+    if followups_raw:
+        import contextlib
+        import json as _json
+
+        with contextlib.suppress(ValueError, TypeError):
+            followups = _json.loads(followups_raw)
+
     return ThreadDetailResponse(
         thread_id=thread.id,  # type: ignore[attr-defined]
         question=thread.question,  # type: ignore[attr-defined]
         status=thread.status,  # type: ignore[attr-defined]
         created_at=thread.created_at.isoformat(),  # type: ignore[attr-defined]
         turns=turns,
+        followups=followups,
     )
 
 

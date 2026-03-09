@@ -75,6 +75,9 @@ class Thread(Base):
     user_id: Mapped[str | None] = mapped_column(
         ForeignKey("users.id"), nullable=True, index=True, default=None
     )
+    followups_json: Mapped[str | None] = mapped_column(
+        Text, nullable=True, default=None
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, default=_utcnow, onupdate=_utcnow

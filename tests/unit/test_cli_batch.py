@@ -460,10 +460,11 @@ class TestBatchAsyncUnit:
             float,
             str | None,
             list[dict[str, str | None]],
+            list[str],
         ]:
             nonlocal consensus_called
             consensus_called = True
-            return ("Use SQLite.", 0.85, 1.0, None, 0.01, None, [])
+            return ("Use SQLite.", 0.85, 1.0, None, 0.01, None, [], [])
 
         with (
             patch("duh.cli.app.load_config", return_value=config),
@@ -554,8 +555,8 @@ class TestBatchAsyncUnit:
             pm: Any,
             display: Any = None,
             tool_registry: Any = None,
-        ) -> tuple[str, float, float, str | None, float, str | None]:
-            return ("Answer.", 0.9, 1.0, None, 0.01, None, [])
+        ) -> tuple[str, float, float, str | None, float, str | None, list[dict[str, str | None]], list[str]]:
+            return ("Answer.", 0.9, 1.0, None, 0.01, None, [], [])
 
         with (
             patch("duh.cli.app.load_config", return_value=config),
@@ -609,12 +610,12 @@ class TestBatchAsyncUnit:
             pm: Any,
             display: Any = None,
             tool_registry: Any = None,
-        ) -> tuple[str, float, float, str | None, float, str | None]:
+        ) -> tuple[str, float, float, str | None, float, str | None, list[dict[str, str | None]], list[str]]:
             nonlocal call_count
             call_count += 1
             if question == "Q2":
                 raise RuntimeError("Provider timeout")
-            return ("Answer.", 0.9, 1.0, None, 0.01, None, [])
+            return ("Answer.", 0.9, 1.0, None, 0.01, None, [], [])
 
         with (
             patch("duh.cli.app.load_config", return_value=config),
@@ -658,10 +659,10 @@ class TestBatchAsyncUnit:
             pm: Any,
             display: Any = None,
             tool_registry: Any = None,
-        ) -> tuple[str, float, float, str | None, float, str | None]:
+        ) -> tuple[str, float, float, str | None, float, str | None, list[dict[str, str | None]], list[str]]:
             if question == "Q2":
                 raise RuntimeError("Model unavailable")
-            return ("Answer.", 0.9, 1.0, None, 0.01, None, [])
+            return ("Answer.", 0.9, 1.0, None, 0.01, None, [], [])
 
         with (
             patch("duh.cli.app.load_config", return_value=config),

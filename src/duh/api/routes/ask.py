@@ -112,6 +112,7 @@ async def _handle_consensus(  # type: ignore[no-untyped-def]
         cost,
         _overview,
         _citations,
+        _followups,
     ) = await _run_consensus(
         body.question,
         config,
@@ -192,6 +193,7 @@ async def _handle_decompose(body: AskRequest, config, pm) -> AskResponse:  # typ
             cost,
             _overview,
             _citations,
+            _followups,
         ) = await _run_consensus(body.question, config, pm)
         return AskResponse(
             decision=decision,

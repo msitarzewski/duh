@@ -123,7 +123,7 @@ class TestToolsFlag:
     ) -> None:
         config = DuhConfig(tools=ToolsConfig(enabled=False))
         mock_config.return_value = config
-        mock_run.return_value = ("Answer", 0.9, None, 0.01)
+        mock_run.return_value = ("Answer", 0.9, 1.0, None, 0.01, None, [], [])
 
         runner.invoke(cli, ["ask", "--tools", "test question"])
         # After CLI processes --tools flag, config should be overridden
@@ -139,7 +139,7 @@ class TestToolsFlag:
     ) -> None:
         config = DuhConfig(tools=ToolsConfig(enabled=True))
         mock_config.return_value = config
-        mock_run.return_value = ("Answer", 0.9, None, 0.01)
+        mock_run.return_value = ("Answer", 0.9, 1.0, None, 0.01, None, [], [])
 
         runner.invoke(cli, ["ask", "--no-tools", "test question"])
         assert config.tools.enabled is False
@@ -154,7 +154,7 @@ class TestToolsFlag:
     ) -> None:
         config = DuhConfig(tools=ToolsConfig(enabled=True))
         mock_config.return_value = config
-        mock_run.return_value = ("Answer", 0.9, None, 0.01)
+        mock_run.return_value = ("Answer", 0.9, 1.0, None, 0.01, None, [], [])
 
         runner.invoke(cli, ["ask", "test question"])
         # Should remain True since no flag was passed
@@ -242,7 +242,7 @@ class TestAskAsyncToolWiring:
         config = DuhConfig(tools=ToolsConfig(enabled=True))
         mock_config.return_value = config
         mock_providers.return_value.list_all_models.return_value = ["model1"]
-        mock_consensus.return_value = ("Answer", 0.9, 1.0, None, 0.01, None)
+        mock_consensus.return_value = ("Answer", 0.9, 1.0, None, 0.01, None, [], [])
 
         runner.invoke(cli, ["ask", "test question"])
 
@@ -263,7 +263,7 @@ class TestAskAsyncToolWiring:
         config = DuhConfig(tools=ToolsConfig(enabled=False))
         mock_config.return_value = config
         mock_providers.return_value.list_all_models.return_value = ["model1"]
-        mock_consensus.return_value = ("Answer", 0.9, 1.0, None, 0.01, None)
+        mock_consensus.return_value = ("Answer", 0.9, 1.0, None, 0.01, None, [], [])
 
         runner.invoke(cli, ["ask", "test question"])
 

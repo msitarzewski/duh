@@ -1,5 +1,7 @@
-import { useEffect } from 'react'
+import { useCallback, useEffect } from 'react'
 import { useCalibrationStore } from '@/stores'
+
+const INTENT_CATEGORIES = ['factual', 'technical', 'creative', 'judgment', 'strategic']
 
 function eceRating(ece: number): { label: string; color: string } {
   if (ece < 0.05) return { label: 'Excellent', color: 'var(--color-success, #22c55e)' }
@@ -17,10 +19,41 @@ export function CalibrationDashboard() {
     ece,
     loading,
     error,
+    category,
+    since,
+    until,
     fetchCalibration,
+    setCategory,
+    setSince,
+    setUntil,
   } = useCalibrationStore()
 
   useEffect(() => {
+    fetchCalibration()
+  }, [fetchCalibration])
+
+  const handleCategoryChange = useCallback(
+    (e: React.ChangeEvent<HTMLSelectElement>) => {
+      setCategory(e.target.value || null)
+    },
+    [setCategory],
+  )
+
+  const handleSinceChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      setSince(e.target.value || null)
+    },
+    [setSince],
+  )
+
+  const handleUntilChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      setUntil(e.target.value || null)
+    },
+    [setUntil],
+  )
+
+  const handleApplyFilters = useCallback(() => {
     fetchCalibration()
   }, [fetchCalibration])
 
@@ -51,6 +84,50 @@ export function CalibrationDashboard() {
         Are confidence scores accurate? Compare predicted confidence against actual
         outcomes.
       </p>
+
+      {/* Filters */}
+      <div className="flex flex-wrap items-end gap-3">
+        <label className="flex flex-col gap-1 text-xs text-[var(--color-text-dim)]">
+          Category
+          <select
+            value={category ?? ''}
+            onChange={handleCategoryChange}
+            className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-[var(--radius-sm)] px-2 py-1.5 text-sm text-[var(--color-text)] font-mono"
+          >
+            <option value="">All</option>
+            {INTENT_CATEGORIES.map((c) => (
+              <option key={c} value={c}>
+                {c}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="flex flex-col gap-1 text-xs text-[var(--color-text-dim)]">
+          Since
+          <input
+            type="date"
+            value={since ?? ''}
+            onChange={handleSinceChange}
+            className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-[var(--radius-sm)] px-2 py-1.5 text-sm text-[var(--color-text)] font-mono"
+          />
+        </label>
+        <label className="flex flex-col gap-1 text-xs text-[var(--color-text-dim)]">
+          Until
+          <input
+            type="date"
+            value={until ?? ''}
+            onChange={handleUntilChange}
+            className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-[var(--radius-sm)] px-2 py-1.5 text-sm text-[var(--color-text)] font-mono"
+          />
+        </label>
+        <button
+          onClick={handleApplyFilters}
+          disabled={loading}
+          className="px-3 py-1.5 text-sm font-medium bg-[var(--color-primary)] text-white rounded-[var(--radius-sm)] hover:opacity-90 disabled:opacity-50"
+        >
+          Apply
+        </button>
+      </div>
 
       {/* Metric cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">

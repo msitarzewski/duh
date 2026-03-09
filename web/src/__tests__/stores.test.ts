@@ -409,6 +409,8 @@ describe('useCalibrationStore', () => {
       loading: false,
       error: null,
       category: null,
+      since: null,
+      until: null,
     })
   })
 
@@ -471,5 +473,48 @@ describe('useCalibrationStore', () => {
 
     useCalibrationStore.getState().setCategory(null)
     expect(useCalibrationStore.getState().category).toBeNull()
+  })
+
+  it('setSince updates since filter', () => {
+    useCalibrationStore.getState().setSince('2025-01-01')
+    expect(useCalibrationStore.getState().since).toBe('2025-01-01')
+
+    useCalibrationStore.getState().setSince(null)
+    expect(useCalibrationStore.getState().since).toBeNull()
+  })
+
+  it('setUntil updates until filter', () => {
+    useCalibrationStore.getState().setUntil('2025-12-31')
+    expect(useCalibrationStore.getState().until).toBe('2025-12-31')
+
+    useCalibrationStore.getState().setUntil(null)
+    expect(useCalibrationStore.getState().until).toBeNull()
+  })
+
+  it('fetchCalibration passes filters to API', async () => {
+    mockedApi.calibration.mockResolvedValue({
+      buckets: [],
+      total_decisions: 0,
+      total_with_outcomes: 0,
+      overall_accuracy: 0,
+      ece: 0,
+    })
+
+    useCalibrationStore.getState().setCategory('factual')
+    useCalibrationStore.getState().setSince('2025-06-01')
+    useCalibrationStore.getState().setUntil('2025-06-30')
+    await useCalibrationStore.getState().fetchCalibration()
+
+    expect(mockedApi.calibration).toHaveBeenCalledWith({
+      category: 'factual',
+      since: '2025-06-01',
+      until: '2025-06-30',
+    })
+  })
+
+  it('has correct initial state for date filters', () => {
+    const state = useCalibrationStore.getState()
+    expect(state.since).toBeNull()
+    expect(state.until).toBeNull()
   })
 })

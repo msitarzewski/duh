@@ -25,6 +25,7 @@ if TYPE_CHECKING:
 
     from duh.cli.display import ConsensusDisplay
     from duh.config.schema import DuhConfig
+    from duh.consensus.machine import RoundResult
     from duh.memory.models import Thread, Vote
     from duh.providers.base import ModelInfo
     from duh.providers.manager import ProviderManager
@@ -38,6 +39,21 @@ def _error(msg: str) -> None:
     """Print an error message to stderr and exit."""
     click.echo(f"Error: {msg}", err=True)
     sys.exit(1)
+
+
+def _parse_challengers(
+    value: str | None,
+) -> tuple[list[str] | None, int | None]:
+    """Parse --challengers as int (count) or comma-separated model refs.
+
+    Returns (model_list, count) — exactly one will be set, or both None.
+    """
+    if not value:
+        return None, None
+    try:
+        return None, int(value)
+    except ValueError:
+        return value.split(","), None
 
 
 def _load_config(config_path: str | None) -> DuhConfig:
@@ -199,6 +215,104 @@ def _setup_tools(config: DuhConfig) -> ToolRegistry | None:
     return registry
 
 
+async def persist_consensus(
+    db_factory: async_sessionmaker[AsyncSession],
+    question: str,
+    round_history: list[RoundResult],
+    overview: str | None = None,
+    followups: list[str] | None = None,
+) -> str:
+    """Persist full consensus round history to the database.
+
+    Saves proposals, challenger responses, revisions, citations,
+    decisions, and overview — the same rich format used by the web UI.
+
+    Returns the new thread ID.
+    """
+    import json as _json
+
+    from duh.memory.repository import MemoryRepository
+
+    async with db_factory() as session:
+        repo = MemoryRepository(session)
+        thread = await repo.create_thread(question)
+        thread.status = "complete"
+
+        for rr in round_history:
+            turn = await repo.create_turn(thread.id, rr.round_number, "COMMIT")
+
+            # Proposal with citations
+            proposal_cit = None
+            if rr.proposal_citations:
+                proposal_cit = _json.dumps(
+                    [
+                        {"url": c["url"], "title": c.get("title")}
+                        for c in rr.proposal_citations
+                    ]
+                )
+            await repo.add_contribution(
+                turn.id,
+                rr.proposal_model,
+                "proposer",
+                rr.proposal,
+                citations_json=proposal_cit,
+            )
+
+            # Challenger responses with citations
+            for ch in rr.challenges:
+                ch_cit = None
+                if ch.citations:
+                    ch_cit = _json.dumps(
+                        [
+                            {"url": c["url"], "title": c.get("title")}
+                            for c in ch.citations
+                        ]
+                    )
+                await repo.add_contribution(
+                    turn.id,
+                    ch.model_ref,
+                    "challenger",
+                    ch.content,
+                    citations_json=ch_cit,
+                )
+
+            # Revision with citations
+            rev_cit = None
+            if rr.revision_citations:
+                rev_cit = _json.dumps(
+                    [
+                        {"url": c["url"], "title": c.get("title")}
+                        for c in rr.revision_citations
+                    ]
+                )
+            await repo.add_contribution(
+                turn.id,
+                rr.proposal_model,
+                "reviser",
+                rr.revision,
+                citations_json=rev_cit,
+            )
+
+            # Decision
+            await repo.save_decision(
+                turn.id,
+                thread.id,
+                rr.decision,
+                rr.confidence,
+                rigor=rr.rigor,
+                dissent=rr.dissent,
+            )
+
+        if overview:
+            await repo.save_thread_summary(thread.id, overview, "overview")
+
+        if followups:
+            thread.followups_json = _json.dumps(followups)
+
+        await session.commit()
+        return str(thread.id)
+
+
 async def _run_consensus(
     question: str,
     config: DuhConfig,
@@ -209,13 +323,23 @@ async def _run_consensus(
     panel: list[str] | None = None,
     proposer_override: str | None = None,
     challengers_override: list[str] | None = None,
+    challenger_count: int | None = None,
     web_search: bool = False,
+    db_factory: async_sessionmaker[AsyncSession] | None = None,
 ) -> tuple[
-    str, float, float, str | None, float, str | None, list[dict[str, str | None]]
+    str,
+    float,
+    float,
+    str | None,
+    float,
+    str | None,
+    list[dict[str, str | None]],
+    list[str],
 ]:
     """Run the full consensus loop.
 
-    Returns (decision, confidence, rigor, dissent, total_cost, overview, citations).
+    Returns (decision, confidence, rigor, dissent, total_cost, overview,
+    citations, followups).
     """
     from duh.consensus.convergence import check_convergence
     from duh.consensus.handlers import (
@@ -272,7 +396,10 @@ async def _run_consensus(
         # CHALLENGE
         sm.transition(ConsensusState.CHALLENGE)
         challengers = challengers_override or select_challengers(
-            pm, proposer, panel=effective_panel
+            pm,
+            proposer,
+            panel=effective_panel,
+            **({"count": challenger_count} if challenger_count else {}),
         )
         if display:
             detail = f"{len(challengers)} models"
@@ -299,10 +426,17 @@ async def _run_consensus(
         if display:
             reviser = ctx.proposal_model or proposer
             with display.phase_status("REVISE", reviser):
-                await handle_revise(ctx, pm)
+                await handle_revise(
+                    ctx,
+                    pm,
+                    tool_registry=tool_registry,
+                    web_search=web_search,
+                )
             display.show_revise(ctx.revision_model or reviser, ctx.revision or "")
         else:
-            await handle_revise(ctx, pm)
+            await handle_revise(
+                ctx, pm, tool_registry=tool_registry, web_search=web_search
+            )
 
         # COMMIT
         sm.transition(ConsensusState.COMMIT)
@@ -327,8 +461,11 @@ async def _run_consensus(
 
     sm.transition(ConsensusState.COMPLETE)
 
-    # Generate executive overview (best-effort)
+    # Generate executive overview and follow-up questions (best-effort)
     await generate_overview(ctx, pm)
+    from duh.consensus.handlers import generate_followups
+
+    await generate_followups(ctx, pm)
 
     # Show tool usage if any
     if display and ctx.tool_calls_log:
@@ -340,10 +477,27 @@ async def _run_consensus(
         all_citations.extend(rr.proposal_citations)
         for ch in rr.challenges:
             all_citations.extend(ch.citations)
+        all_citations.extend(rr.revision_citations)
     # Include current round (may not be archived yet)
     all_citations.extend(ctx.proposal_citations)
     for ch in ctx.challenges:
         all_citations.extend(ch.citations)
+    all_citations.extend(ctx.revision_citations)
+
+    # Persist full round history if DB available
+    if db_factory is not None:
+        try:
+            await persist_consensus(
+                db_factory,
+                question,
+                ctx.round_history,
+                overview=ctx.overview,
+                followups=ctx.followups or None,
+            )
+        except Exception:
+            import logging as _logging
+
+            _logging.getLogger(__name__).exception("Failed to persist consensus thread")
 
     return (
         ctx.decision or "",
@@ -353,6 +507,7 @@ async def _run_consensus(
         pm.total_cost,
         ctx.overview,
         all_citations,
+        ctx.followups,
     )
 
 
@@ -368,14 +523,32 @@ async def _run_consensus(
     default=None,
     help="Path to config file.",
 )
+@click.option(
+    "--rounds",
+    type=int,
+    default=None,
+    help="Max consensus rounds (overrides config).",
+)
+@click.option(
+    "--challengers",
+    default=None,
+    help="Count or model refs (e.g. 3 or openai:gpt-5,google:gemini-2.5-pro).",
+)
 @click.pass_context
-def cli(ctx: click.Context, config_path: str | None) -> None:
+def cli(
+    ctx: click.Context,
+    config_path: str | None,
+    rounds: int | None,
+    challengers: str | None,
+) -> None:
     """duh - Multi-model consensus engine.
 
     Ask multiple LLMs, get one answer they agree on.
     """
     ctx.ensure_object(dict)
     ctx.obj["config_path"] = config_path
+    ctx.obj["rounds"] = rounds
+    ctx.obj["challengers"] = challengers
     if ctx.invoked_subcommand is None:
         click.echo(ctx.get_help())
 
@@ -416,7 +589,7 @@ def cli(ctx: click.Context, config_path: str | None) -> None:
 @click.option(
     "--challengers",
     default=None,
-    help="Override challengers (comma-separated model refs).",
+    help="Count or model refs (e.g. 3 or openai:gpt-5,google:gemini-2.5-pro).",
 )
 @click.option(
     "--panel",
@@ -447,6 +620,11 @@ def ask(
     and produces a revised consensus decision.
     """
     config = _load_config(ctx.obj["config_path"])
+
+    # Top-level options cascade into subcommand (subcommand wins)
+    rounds = rounds or ctx.obj.get("rounds")
+    challengers = challengers or ctx.obj.get("challengers")
+
     if rounds is not None:
         config.general.max_rounds = rounds
 
@@ -456,7 +634,7 @@ def ask(
 
     # Parse model selection overrides
     panel_list = panel.split(",") if panel else None
-    challengers_list = challengers.split(",") if challengers else None
+    challengers_list, challenger_count = _parse_challengers(challengers)
 
     # Question refinement (pre-consensus clarification)
     if refine:
@@ -498,13 +676,14 @@ def ask(
                 panel=panel_list,
                 proposer_override=proposer,
                 challengers_override=challengers_list,
+                challenger_count=challenger_count,
             )
         )
     except DuhError as e:
         _error(str(e))
         return  # unreachable
 
-    decision, confidence, rigor, dissent, cost, overview, citations = result
+    decision, confidence, rigor, dissent, cost, overview, citations, _followups = result
 
     from duh.cli.display import ConsensusDisplay
 
@@ -547,8 +726,16 @@ async def _ask_async(
     panel: list[str] | None = None,
     proposer_override: str | None = None,
     challengers_override: list[str] | None = None,
+    challenger_count: int | None = None,
 ) -> tuple[
-    str, float, float, str | None, float, str | None, list[dict[str, str | None]]
+    str,
+    float,
+    float,
+    str | None,
+    float,
+    str | None,
+    list[dict[str, str | None]],
+    list[str],
 ]:
     """Async implementation for the ask command."""
     from duh.cli.display import ConsensusDisplay
@@ -563,19 +750,25 @@ async def _ask_async(
 
     tool_registry = _setup_tools(config)
     use_native_search = config.tools.enabled and config.tools.web_search.native
+    factory, engine = await _create_db(config)
     display = ConsensusDisplay()
     display.start()
-    return await _run_consensus(
-        question,
-        config,
-        pm,
-        display=display,
-        tool_registry=tool_registry,
-        panel=panel,
-        proposer_override=proposer_override,
-        challengers_override=challengers_override,
-        web_search=use_native_search,
-    )
+    try:
+        return await _run_consensus(
+            question,
+            config,
+            pm,
+            display=display,
+            tool_registry=tool_registry,
+            panel=panel,
+            proposer_override=proposer_override,
+            challengers_override=challengers_override,
+            challenger_count=challenger_count,
+            web_search=use_native_search,
+            db_factory=factory,
+        )
+    finally:
+        await engine.dispose()
 
 
 async def _ask_voting_async(
@@ -666,6 +859,7 @@ async def _ask_auto_async(
             cost,
             overview,
             citations,
+            _followups,
         ) = await _run_consensus(question, config, pm, display=display)
         display.show_final_decision(
             decision, confidence, rigor, cost, dissent, overview=overview
@@ -743,7 +937,16 @@ async def _ask_decompose_async(
     # Single-subtask optimization: skip synthesis
     if len(subtask_specs) == 1:
         result = await _run_consensus(question, config, pm, display=display)
-        decision, confidence, rigor, dissent, cost, overview, citations = result
+        (
+            decision,
+            confidence,
+            rigor,
+            dissent,
+            cost,
+            overview,
+            citations,
+            _followups,
+        ) = result
         display.show_final_decision(
             decision, confidence, rigor, cost, dissent, overview=overview
         )
@@ -2260,6 +2463,9 @@ def batch(
     (each line is {"question": "..."}).
     """
     config = _load_config(ctx.obj["config_path"])
+
+    # Top-level --rounds cascades into batch
+    rounds = rounds or ctx.obj.get("rounds")
     if rounds is not None:
         config.general.max_rounds = rounds
 
@@ -2397,6 +2603,7 @@ async def _batch_async(
                     _cost,
                     _overview,
                     _citations,
+                    _fups,
                 ) = await _run_consensus(question, config, pm)
 
             q_cost = pm.total_cost - cost_before
