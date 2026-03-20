@@ -647,7 +647,16 @@ class TestAskIntegration:
 
         async def fake_ask(
             question: str, cfg: Any, **kwargs: Any
-        ) -> tuple[str, float, float, str | None, float, str | None, list[dict[str, str | None]], list[str]]:
+        ) -> tuple[
+            str,
+            float,
+            float,
+            str | None,
+            float,
+            str | None,
+            list[dict[str, str | None]],
+            list[str],
+        ]:
             pm = ProviderManager()
             await pm.register(provider)
             from duh.cli.app import _run_consensus

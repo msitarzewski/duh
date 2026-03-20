@@ -555,7 +555,16 @@ class TestBatchAsyncUnit:
             pm: Any,
             display: Any = None,
             tool_registry: Any = None,
-        ) -> tuple[str, float, float, str | None, float, str | None, list[dict[str, str | None]], list[str]]:
+        ) -> tuple[
+            str,
+            float,
+            float,
+            str | None,
+            float,
+            str | None,
+            list[dict[str, str | None]],
+            list[str],
+        ]:
             return ("Answer.", 0.9, 1.0, None, 0.01, None, [], [])
 
         with (
@@ -610,7 +619,16 @@ class TestBatchAsyncUnit:
             pm: Any,
             display: Any = None,
             tool_registry: Any = None,
-        ) -> tuple[str, float, float, str | None, float, str | None, list[dict[str, str | None]], list[str]]:
+        ) -> tuple[
+            str,
+            float,
+            float,
+            str | None,
+            float,
+            str | None,
+            list[dict[str, str | None]],
+            list[str],
+        ]:
             nonlocal call_count
             call_count += 1
             if question == "Q2":
@@ -659,7 +677,16 @@ class TestBatchAsyncUnit:
             pm: Any,
             display: Any = None,
             tool_registry: Any = None,
-        ) -> tuple[str, float, float, str | None, float, str | None, list[dict[str, str | None]], list[str]]:
+        ) -> tuple[
+            str,
+            float,
+            float,
+            str | None,
+            float,
+            str | None,
+            list[dict[str, str | None]],
+            list[str],
+        ]:
             if question == "Q2":
                 raise RuntimeError("Model unavailable")
             return ("Answer.", 0.9, 1.0, None, 0.01, None, [], [])
