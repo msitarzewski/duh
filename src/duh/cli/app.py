@@ -1934,9 +1934,7 @@ def _format_thread_pdf(
     # Question — left-aligned with curly quotes
     pdf.set_font(pdf._font_family, "I", 14)
     pdf.set_text_color(40, 40, 40)
-    pdf.multi_cell(
-        0, 8, pdf._safe(f"\u201c{thread.question}\u201d")
-    )
+    pdf.multi_cell(0, 8, pdf._safe(f"\u201c{thread.question}\u201d"))
     pdf.ln(8)
 
     # Metadata
