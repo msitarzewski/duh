@@ -41,6 +41,25 @@
 - Tests: TestShowCitations (8), TestShowFinalDecisionOverview (2), calibration date tests (4), all 8-tuple updates
 - Files: handlers.py, machine.py, app.py, ws.py, ask.py, threads.py, models.py, migrations.py, mcp/server.py, openai.py, perplexity.py, catalog.py, alembic/env.py, CalibrationDashboard.tsx, ConsensusNav.tsx, ConsensusPanel.tsx, ThreadNav.tsx, calibration.ts, consensus.ts, types.ts, + 7 test files
 
+## 2026-03-20: Thread View Parity + PDF Overhaul + Server/UI Fixes
+- **Thread detail view**: `TurnCard` replaced with `PhaseCard` rendering — PROPOSE/CHALLENGE/REVISE match live consensus view
+  - `turnToPhaseData()` helper transforms `Turn.contributions` by role
+  - `ThreadNav` upgraded to phase-level navigation (PROPOSE, challenger models, REVISE)
+  - Header renamed "ROUNDS" → "PROGRESS", feedback moved to top
+- **PDF export overhaul**: branded cover page ("duh." + "consensus engine"), curly-quoted question
+  - Styled TOC on dedicated page: dark header bar, dot leaders, clickable cyan page numbers
+  - Colored section header bars (Decision=green, Dissent=amber, Consensus Process=gray, Sources=gray-blue)
+  - Phase-grouped contributions with PROPOSE/CHALLENGE/REVISE accent colors + provider model refs
+  - Labeled confidence/rigor progress bars
+  - Consolidated Sources section: numbered clickable URLs with hostname display
+  - Page break between Decision/Dissent and Consensus Process
+- **Server fix**: `_create_db()` runs `create_all` for fresh file-based SQLite before `ensure_schema()`
+- **ensure_schema**: handles missing tables gracefully (`_get_columns` returns `None`)
+- **ExportMenu**: opaque dropdown (`--color-surface-solid`), hover uses `--color-surface-hover`
+- **Thread header**: `relative z-10` + opaque background for dropdown visibility
+- Tests: 1652 Python + 199 Vitest passing
+- Files: `app.py`, `migrations.py`, `ThreadDetail.tsx`, `ThreadNav.tsx`, `ExportMenu.tsx`, `thread-nav.test.tsx`, `README.md`
+
 ## 2026-03-07: Z-index Fix + GPT-5.4 + .env Docs
 - Fixed z-index stacking contexts trapping dropdowns (Shell z-10, TopBar z-20 removed)
 - Added CSS z-index tokens (`--z-background`, `--z-dropdown`, `--z-overlay`, `--z-modal`)

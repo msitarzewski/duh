@@ -1,10 +1,43 @@
 # Active Context
 
-**Last Updated**: 2026-03-09
-**Current Phase**: Post PR #14 merge — follow-up questions, revision citations, CLI persistence, calibration filters, provider updates
-**Next Action**: Commit and push uncommitted work to new branch
+**Last Updated**: 2026-03-20
+**Current Phase**: Thread view parity, PDF overhaul, server/UI fixes — committed and pushed to main
+**Next Action**: Continue feature work or address open questions
 
-## Latest Work (2026-03-09)
+## Latest Work (2026-03-20)
+
+### Thread Detail View — Consensus Parity
+- Replaced `TurnCard` with `PhaseCard` in `ThreadDetail.tsx` — rounds now render PROPOSE/CHALLENGE/REVISE phases matching the live consensus view
+- Added `turnToPhaseData()` helper to transform `Turn.contributions` (grouped by `role`) into PhaseCard props
+- `ThreadNav.tsx` upgraded to phase-level navigation: PROPOSE, individual challenger model names, REVISE per round (was round-level only)
+- Header renamed from "ROUNDS" to "PROGRESS" matching `ConsensusNav`
+- Feedback section moved from bottom to right after decision block
+- Scroll anchor IDs: `thread-round-N-propose`, `thread-round-N-challenge`, `thread-round-N-revise`
+- `TurnCard` still exists but no longer used in production code
+
+### PDF Export Overhaul
+- **Cover page**: centered "duh." brand (36pt cyan) + "consensus engine" subtitle, quoted question (italic, curly quotes), centered metadata
+- **Table of Contents**: own page, dark header bar, dot leaders, clickable cyan page numbers linking to sections
+- **Section headers**: colored background bars with white text (Decision=green, Dissent=amber, Consensus Process=gray, Sources=gray-blue)
+- **Phase-grouped contributions**: PROPOSE (green accent), CHALLENGE (amber accent), REVISE (blue accent) — each with phase label + provider-colored model ref
+- **Confidence/rigor meters**: labeled progress bars with colored fills (green for confidence, cyan for rigor)
+- **Sources section**: consolidated at end of document, numbered, with clickable URL links and hostname display
+- **Page break**: Decision/Dissent on initial pages, Consensus Process starts on new page
+- **TOC overflow fix**: TOC renders on dedicated page to prevent fpdf2 page-count mismatch
+
+### Server & UI Fixes
+- `_create_db()`: file-based SQLite now runs `Base.metadata.create_all()` before `ensure_schema()` — fixes crash on fresh databases with no tables
+- `ensure_schema()`: `_get_columns()` returns `None` for missing tables, all migration blocks skip gracefully
+- `ExportMenu` dropdown: opaque `--color-surface-solid` background (was transparent `--glass-bg`), hover state uses `--color-surface-hover` (was undefined `--color-bg-tertiary`)
+- Thread header `GlassPanel`: `relative z-10` + opaque background so export dropdown renders above sibling Decision panel
+
+### Test Updates
+- `thread-nav.test.tsx`: "ROUNDS"→"PROGRESS", new phase-level entry test, updated empty-contributions test
+- All 1652 Python + 199 Vitest tests passing
+
+---
+
+## Prior Work (2026-03-09)
 
 ### Follow-up Questions (new end-to-end feature)
 - `generate_followups()` in `src/duh/consensus/handlers.py:930` — uses cheapest model with JSON mode to suggest 3 follow-up questions after consensus completes
@@ -69,9 +102,9 @@
 
 ## Current State
 
-- **Branch `main`** — uncommitted changes across 29 files (+828/-63)
-- All previous features intact (v0.1-v0.6, question-refinement PR #13, messaging-refinement PR #14)
-- Prior merged: question refinement, native web search, citations, tools-by-default, sidebar UX, README rewrite, CLI citation display
+- **Branch `main`** — all work committed and pushed (574aaca, 822396b)
+- All previous features intact (v0.1-v0.6, PR #13-#15)
+- 1652 Python + 199 Vitest tests passing, build clean
 
 ## Open Questions (Still Unresolved)
 

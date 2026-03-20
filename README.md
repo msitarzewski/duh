@@ -75,7 +75,7 @@ Or use a `.env` file (see `.env.example`).
 
 ### Web UI
 - **Live consensus streaming** -- Watch models debate in real-time via WebSocket. Challengers stream in as they finish (parallel, not batched).
-- **Thread browser** -- Search, filter, and revisit past consensus threads with full debate history.
+- **Thread browser** -- Search, filter, and revisit past consensus threads with full debate history. Thread detail view mirrors the live consensus view with phase-grouped rendering and phase-level navigation.
 - **3D decision space** -- Interactive scatter plot of decisions by confidence, rigor, and category. InstancedMesh handles 1000+ points.
 - **Calibration dashboard** -- ECE analysis, accuracy by confidence bucket, overall calibration rating.
 - **Shareable threads** -- Public share links for consensus results (no auth required).
@@ -87,7 +87,7 @@ Or use a `.env` file (see `.env.example`).
 - **Authentication** -- JWT auth with user accounts, RBAC (admin/contributor/viewer), password reset via SMTP email.
 - **Persistent memory** -- SQLite or PostgreSQL. Every thread, turn, contribution, decision, vote, subtask, and citation stored.
 - **Cost tracking** -- Per-model token costs in real-time with warn thresholds and hard limits.
-- **Export** -- Threads as JSON, Markdown, or PDF. PDF includes TOC, bookmarks, provider-colored callout boxes, and confidence/rigor meters.
+- **Export** -- Threads as JSON, Markdown, or PDF. PDF features branded cover page, styled table of contents with dot-leader links, colored section headers, phase-grouped contributions (PROPOSE/CHALLENGE/REVISE), confidence/rigor meters, and consolidated sources with clickable URLs.
 - **Batch processing** -- Process multiple questions from a file with any protocol.
 - **Backup & restore** -- SQLite copy or JSON export, with merge mode for restores.
 

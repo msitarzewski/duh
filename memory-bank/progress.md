@@ -1,10 +1,30 @@
 # Progress
 
-**Last Updated**: 2026-02-19
+**Last Updated**: 2026-03-20
 
 ---
 
-## Current State: Post PR #14 — Follow-ups, Revision Citations, CLI Persistence
+## Current State: Thread View Parity + PDF Overhaul + Server Fixes
+
+### Thread View Parity + PDF Overhaul + Server/UI Fixes (2026-03-20)
+
+- **Thread detail view**: replaced `TurnCard` with `PhaseCard` rendering — PROPOSE/CHALLENGE/REVISE phases match live consensus view
+  - `turnToPhaseData()` transforms `Turn.contributions` by role into PhaseCard props
+  - `ThreadNav` upgraded to phase-level navigation (PROPOSE, individual challenger models, REVISE)
+  - Feedback section moved to top (right after decision)
+- **PDF export overhaul**: branded cover page ("duh." + "consensus engine"), quoted question, styled TOC with dot leaders + clickable page links
+  - Colored section header bars (Decision=green, Dissent=amber, Consensus Process=gray)
+  - Phase-grouped contributions with accent colors per phase
+  - Confidence/rigor labeled progress bars
+  - Consolidated Sources section at end with numbered clickable URLs
+  - TOC on dedicated page to prevent fpdf2 overflow error
+- **Server fix**: `create_all` for fresh file-based SQLite before `ensure_schema()` — no more crash on empty DB
+- **UI fixes**: opaque ExportMenu dropdown, opaque thread header with z-index for dropdown visibility, fixed undefined `--color-bg-tertiary` hover token
+- Tests: 1652 Python + 199 Vitest (was 198, +1 new phase-level nav test)
+
+---
+
+## Previous State: Post PR #14 — Follow-ups, Revision Citations, CLI Persistence
 
 ### Follow-up Questions + Revision Citations + CLI Persistence + Provider Updates (2026-03-09)
 
