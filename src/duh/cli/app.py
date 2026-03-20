@@ -1955,6 +1955,7 @@ def _format_thread_pdf(
 
     # -- TOC placeholder (renders as its own page) --
     if content == "full":
+        pdf.add_page()
         pdf.insert_toc_placeholder(
             render_toc,
             pages=1,
