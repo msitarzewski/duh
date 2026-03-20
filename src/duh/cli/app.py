@@ -115,13 +115,19 @@ async def _create_db(
             cursor.execute("PRAGMA foreign_keys=ON")
             cursor.close()
 
-    # Only use create_all for in-memory SQLite (tests/dev).
-    # File-based SQLite and PostgreSQL are managed by alembic migrations.
+    # In-memory SQLite (tests/dev) and fresh file-based SQLite both need
+    # create_all. File-based SQLite also runs ensure_schema for column
+    # migrations on existing databases.
     is_memory = url.startswith("sqlite") and ":memory:" in url
+    is_file_sqlite = url.startswith("sqlite") and not is_memory
     if is_memory:
         async with engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
-    elif url.startswith("sqlite"):
+    elif is_file_sqlite:
+        # create_all is safe on existing DBs (skips tables that exist)
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+
         from duh.memory.migrations import ensure_schema
 
         await ensure_schema(engine)
@@ -1550,12 +1556,14 @@ def _format_thread_pdf(
     """Format a thread as a research-paper quality PDF.
 
     Features: repeating header/footer, TOC with bookmarks, provider-colored
-    callout boxes, confidence meter, and full Unicode via TTF fonts (with
-    graceful fallback to core Helvetica).
+    phase callout boxes, confidence/rigor meters, citation references,
+    and full Unicode via TTF fonts (with graceful fallback to Helvetica).
     """
     import html as html_mod
+    import json
     import re
     from datetime import datetime
+    from urllib.parse import urlparse
 
     from fpdf import FPDF  # type: ignore[import-untyped]
 
@@ -1578,6 +1586,24 @@ def _format_thread_pdf(
             final_decision = turn.decision
             break
 
+    # ── Collect all citations ───────────────────────────────────
+    all_citations: list[dict[str, str]] = []
+    seen_urls: set[str] = set()
+    for turn in thread.turns:
+        for c in turn.contributions:
+            if c.citations_json:
+                try:
+                    cits = json.loads(c.citations_json)
+                except (json.JSONDecodeError, TypeError):
+                    continue
+                for cit in cits:
+                    url = cit.get("url", "")
+                    if url and url not in seen_urls:
+                        seen_urls.add(url)
+                        all_citations.append(
+                            {"url": url, "title": cit.get("title") or ""}
+                        )
+
     # ── Provider color map ──────────────────────────────────────
     provider_colors: dict[str, tuple[int, int, int]] = {
         "anthropic": (204, 107, 43),
@@ -1588,9 +1614,22 @@ def _format_thread_pdf(
     }
     default_color = (120, 120, 120)
 
+    # Role colors for phase headers
+    role_colors: dict[str, tuple[int, int, int]] = {
+        "propose": (40, 160, 80),  # green
+        "challenge": (200, 140, 40),  # amber
+        "revise": (40, 120, 200),  # blue
+    }
+
     def _provider_color(model_ref: str) -> tuple[int, int, int]:
         provider = model_ref.split(":")[0].lower() if ":" in model_ref else ""
         return provider_colors.get(provider, default_color)
+
+    def _role_color(role: str) -> tuple[int, int, int]:
+        key = role.lower().rstrip("r")  # proposer→propose, etc.
+        if key.endswith("e"):
+            return role_colors.get(key, default_color)
+        return role_colors.get(key + "e", default_color)
 
     # ── PDF subclass with header/footer ─────────────────────────
 
@@ -1765,7 +1804,7 @@ def _format_thread_pdf(
         """Render markdown content as formatted PDF."""
         pdf.write_html(pdf._safe(_md_to_html(md_text)))
 
-    # ── Callout box helper ──────────────────────────────────────
+    # ── Drawing helpers ─────────────────────────────────────────
 
     def _draw_accent_bar(
         start_y: float, end_y: float, color: tuple[int, int, int]
@@ -1776,7 +1815,6 @@ def _format_thread_pdf(
         pdf.set_draw_color(*color)
         pdf.set_line_width(2.5)
         x = pdf.l_margin - 1
-        # Clamp to page content area
         top = max(start_y, pdf.t_margin)
         bot = min(end_y, pdf.h - pdf.b_margin)
         if bot > top:
@@ -1784,27 +1822,72 @@ def _format_thread_pdf(
         pdf.set_draw_color(*saved_draw)
         pdf.set_line_width(saved_width)
 
-    def _callout_box(
+    def _section_header(
+        title: str,
+        color: tuple[int, int, int],
+        *,
+        level: int = 0,
+        font_size: int = 15,
+    ) -> None:
+        """Draw a styled section header with colored background strip."""
+        r, g, b = color
+        # Light tinted background
+        pdf.set_fill_color(r, g, b)
+        pdf.set_draw_color(r, g, b)
+        bar_y = pdf.get_y()
+        bar_h = 8 if level == 0 else 7
+        # Full-width colored bar
+        pdf.rect(pdf.l_margin, bar_y, pdf.w - pdf.l_margin - pdf.r_margin, bar_h, "F")
+        pdf.set_font(pdf._font_family, "B", font_size)
+        pdf.set_text_color(255, 255, 255)
+        pdf.set_xy(pdf.l_margin + 3, bar_y + 0.5)
+        pdf.cell(0, bar_h - 1, pdf._safe(title))
+        pdf.set_y(bar_y + bar_h + 3)
+        pdf.set_text_color(40, 40, 40)
+
+    def _meter_bar(
+        label: str,
+        value: float,
+        color: tuple[int, int, int],
+    ) -> None:
+        """Draw a labeled progress bar for confidence/rigor."""
+        pdf.set_font(pdf._font_family, "B", 9)
+        pdf.set_text_color(80, 80, 80)
+        label_text = f"{label}: {value:.0%}"
+        pdf.cell(28, 5, pdf._safe(label_text))
+        bar_x = pdf.get_x() + 1
+        bar_y = pdf.get_y() + 0.8
+        bar_w = 50
+        bar_h = 3.5
+        # Track background
+        pdf.set_fill_color(230, 230, 230)
+        pdf.rect(bar_x, bar_y, bar_w, bar_h, style="F")
+        # Filled portion
+        pdf.set_fill_color(*color)
+        pdf.rect(bar_x, bar_y, bar_w * value, bar_h, style="F")
+        pdf.set_text_color(40, 40, 40)
+
+    def _phase_block(
+        phase_label: str,
         model_ref: str,
-        role: str,
         body: str,
         *,
-        accent: tuple[int, int, int] | None = None,
+        phase_color: tuple[int, int, int],
+        accent_color: tuple[int, int, int],
     ) -> None:
-        """Draw a colored callout box with provider accent line."""
-        color = accent or _provider_color(model_ref)
+        """Draw a phase block (PROPOSE/CHALLENGE/REVISE) with accent bar."""
         start_y = pdf.get_y()
-
-        # Indent content to leave room for accent bar
         saved_margin = pdf.l_margin
         pdf.set_left_margin(saved_margin + 6)
         pdf.set_x(pdf.l_margin)
 
-        # Header: model + role
+        # Phase + model header
         pdf.set_font(pdf._font_family, "B", 9)
-        pdf.set_text_color(*color)
-        pdf.cell(0, 5, pdf._safe(f"{model_ref}  |  {role.upper()}"))
-        pdf.ln(5)
+        pdf.set_text_color(*phase_color)
+        pdf.cell(0, 5, pdf._safe(f"{phase_label}  "))
+        pdf.set_text_color(*accent_color)
+        pdf.set_font(pdf._font_family, "", 8)
+        pdf.cell(0, 5, pdf._safe(model_ref), new_x="LMARGIN", new_y="NEXT")
 
         # Body
         pdf.set_text_color(40, 40, 40)
@@ -1813,13 +1896,9 @@ def _format_thread_pdf(
         pdf.ln(2)
 
         end_y = pdf.get_y()
-
-        # Draw accent bar on left edge (doesn't overlap text)
-        _draw_accent_bar(start_y, end_y, color)
-
-        # Restore margin
+        _draw_accent_bar(start_y, end_y, phase_color)
         pdf.set_left_margin(saved_margin)
-        pdf.ln(4)
+        pdf.ln(3)
 
     # ── Build the PDF ───────────────────────────────────────────
 
@@ -1829,14 +1908,38 @@ def _format_thread_pdf(
     pdf.set_auto_page_break(auto=True, margin=20)
     pdf.set_text_color(40, 40, 40)
 
-    # -- Title page / header area --
+    # -- Cover page --
     pdf.add_page()
 
-    pdf.set_font(pdf._font_family, "B", 20)
-    pdf.multi_cell(0, 10, pdf._safe(thread.question))
-    pdf.ln(3)
+    # Push content to vertical center
+    pdf.ln(60)
 
-    # Metadata line
+    # "duh." brand + subtitle stacked
+    pdf.set_font(pdf._font_family, "B", 36)
+    pdf.set_text_color(0, 180, 200)
+    pdf.cell(0, 15, "duh.", align="C")
+    pdf.ln(12)
+    pdf.set_font(pdf._font_family, "", 10)
+    pdf.set_text_color(140, 140, 140)
+    pdf.cell(0, 6, "consensus engine", align="C")
+    pdf.ln(16)
+
+    # Thin separator
+    mid_x = pdf.w / 2
+    pdf.set_draw_color(200, 200, 200)
+    pdf.set_line_width(0.5)
+    pdf.line(mid_x - 30, pdf.get_y(), mid_x + 30, pdf.get_y())
+    pdf.ln(12)
+
+    # Question — left-aligned with curly quotes
+    pdf.set_font(pdf._font_family, "I", 14)
+    pdf.set_text_color(40, 40, 40)
+    pdf.multi_cell(
+        0, 8, pdf._safe(f"\u201c{thread.question}\u201d")
+    )
+    pdf.ln(8)
+
+    # Metadata
     pdf.set_font(pdf._font_family, "", 9)
     pdf.set_text_color(130, 130, 130)
     meta_parts = [
@@ -1846,18 +1949,11 @@ def _format_thread_pdf(
     ]
     if total_cost > 0:
         meta_parts.append(f"Cost ${total_cost:.4f}")
-    pdf.cell(0, 5, pdf._safe("  |  ".join(meta_parts)))
-    pdf.ln(6)
-
-    # Horizontal rule
-    pdf.set_draw_color(200, 200, 200)
-    pdf.set_line_width(0.5)
-    pdf.line(10, pdf.get_y(), 200, pdf.get_y())
-    pdf.ln(6)
+    pdf.cell(0, 5, pdf._safe("  |  ".join(meta_parts)), align="C")
     pdf.set_text_color(40, 40, 40)
     pdf.set_line_width(0.2)
 
-    # -- TOC placeholder --
+    # -- TOC placeholder (renders as its own page) --
     if content == "full":
         pdf.insert_toc_placeholder(
             render_toc,
@@ -1867,9 +1963,7 @@ def _format_thread_pdf(
     # -- Executive Overview section --
     if overview:
         pdf.start_section("Executive Overview")
-        pdf.set_font(pdf._font_family, "B", 15)
-        pdf.cell(0, 8, "Executive Overview")
-        pdf.ln(8)
+        _section_header("Executive Overview", (40, 120, 200))
 
         overview_start_y = pdf.get_y()
         pdf.set_left_margin(16)
@@ -1886,105 +1980,133 @@ def _format_thread_pdf(
     # -- Decision section --
     if final_decision:
         pdf.start_section("Decision")
-        pdf.set_font(pdf._font_family, "B", 15)
-        pdf.cell(0, 8, "Decision")
-        pdf.ln(8)
+        _section_header("Decision", (40, 160, 80))
 
         decision_start_y = pdf.get_y()
-
-        # Indent for accent bar
         pdf.set_left_margin(16)
         pdf.set_x(16)
 
-        # Decision content
         pdf.set_font(pdf._font_family, "", 11)
         pdf.set_text_color(40, 40, 40)
         _write_md(final_decision.content)
-        pdf.ln(4)
+        pdf.ln(6)
 
-        # Confidence meter
-        conf_pct = final_decision.confidence
-        pdf.set_font(pdf._font_family, "B", 10)
-        pdf.cell(30, 6, pdf._safe(f"Confidence: {conf_pct:.0%}"))
-        bar_x = pdf.get_x() + 2
-        bar_y = pdf.get_y() + 1
-        bar_w = 60
-        bar_h = 4
-        pdf.set_fill_color(230, 230, 230)
-        pdf.rect(bar_x, bar_y, bar_w, bar_h, style="F")
-        g = int(100 + 155 * conf_pct)
-        pdf.set_fill_color(40, min(g, 200), 80)
-        pdf.rect(bar_x, bar_y, bar_w * conf_pct, bar_h, style="F")
-        pdf.ln(10)
+        # Confidence and Rigor meters side by side
+        _meter_bar("Confidence", final_decision.confidence, (40, 160, 80))
+        pdf.ln(7)
+        _meter_bar("Rigor", final_decision.rigor, (0, 160, 160))
+        pdf.ln(8)
 
-        # Rigor meter
-        rigor_pct = final_decision.rigor
-        pdf.set_font(pdf._font_family, "B", 10)
-        pdf.cell(30, 6, pdf._safe(f"Rigor: {rigor_pct:.0%}"))
-        bar_x = pdf.get_x() + 2
-        bar_y = pdf.get_y() + 1
-        pdf.set_fill_color(230, 230, 230)
-        pdf.rect(bar_x, bar_y, bar_w, bar_h, style="F")
-        g = int(100 + 155 * rigor_pct)
-        pdf.set_fill_color(40, min(g, 200), 80)
-        pdf.rect(bar_x, bar_y, bar_w * rigor_pct, bar_h, style="F")
-        pdf.ln(10)
-
-        # Draw green accent bar
         _draw_accent_bar(decision_start_y, pdf.get_y(), (40, 160, 80))
         pdf.set_left_margin(10)
 
         # Dissent
         if include_dissent and final_decision.dissent:
+            pdf.ln(4)
             pdf.start_section("Dissent", level=1)
-            pdf.set_font(pdf._font_family, "B", 13)
-            pdf.set_text_color(40, 40, 40)
-            pdf.cell(0, 8, "Dissent")
-            pdf.ln(6)
+            _section_header("Dissent", (200, 140, 40), level=1, font_size=13)
 
             dissent_start_y = pdf.get_y()
             pdf.set_left_margin(16)
             pdf.set_x(16)
 
-            pdf.set_font(pdf._font_family, "I", 10)
-            pdf.set_text_color(100, 100, 100)
+            pdf.set_font(pdf._font_family, "", 10)
+            pdf.set_text_color(60, 60, 60)
             _write_md(final_decision.dissent)
             pdf.ln(4)
 
-            # Amber accent bar
-            _draw_accent_bar(dissent_start_y, pdf.get_y(), (200, 140, 80))
+            _draw_accent_bar(dissent_start_y, pdf.get_y(), (200, 140, 40))
             pdf.set_left_margin(10)
             pdf.set_text_color(40, 40, 40)
 
-    # -- Consensus process --
+    # -- Consensus process (new page) --
     if content == "full":
-        pdf.set_draw_color(200, 200, 200)
-        pdf.line(10, pdf.get_y(), 200, pdf.get_y())
-        pdf.ln(6)
+        pdf.add_page()
 
         pdf.start_section("Consensus Process")
-        pdf.set_font(pdf._font_family, "B", 15)
-        pdf.cell(0, 8, "Consensus Process")
-        pdf.ln(8)
+        _section_header("Consensus Process", (80, 80, 100))
 
         for turn in thread.turns:
             section_title = f"Round {turn.round_number}"
             pdf.start_section(section_title, level=1)
-            pdf.set_font(pdf._font_family, "B", 13)
+            pdf.set_font(pdf._font_family, "B", 12)
             pdf.set_text_color(80, 80, 80)
-            pdf.cell(0, 7, section_title)
+            pdf.cell(0, 7, pdf._safe(section_title))
             pdf.ln(7)
             pdf.set_text_color(40, 40, 40)
 
-            for c in turn.contributions:
-                _callout_box(c.model_ref, c.role, c.content)
+            # Group contributions by phase
+            proposers = [c for c in turn.contributions if c.role == "proposer"]
+            challengers = [c for c in turn.contributions if c.role == "challenger"]
+            revisers = [c for c in turn.contributions if c.role == "reviser"]
+            others = [
+                c
+                for c in turn.contributions
+                if c.role not in ("proposer", "challenger", "reviser")
+            ]
+
+            for c in proposers:
+                _phase_block(
+                    "PROPOSE",
+                    c.model_ref,
+                    c.content,
+                    phase_color=(40, 160, 80),
+                    accent_color=_provider_color(c.model_ref),
+                )
+
+            for c in challengers:
+                _phase_block(
+                    "CHALLENGE",
+                    c.model_ref,
+                    c.content,
+                    phase_color=(200, 140, 40),
+                    accent_color=_provider_color(c.model_ref),
+                )
+
+            for c in revisers:
+                _phase_block(
+                    "REVISE",
+                    c.model_ref,
+                    c.content,
+                    phase_color=(40, 120, 200),
+                    accent_color=_provider_color(c.model_ref),
+                )
+
+            for c in others:
+                _phase_block(
+                    c.role.upper(),
+                    c.model_ref,
+                    c.content,
+                    phase_color=default_color,
+                    accent_color=_provider_color(c.model_ref),
+                )
+
+            # Round metrics
+            if turn.decision:
+                pdf.set_font(pdf._font_family, "", 9)
+                pdf.set_text_color(100, 100, 100)
+                metrics = (
+                    f"Confidence: {turn.decision.confidence:.0%}"
+                    f"   Rigor: {turn.decision.rigor:.0%}"
+                )
+                if turn.decision.dissent:
+                    metrics += "   Dissent noted"
+                pdf.cell(0, 5, pdf._safe(metrics))
+                pdf.ln(4)
+                pdf.set_text_color(40, 40, 40)
+
+            # Separator between rounds
+            pdf.set_draw_color(220, 220, 220)
+            pdf.line(pdf.l_margin, pdf.get_y(), 200, pdf.get_y())
+            pdf.ln(5)
 
         # Votes
         if votes:
             pdf.start_section("Votes", level=1)
-            pdf.set_font(pdf._font_family, "B", 13)
-            pdf.cell(0, 8, "Votes")
-            pdf.ln(6)
+            pdf.set_font(pdf._font_family, "B", 12)
+            pdf.set_text_color(80, 80, 80)
+            pdf.cell(0, 7, "Votes")
+            pdf.ln(7)
 
             for v in votes:
                 color = _provider_color(v.model_ref)
@@ -1999,8 +2121,32 @@ def _format_thread_pdf(
             pdf.ln(4)
             pdf.set_text_color(40, 40, 40)
 
+    # -- Sources ──────────────────────────────────────────────────
+    if all_citations:
+        pdf.ln(4)
+        pdf.start_section("Sources")
+        _section_header("Sources", (100, 100, 120))
+
+        pdf.set_font(pdf._font_family, "", 7)
+        for i, cit in enumerate(all_citations, 1):
+            url = cit["url"]
+            title = cit["title"]
+            try:
+                host = urlparse(url).hostname or url
+                host = host.replace("www.", "")
+            except Exception:
+                host = url
+            display = title if title else host
+            pdf.set_text_color(80, 80, 80)
+            pdf.cell(6, 4, f"{i}.")
+            pdf.set_text_color(40, 80, 160)
+            pdf.set_font(pdf._font_family, "", 7)
+            # fpdf2 supports link= on cell for clickable URLs
+            label = pdf._safe(f"{display}  [{host}]" if title else host)
+            pdf.cell(0, 4, label, link=url, new_x="LMARGIN", new_y="NEXT")
+
     # -- Appendix: metadata footer ───────────────────────────────
-    pdf.ln(4)
+    pdf.ln(6)
     pdf.set_draw_color(200, 200, 200)
     pdf.line(10, pdf.get_y(), 200, pdf.get_y())
     pdf.ln(4)
@@ -2019,7 +2165,7 @@ def _format_thread_pdf(
 
 
 def render_toc(pdf: object, outline: list[object]) -> None:
-    """Render a table of contents page for the PDF.
+    """Render a styled table of contents page for the PDF.
 
     Called by fpdf2's ``insert_toc_placeholder`` mechanism.
     """
@@ -2027,10 +2173,20 @@ def render_toc(pdf: object, outline: list[object]) -> None:
 
     assert isinstance(pdf, FPDF)
     font = getattr(pdf, "_font_family", "Helvetica")
-    pdf.set_font(font, "B", 15)
-    pdf.set_text_color(40, 40, 40)
-    pdf.cell(0, 10, "Table of Contents")
-    pdf.ln(10)
+    safe = getattr(pdf, "_safe", lambda t: t)
+
+    # Section header bar
+    pdf.set_fill_color(60, 60, 70)
+    bar_y = pdf.get_y()
+    bar_h = 9
+    pdf.rect(pdf.l_margin, bar_y, pdf.w - pdf.l_margin - pdf.r_margin, bar_h, "F")
+    pdf.set_font(font, "B", 14)
+    pdf.set_text_color(255, 255, 255)
+    pdf.set_xy(pdf.l_margin + 3, bar_y + 1)
+    pdf.cell(0, bar_h - 2, "Contents")
+    pdf.set_y(bar_y + bar_h + 6)
+
+    right_edge = pdf.w - pdf.r_margin
 
     for entry in outline:
         level = getattr(entry, "level", 0)
@@ -2038,21 +2194,47 @@ def render_toc(pdf: object, outline: list[object]) -> None:
         page_number = getattr(entry, "page_number", 0)
         link = getattr(entry, "link", None)
 
-        indent = 4 * level
+        indent = 6 * level
         pdf.set_x(pdf.l_margin + indent)
 
         if level == 0:
             pdf.set_font(font, "B", 11)
+            line_h: float = 8
         else:
             pdf.set_font(font, "", 10)
+            line_h = 6.5
 
-        pdf.set_text_color(60, 60, 60)
-        w = pdf.w - pdf.l_margin - pdf.r_margin - indent - 15
-        # Use safe method if available
-        safe = getattr(pdf, "_safe", lambda t: t)
-        pdf.cell(w, 6, safe(name), link=link)
-        pdf.cell(15, 6, str(page_number), align="R")
-        pdf.ln(6)
+        # Name
+        pdf.set_text_color(40, 40, 40)
+        name_w = pdf.get_string_width(safe(name))
+        pdf.cell(name_w + 1, line_h, safe(name), link=link)
+
+        # Dot leader
+        dot_start_x = pdf.get_x() + 1
+        page_str = str(page_number)
+        pdf.set_font(font, "", 10)
+        page_w = pdf.get_string_width(page_str) + 2
+        dot_end_x = right_edge - page_w
+        if dot_end_x > dot_start_x + 5:
+            pdf.set_text_color(180, 180, 180)
+            pdf.set_font(font, "", 8)
+            dot = " . "
+            dot_w = pdf.get_string_width(dot)
+            x = dot_start_x
+            while x + dot_w < dot_end_x:
+                pdf.set_x(x)
+                pdf.cell(dot_w, line_h, dot)
+                x += dot_w
+
+        # Page number (right-aligned, clickable)
+        pdf.set_x(right_edge - page_w)
+        if level == 0:
+            pdf.set_font(font, "B", 11)
+        else:
+            pdf.set_font(font, "", 10)
+        pdf.set_text_color(0, 140, 180)
+        pdf.cell(page_w, line_h, page_str, align="R", link=link)
+        pdf.ln(line_h)
 
 
 # ── models ───────────────────────────────────────────────────────

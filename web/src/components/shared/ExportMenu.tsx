@@ -148,27 +148,27 @@ export function ExportMenu({ thread }: ExportMenuProps) {
         {downloading ? 'Exporting...' : 'Export'}
       </GlowButton>
       {open && (
-        <div className="absolute top-full right-0 mt-1 bg-[var(--glass-bg)] backdrop-blur-[var(--glass-blur)] border border-[var(--color-border)] rounded-[var(--radius-md)] shadow-lg py-1 min-w-[200px] z-[var(--z-dropdown)]">
+        <div className="absolute top-full right-0 mt-1 bg-[var(--color-surface-solid)] border border-[var(--color-border)] rounded-[var(--radius-md)] shadow-lg py-1 min-w-[200px] z-[var(--z-dropdown)]">
           <button
-            className="w-full text-left px-3 py-1.5 text-xs hover:bg-[var(--color-bg-tertiary)] text-[var(--color-text)]"
+            className="w-full text-left px-3 py-1.5 text-xs hover:bg-[var(--color-surface-hover)] text-[var(--color-text)]"
             onClick={() => handleMarkdown('decision')}
           >
             Markdown (decision only)
           </button>
           <button
-            className="w-full text-left px-3 py-1.5 text-xs hover:bg-[var(--color-bg-tertiary)] text-[var(--color-text)]"
+            className="w-full text-left px-3 py-1.5 text-xs hover:bg-[var(--color-surface-hover)] text-[var(--color-text)]"
             onClick={() => handleMarkdown('full')}
           >
             Markdown (full report)
           </button>
           <button
-            className="w-full text-left px-3 py-1.5 text-xs hover:bg-[var(--color-bg-tertiary)] text-[var(--color-text)]"
+            className="w-full text-left px-3 py-1.5 text-xs hover:bg-[var(--color-surface-hover)] text-[var(--color-text)]"
             onClick={() => handlePdf('decision')}
           >
             PDF (decision only)
           </button>
           <button
-            className="w-full text-left px-3 py-1.5 text-xs hover:bg-[var(--color-bg-tertiary)] text-[var(--color-text)]"
+            className="w-full text-left px-3 py-1.5 text-xs hover:bg-[var(--color-surface-hover)] text-[var(--color-text)]"
             onClick={() => handlePdf('full')}
           >
             PDF (full report)

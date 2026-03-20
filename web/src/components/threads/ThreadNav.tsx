@@ -19,6 +19,11 @@ const ROLE_MAP: Record<string, TaggedCitation['role']> = {
   reviser: 'revise',
 }
 
+function shortModel(model: string): string {
+  const parts = model.split(':')
+  return parts.length > 1 ? parts[1]! : model
+}
+
 export function ThreadNav() {
   const thread = useThreadsStore((s) => s.currentThread)
 
@@ -56,7 +61,7 @@ export function ThreadNav() {
   return (
     <GlassPanel padding="sm">
       <span className="font-mono text-xs text-[var(--color-primary)] font-semibold block mb-3">
-        ROUNDS
+        PROGRESS
       </span>
       <nav className="space-y-1.5">
         {thread.status === 'complete' && thread.turns.some((t) => t.decision) && (
@@ -70,21 +75,49 @@ export function ThreadNav() {
         )}
 
         {thread.turns.map((turn) => {
-          const hasDecision = !!turn.decision
+          const proposer = turn.contributions.find((c) => c.role === 'proposer')
+          const challengers = turn.contributions.filter((c) => c.role === 'challenger')
+          const reviser = turn.contributions.find((c) => c.role === 'reviser')
+
           return (
-            <button
-              key={turn.round_number}
-              className="flex items-center gap-1.5 w-full text-left text-[10px] font-mono text-[var(--color-text-secondary)] hover:text-[var(--color-text)] transition-colors py-0.5"
-              onClick={() => scrollTo(`thread-round-${turn.round_number}`)}
-            >
-              <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${hasDecision ? 'bg-[var(--color-green)]' : 'bg-[var(--color-text-dim)]/30'}`} />
-              ROUND {turn.round_number}
-              {hasDecision && (
-                <span className="text-[var(--color-green)] ml-auto">
-                  {Math.round(turn.decision!.confidence * 100)}%
-                </span>
-              )}
-            </button>
+            <div key={turn.round_number}>
+              <button
+                className="font-mono text-[10px] text-[var(--color-text-dim)] hover:text-[var(--color-text)] transition-colors mb-1"
+                onClick={() => scrollTo(`thread-round-${turn.round_number}`)}
+              >
+                ROUND {turn.round_number}
+              </button>
+              <div className="space-y-0.5 pl-2">
+                {proposer && (
+                  <button
+                    className="flex items-center gap-1.5 w-full text-left text-[10px] font-mono text-[var(--color-text-secondary)] hover:text-[var(--color-text)] transition-colors py-0.5"
+                    onClick={() => scrollTo(`thread-round-${turn.round_number}-propose`)}
+                  >
+                    <span className="w-1.5 h-1.5 rounded-full bg-[var(--color-green)] shrink-0" />
+                    PROPOSE
+                  </button>
+                )}
+                {challengers.map((ch, i) => (
+                  <button
+                    key={i}
+                    className="flex items-center gap-1.5 w-full text-left text-[10px] font-mono text-[var(--color-text-secondary)] hover:text-[var(--color-text)] transition-colors py-0.5"
+                    onClick={() => scrollTo(`thread-round-${turn.round_number}-challenge`)}
+                  >
+                    <span className="w-1.5 h-1.5 rounded-full bg-[var(--color-green)] shrink-0" />
+                    <span className="text-[var(--color-amber)] truncate">{shortModel(ch.model_ref)}</span>
+                  </button>
+                ))}
+                {reviser && (
+                  <button
+                    className="flex items-center gap-1.5 w-full text-left text-[10px] font-mono text-[var(--color-text-secondary)] hover:text-[var(--color-text)] transition-colors py-0.5"
+                    onClick={() => scrollTo(`thread-round-${turn.round_number}-revise`)}
+                  >
+                    <span className="w-1.5 h-1.5 rounded-full bg-[var(--color-green)] shrink-0" />
+                    REVISE
+                  </button>
+                )}
+              </div>
+            </div>
           )
         })}
 

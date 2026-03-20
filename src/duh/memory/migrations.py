@@ -16,10 +16,14 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-async def _get_columns(conn: AsyncConnection, table: str) -> set[str]:
-    """Get column names for a table via PRAGMA."""
+async def _get_columns(conn: AsyncConnection, table: str) -> set[str] | None:
+    """Get column names for a table via PRAGMA.
+
+    Returns ``None`` if the table does not exist.
+    """
     rows = await conn.exec_driver_sql(f"PRAGMA table_info({table})")
-    return {row[1] for row in rows}
+    cols = {row[1] for row in rows}
+    return cols if cols else None
 
 
 async def ensure_schema(engine: AsyncEngine) -> None:
@@ -35,7 +39,7 @@ async def ensure_schema(engine: AsyncEngine) -> None:
     async with engine.begin() as conn:
         # ── decisions table ──
         decision_cols = await _get_columns(conn, "decisions")
-        if "rigor" not in decision_cols:
+        if decision_cols is not None and "rigor" not in decision_cols:
             logger.info("Adding 'rigor' column to decisions table")
             await conn.exec_driver_sql(
                 "ALTER TABLE decisions ADD COLUMN rigor FLOAT DEFAULT 0.0"
@@ -43,7 +47,7 @@ async def ensure_schema(engine: AsyncEngine) -> None:
 
         # ── users table ──
         user_cols = await _get_columns(conn, "users")
-        if "is_guest" not in user_cols:
+        if user_cols is not None and "is_guest" not in user_cols:
             logger.info("Adding 'is_guest' column to users table")
             await conn.exec_driver_sql(
                 "ALTER TABLE users ADD COLUMN is_guest BOOLEAN DEFAULT 0"
@@ -51,7 +55,7 @@ async def ensure_schema(engine: AsyncEngine) -> None:
 
         # ── contributions table ──
         contrib_cols = await _get_columns(conn, "contributions")
-        if "citations_json" not in contrib_cols:
+        if contrib_cols is not None and "citations_json" not in contrib_cols:
             logger.info("Adding 'citations_json' column to contributions table")
             await conn.exec_driver_sql(
                 "ALTER TABLE contributions ADD COLUMN citations_json TEXT DEFAULT NULL"
@@ -59,18 +63,19 @@ async def ensure_schema(engine: AsyncEngine) -> None:
 
         # ── threads table ──
         thread_cols = await _get_columns(conn, "threads")
-        if "is_public" not in thread_cols:
-            logger.info("Adding 'is_public' column to threads table")
-            await conn.exec_driver_sql(
-                "ALTER TABLE threads ADD COLUMN is_public BOOLEAN DEFAULT 0"
-            )
-        if "slug" not in thread_cols:
-            logger.info("Adding 'slug' column to threads table")
-            await conn.exec_driver_sql(
-                "ALTER TABLE threads ADD COLUMN slug VARCHAR(200) DEFAULT NULL"
-            )
-        if "followups_json" not in thread_cols:
-            logger.info("Adding 'followups_json' column to threads table")
-            await conn.exec_driver_sql(
-                "ALTER TABLE threads ADD COLUMN followups_json TEXT DEFAULT NULL"
-            )
+        if thread_cols is not None:
+            if "is_public" not in thread_cols:
+                logger.info("Adding 'is_public' column to threads table")
+                await conn.exec_driver_sql(
+                    "ALTER TABLE threads ADD COLUMN is_public BOOLEAN DEFAULT 0"
+                )
+            if "slug" not in thread_cols:
+                logger.info("Adding 'slug' column to threads table")
+                await conn.exec_driver_sql(
+                    "ALTER TABLE threads ADD COLUMN slug VARCHAR(200) DEFAULT NULL"
+                )
+            if "followups_json" not in thread_cols:
+                logger.info("Adding 'followups_json' column to threads table")
+                await conn.exec_driver_sql(
+                    "ALTER TABLE threads ADD COLUMN followups_json TEXT DEFAULT NULL"
+                )

@@ -41,14 +41,14 @@ describe('ThreadNav', () => {
     expect(container.firstChild).toBeNull()
   })
 
-  it('renders ROUNDS header when turns exist', () => {
+  it('renders PROGRESS header when turns exist', () => {
     mockThread = makeThread([{
       round_number: 1, state: 'PROPOSE',
       contributions: [], decision: null,
     }])
 
     render(<ThreadNav />)
-    expect(screen.getByText('ROUNDS')).toBeInTheDocument()
+    expect(screen.getByText('PROGRESS')).toBeInTheDocument()
   })
 
   it('renders round buttons', () => {
@@ -60,6 +60,25 @@ describe('ThreadNav', () => {
     render(<ThreadNav />)
     expect(screen.getByText('ROUND 1')).toBeInTheDocument()
     expect(screen.getByText('ROUND 2')).toBeInTheDocument()
+  })
+
+  it('renders phase-level entries when contributions exist', () => {
+    mockThread = makeThread([{
+      round_number: 1, state: 'COMMIT',
+      contributions: [
+        { model_ref: 'anthropic:claude-opus-4-6', role: 'proposer', content: 'p', input_tokens: 0, output_tokens: 0, cost_usd: 0 },
+        { model_ref: 'openai:gpt-5.4', role: 'challenger', content: 'c1', input_tokens: 0, output_tokens: 0, cost_usd: 0 },
+        { model_ref: 'google:gemini-3.1-pro', role: 'challenger', content: 'c2', input_tokens: 0, output_tokens: 0, cost_usd: 0 },
+        { model_ref: 'anthropic:claude-opus-4-6', role: 'reviser', content: 'r', input_tokens: 0, output_tokens: 0, cost_usd: 0 },
+      ],
+      decision: null,
+    }])
+
+    render(<ThreadNav />)
+    expect(screen.getByText('PROPOSE')).toBeInTheDocument()
+    expect(screen.getByText('gpt-5.4')).toBeInTheDocument()
+    expect(screen.getByText('gemini-3.1-pro')).toBeInTheDocument()
+    expect(screen.getByText('REVISE')).toBeInTheDocument()
   })
 
   it('renders DECISION entry at top when thread is complete with decision', () => {
@@ -83,14 +102,16 @@ describe('ThreadNav', () => {
     expect(screen.queryByText('FEEDBACK')).toBeNull()
   })
 
-  it('shows confidence percentage for rounds with decisions', () => {
+  it('renders round without phase entries when no contributions', () => {
     mockThread = makeThread([{
       round_number: 1, state: 'PROPOSE', contributions: [],
       decision: { content: 'D', confidence: 0.92, rigor: 0.85, dissent: null },
     }])
 
     render(<ThreadNav />)
-    expect(screen.getByText('92%')).toBeInTheDocument()
+    expect(screen.getByText('ROUND 1')).toBeInTheDocument()
+    expect(screen.queryByText('PROPOSE')).toBeNull()
+    expect(screen.queryByText('REVISE')).toBeNull()
   })
 
   it('calls scrollIntoView on round click', () => {
