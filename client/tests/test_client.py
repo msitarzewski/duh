@@ -547,7 +547,7 @@ class TestAPIError:
 class TestClientInit:
     def test_default_init(self) -> None:
         client = DuhClient()
-        assert client._base_url == "http://localhost:8080"
+        assert client._base_url == "http://localhost:8484"
         client.close()
 
     def test_custom_base_url(self) -> None:
@@ -569,4 +569,4 @@ class TestClientInit:
 
     async def test_async_context_manager(self) -> None:
         async with DuhClient() as client:
-            assert client._base_url == "http://localhost:8080"
+            assert client._base_url == "http://localhost:8484"

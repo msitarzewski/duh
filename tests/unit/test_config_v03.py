@@ -18,7 +18,7 @@ class TestAPIConfigDefaults:
 
     def test_port_default(self) -> None:
         cfg = APIConfig()
-        assert cfg.port == 8080
+        assert cfg.port == 8484
 
     def test_cors_origins_default(self) -> None:
         cfg = APIConfig()
@@ -108,7 +108,7 @@ class TestDuhConfigAPIIntegration:
     def test_api_defaults_in_duh_config(self) -> None:
         cfg = DuhConfig()
         assert cfg.api.host == "127.0.0.1"
-        assert cfg.api.port == 8080
+        assert cfg.api.port == 8484
         assert cfg.api.cors_origins == ["http://localhost:3000"]
         assert cfg.api.rate_limit == 60
         assert cfg.api.rate_limit_window == 60

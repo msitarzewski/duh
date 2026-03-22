@@ -50,20 +50,20 @@ class DuhClient:
 
     Usage (async)::
 
-        async with DuhClient("http://localhost:8080") as client:
+        async with DuhClient("http://localhost:8484") as client:
             result = await client.ask("What is the best auth strategy?")
             print(result.decision)
 
     Usage (sync)::
 
-        client = DuhClient("http://localhost:8080")
+        client = DuhClient("http://localhost:8484")
         result = client.ask_sync("What is the best auth strategy?")
         print(result.decision)
     """
 
     def __init__(
         self,
-        base_url: str = "http://localhost:8080",
+        base_url: str = "http://localhost:8484",
         api_key: str | None = None,
         timeout: float = 120.0,
     ) -> None:

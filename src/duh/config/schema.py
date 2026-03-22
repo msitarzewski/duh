@@ -127,7 +127,7 @@ class APIConfig(BaseModel):
     """REST API server configuration."""
 
     host: str = "127.0.0.1"
-    port: int = 8080
+    port: int = 8484
     cors_origins: list[str] = Field(default_factory=lambda: ["http://localhost:3000"])
     rate_limit: int = 60  # requests per minute per API key
     rate_limit_window: int = 60  # window in seconds
