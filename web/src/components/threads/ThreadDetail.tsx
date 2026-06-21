@@ -5,6 +5,7 @@ import { GlassPanel, GlowButton, Skeleton, Badge, ExportMenu, Markdown, Disclosu
 import { ConfidenceMeter } from '@/components/consensus/ConfidenceMeter'
 import { DissentBanner } from '@/components/consensus/DissentBanner'
 import { PhaseCard } from '@/components/consensus/PhaseCard'
+import { CostTicker } from '@/components/consensus/CostTicker'
 import type { Turn } from '@/api/types'
 
 function formatDate(iso: string): string {
@@ -86,6 +87,12 @@ export function ThreadDetail() {
             <div className="flex items-center gap-3 mt-2 text-[10px] font-mono text-[var(--color-text-dim)]">
               <span>{formatDate(currentThread.created_at)}</span>
               <span>{currentThread.thread_id.slice(0, 8)}</span>
+              {currentThread.usage && (
+                <CostTicker
+                  cost={currentThread.usage.cost_usd}
+                  usage={currentThread.usage}
+                />
+              )}
             </div>
           </div>
           <div className="flex flex-col items-end gap-2">

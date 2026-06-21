@@ -9,7 +9,7 @@ import { RefinementPanel } from './RefinementPanel'
 export function ConsensusPanel() {
   const {
     status, error, currentPhase, currentRound, rounds,
-    decision, confidence, rigor, dissent, cost, overview,
+    decision, confidence, rigor, dissent, cost, usage, overview,
     clarifyingQuestions, clarificationAnswers,
     submitQuestion, answerClarification, submitClarifications, skipRefinement,
     reset,
@@ -64,6 +64,7 @@ export function ConsensusPanel() {
             rigor={rigor ?? 0}
             dissent={dissent}
             cost={cost}
+            usage={usage}
             collapsible
             overview={overview}
           />
@@ -83,7 +84,7 @@ export function ConsensusPanel() {
                     ROUND {round.round}
                   </span>
                   {isCurrentRound && (
-                    <CostTicker cost={cost} />
+                    <CostTicker cost={cost} usage={usage} />
                   )}
                 </div>
 

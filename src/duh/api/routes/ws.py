@@ -237,6 +237,11 @@ async def _stream_consensus(
                 ctx.round_history,
                 ctx.overview,
                 followups=ctx.followups or None,
+                usage={
+                    "input_tokens": pm.total_input_tokens,
+                    "output_tokens": pm.total_output_tokens,
+                    "cost_usd": pm.total_cost,
+                },
             )
         except Exception:
             logger.exception("Failed to persist consensus thread")
@@ -249,6 +254,11 @@ async def _stream_consensus(
             "rigor": ctx.rigor,
             "dissent": ctx.dissent,
             "cost": pm.total_cost,
+            "usage": {
+                "input_tokens": pm.total_input_tokens,
+                "output_tokens": pm.total_output_tokens,
+                "cost_usd": pm.total_cost,
+            },
             "thread_id": thread_id,
             "overview": ctx.overview,
             "followups": ctx.followups if ctx.followups else None,
@@ -355,6 +365,7 @@ async def _persist_consensus(
     round_history: list[RoundResult],
     overview: str | None = None,
     followups: list[str] | None = None,
+    usage: dict[str, float] | None = None,
 ) -> str:
     """Persist consensus round history to the database.
 
@@ -429,6 +440,9 @@ async def _persist_consensus(
 
         if followups:
             thread.followups_json = json.dumps(followups)
+
+        if usage:
+            thread.usage_json = json.dumps(usage)
 
         await session.commit()
         return str(thread.id)

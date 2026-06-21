@@ -227,6 +227,7 @@ async def persist_consensus(
     round_history: list[RoundResult],
     overview: str | None = None,
     followups: list[str] | None = None,
+    usage: dict[str, float] | None = None,
 ) -> str:
     """Persist full consensus round history to the database.
 
@@ -314,6 +315,9 @@ async def persist_consensus(
 
         if followups:
             thread.followups_json = _json.dumps(followups)
+
+        if usage:
+            thread.usage_json = _json.dumps(usage)
 
         await session.commit()
         return str(thread.id)
@@ -499,6 +503,11 @@ async def _run_consensus(
                 ctx.round_history,
                 overview=ctx.overview,
                 followups=ctx.followups or None,
+                usage={
+                    "input_tokens": pm.total_input_tokens,
+                    "output_tokens": pm.total_output_tokens,
+                    "cost_usd": pm.total_cost,
+                },
             )
         except Exception:
             import logging as _logging

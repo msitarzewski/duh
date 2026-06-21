@@ -81,12 +81,19 @@ export interface FeedbackRequest {
 
 // ── Response types ────────────────────────────────────────
 
+export interface Usage {
+  input_tokens: number
+  output_tokens: number
+  cost_usd: number
+}
+
 export interface AskResponse {
   decision: string
   confidence: number
   rigor: number
   dissent: string | null
   cost: number
+  usage?: Usage | null
   thread_id: string | null
   protocol_used: string
 }
@@ -136,6 +143,7 @@ export interface ThreadDetail {
   created_at: string
   turns: Turn[]
   followups?: string[]
+  usage?: Usage | null
 }
 
 export interface RecallResult {
@@ -301,6 +309,7 @@ export interface WSComplete {
   rigor: number
   dissent: string | null
   cost: number
+  usage?: Usage | null
   thread_id: string | null
   overview: string | null
   followups: string[] | null

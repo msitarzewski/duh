@@ -1,10 +1,27 @@
 # Active Context
 
-**Last Updated**: 2026-03-20
-**Current Phase**: Thread view parity, PDF overhaul, server/UI fixes — committed and pushed to main
+**Last Updated**: 2026-06-21
+**Current Phase**: Token usage tracking + npm wrapper — committed and pushed to main
 **Next Action**: Continue feature work or address open questions
 
-## Latest Work (2026-03-20)
+## Latest Work (2026-06-21)
+
+### Token Usage Tracking (end-to-end)
+- `ProviderManager` accumulates `total_input_tokens` / `total_output_tokens` alongside `total_cost`, all reset in `reset_cost()`
+- Token usage exposed on `AskResponse`, WS `complete` event, and `ThreadDetailResponse`
+- **Thread-level `usage_json` total** persisted across all three persistence paths (REST `_persist_result`, WS `_persist_consensus`, CLI `persist_consensus`)
+  - Fixes stored thread usage always reading 0 — `RoundResult` carries no per-contribution token counts, so the per-contribution sum was always 0
+- `_build_thread_detail` prefers stored `usage_json`, falls back to per-contribution sum for threads saved before the column existed
+- `usage_json` TEXT column on Thread model + `ensure_schema()` auto-migration (mirrors `followups_json` pattern)
+- Frontend `CostTicker` renders `↑input ↓output` token counts; wired through `ConsensusPanel`, `ConsensusComplete`, and `ThreadDetail` header
+- `npm/like-duh` CLI wrapper verified end-to-end (resolves Python `duh` via DUH_PATH → PATH → uvx → pipx)
+- Verified live (thread 37592e86): response, GET thread detail, and raw DB `usage_json` all matched
+- 1657 Python + 204 Vitest tests passing, mypy clean (62 files), ruff clean, build clean
+- **Known follow-up (not addressed)**: no durable/incremental persistence — mid-run crash still loses the whole consensus (single write at COMPLETE)
+
+---
+
+## Prior Work (2026-03-20)
 
 ### Thread Detail View — Consensus Parity
 - Replaced `TurnCard` with `PhaseCard` in `ThreadDetail.tsx` — rounds now render PROPOSE/CHALLENGE/REVISE phases matching the live consensus view
@@ -102,9 +119,9 @@
 
 ## Current State
 
-- **Branch `main`** — all work committed and pushed (574aaca, 822396b)
+- **Branch `main`** — all work committed and pushed
 - All previous features intact (v0.1-v0.6, PR #13-#15)
-- 1652 Python + 199 Vitest tests passing, build clean
+- 1657 Python + 204 Vitest tests passing, build clean
 
 ## Open Questions (Still Unresolved)
 

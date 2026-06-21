@@ -128,6 +128,39 @@ describe('CostTicker', () => {
     render(<CostTicker cost={0} />)
     expect(screen.getByText('0.0000')).toBeInTheDocument()
   })
+
+  it('renders input/output token counts when usage provided', () => {
+    render(
+      <CostTicker
+        cost={0.05}
+        usage={{ input_tokens: 1200, output_tokens: 340 }}
+      />,
+    )
+    expect(screen.getByText('↑1,200')).toBeInTheDocument()
+    expect(screen.getByText('↓340')).toBeInTheDocument()
+  })
+
+  it('renders tokens even when cost is null', () => {
+    const { container } = render(
+      <CostTicker
+        cost={null}
+        usage={{ input_tokens: 10, output_tokens: 5 }}
+      />,
+    )
+    expect(container.firstChild).not.toBeNull()
+    expect(screen.getByText('↑10')).toBeInTheDocument()
+    expect(screen.queryByText('$')).not.toBeInTheDocument()
+  })
+
+  it('renders null when cost is null and usage is empty', () => {
+    const { container } = render(
+      <CostTicker
+        cost={null}
+        usage={{ input_tokens: 0, output_tokens: 0 }}
+      />,
+    )
+    expect(container.firstChild).toBeNull()
+  })
 })
 
 // ── StreamingText ─────────────────────────────────────────

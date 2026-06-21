@@ -79,3 +79,8 @@ async def ensure_schema(engine: AsyncEngine) -> None:
                 await conn.exec_driver_sql(
                     "ALTER TABLE threads ADD COLUMN followups_json TEXT DEFAULT NULL"
                 )
+            if "usage_json" not in thread_cols:
+                logger.info("Adding 'usage_json' column to threads table")
+                await conn.exec_driver_sql(
+                    "ALTER TABLE threads ADD COLUMN usage_json TEXT DEFAULT NULL"
+                )

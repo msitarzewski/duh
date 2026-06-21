@@ -78,6 +78,7 @@ class Thread(Base):
     followups_json: Mapped[str | None] = mapped_column(
         Text, nullable=True, default=None
     )
+    usage_json: Mapped[str | None] = mapped_column(Text, nullable=True, default=None)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, default=_utcnow, onupdate=_utcnow

@@ -5,6 +5,7 @@ import { DissentBanner } from './DissentBanner'
 import { CostTicker } from './CostTicker'
 import { useConsensusStore } from '@/stores/consensus'
 import type { RoundData } from '@/stores/consensus'
+import type { Usage } from '@/api/types'
 
 interface ConsensusCompleteProps {
   decision: string
@@ -12,6 +13,7 @@ interface ConsensusCompleteProps {
   rigor: number
   dissent: string | null
   cost: number | null
+  usage?: Usage | null
   collapsible?: boolean
   overview: string | null
 }
@@ -98,7 +100,7 @@ function downloadFile(content: string | Blob, filename: string, mimeType: string
   URL.revokeObjectURL(url)
 }
 
-export function ConsensusComplete({ decision, confidence, rigor, dissent, cost, collapsible, overview }: ConsensusCompleteProps) {
+export function ConsensusComplete({ decision, confidence, rigor, dissent, cost, usage, collapsible, overview }: ConsensusCompleteProps) {
   const [copied, setCopied] = useState(false)
   const [exportOpen, setExportOpen] = useState(false)
   const { question, rounds, threadId } = useConsensusStore()
@@ -128,7 +130,7 @@ export function ConsensusComplete({ decision, confidence, rigor, dissent, cost, 
   const header = (
     <>
       <span className="font-mono text-xs text-[var(--color-green)] font-semibold">CONSENSUS REACHED</span>
-      <CostTicker cost={cost} />
+      <CostTicker cost={cost} usage={usage} />
       <div className="flex items-center gap-3 ml-auto">
         <ConfidenceMeter value={confidence} label="Confidence" />
         <ConfidenceMeter value={rigor} size={48} label="Rigor" />
@@ -211,7 +213,7 @@ export function ConsensusComplete({ decision, confidence, rigor, dissent, cost, 
         <div className="flex items-start justify-between gap-4 mb-4">
           <div className="flex items-center gap-3">
             <span className="font-mono text-xs text-[var(--color-green)] font-semibold">CONSENSUS REACHED</span>
-            <CostTicker cost={cost} />
+            <CostTicker cost={cost} usage={usage} />
           </div>
           <div className="flex items-center gap-3">
             <ConfidenceMeter value={confidence} label="Confidence" />

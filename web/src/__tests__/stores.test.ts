@@ -23,6 +23,7 @@ vi.mock('@/api/client', () => ({
   },
 }))
 
+import { ConsensusWebSocket } from '@/api/websocket'
 import { useConsensusStore } from '@/stores/consensus'
 import { useThreadsStore } from '@/stores/threads'
 import { usePreferencesStore } from '@/stores/preferences'
@@ -51,6 +52,7 @@ describe('useConsensusStore', () => {
     expect(state.rigor).toBeNull()
     expect(state.dissent).toBeNull()
     expect(state.cost).toBeNull()
+    expect(state.usage).toBeNull()
   })
 
   it('sets status to connecting when startConsensus is called', () => {
@@ -85,6 +87,56 @@ describe('useConsensusStore', () => {
     useConsensusStore.getState().disconnect()
     // Should not throw
     expect(useConsensusStore.getState().status).toBeDefined()
+  })
+
+  it('captures usage from the complete event', () => {
+    useConsensusStore.getState().startConsensus('What is 2+2?')
+
+    // The store holds a single ws singleton; grab the onEvent passed to connect.
+    const wsInstance = vi.mocked(ConsensusWebSocket).mock.results[0].value
+    const connectConfig = wsInstance.connect.mock.calls.at(-1)![0]
+
+    connectConfig.onEvent({
+      type: 'complete',
+      decision: '4',
+      confidence: 0.95,
+      rigor: 0.8,
+      dissent: null,
+      cost: 0.05,
+      usage: { input_tokens: 1200, output_tokens: 340, cost_usd: 0.05 },
+      thread_id: 'abc',
+      overview: null,
+      followups: null,
+    })
+
+    const state = useConsensusStore.getState()
+    expect(state.status).toBe('complete')
+    expect(state.cost).toBe(0.05)
+    expect(state.usage).toEqual({
+      input_tokens: 1200,
+      output_tokens: 340,
+      cost_usd: 0.05,
+    })
+  })
+
+  it('falls back to null usage when complete event omits it', () => {
+    useConsensusStore.getState().startConsensus('What is 2+2?')
+    const wsInstance = vi.mocked(ConsensusWebSocket).mock.results[0].value
+    const connectConfig = wsInstance.connect.mock.calls.at(-1)![0]
+
+    connectConfig.onEvent({
+      type: 'complete',
+      decision: '4',
+      confidence: 0.95,
+      rigor: 0.8,
+      dissent: null,
+      cost: 0.05,
+      thread_id: 'abc',
+      overview: null,
+      followups: null,
+    })
+
+    expect(useConsensusStore.getState().usage).toBeNull()
   })
 })
 

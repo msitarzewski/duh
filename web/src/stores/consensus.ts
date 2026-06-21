@@ -8,6 +8,7 @@ import type {
   ClarifyingQuestion,
   ModelSelectionOptions,
   Citation,
+  Usage,
 } from '@/api/types'
 
 export type ConsensusStatus = 'idle' | 'connecting' | 'streaming' | 'complete' | 'error' | 'refining'
@@ -55,6 +56,7 @@ interface ConsensusState {
   rigor: number | null
   dissent: string | null
   cost: number | null
+  usage: Usage | null
   threadId: string | null
   overview: string | null
   followups: string[]
@@ -106,6 +108,7 @@ const initialState = {
   rigor: null as number | null,
   dissent: null as string | null,
   cost: null as number | null,
+  usage: null as Usage | null,
   threadId: null as string | null,
   overview: null as string | null,
   followups: [] as string[],
@@ -204,6 +207,7 @@ export const useConsensusStore = create<ConsensusState>((set, get) => ({
       rigor: null,
       dissent: null,
       cost: null,
+      usage: null,
       threadId: null,
       overview: null,
       followups: [],
@@ -356,6 +360,7 @@ function handleEvent(
         rigor: event.rigor,
         dissent: event.dissent,
         cost: event.cost,
+        usage: event.usage ?? null,
         threadId: event.thread_id ?? null,
         overview: event.overview ?? null,
         followups: event.followups ?? [],

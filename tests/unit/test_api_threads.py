@@ -214,6 +214,11 @@ class TestGetThread:
         assert contrib["output_tokens"] == 50
         assert contrib["cost_usd"] == 0.005
 
+        # Aggregated usage across all contributions
+        assert data["usage"]["input_tokens"] == 100
+        assert data["usage"]["output_tokens"] == 50
+        assert data["usage"]["cost_usd"] == 0.005
+
         # Decision
         assert turn["decision"] is not None
         assert turn["decision"]["content"] == "Final answer"
@@ -232,6 +237,35 @@ class TestGetThread:
         turn = data["turns"][0]
         assert turn["decision"] is None
         assert len(turn["contributions"]) == 1
+
+    async def test_usage_prefers_stored_usage_json(self) -> None:
+        """Run-level usage_json overrides the per-contribution sum."""
+        app = await _make_app()
+        async with app.state.db_factory() as session:
+            repo = MemoryRepository(session)
+            thread = await repo.create_thread("Stored usage")
+            turn = await repo.create_turn(thread.id, round_number=1, state="PROPOSE")
+            # Contributions persisted with zero token counts (the real-world case)
+            await repo.add_contribution(
+                turn.id,
+                model_ref="openai/gpt-4",
+                role="proposer",
+                content="x",
+            )
+            thread.usage_json = (
+                '{"input_tokens": 4200, "output_tokens": 1300, "cost_usd": 0.1875}'
+            )
+            thread.status = "complete"
+            await session.commit()
+            tid = thread.id
+
+        client = TestClient(app, raise_server_exceptions=False)
+        resp = client.get(f"/api/threads/{tid}")
+        assert resp.status_code == 200
+        usage = resp.json()["usage"]
+        assert usage["input_tokens"] == 4200
+        assert usage["output_tokens"] == 1300
+        assert usage["cost_usd"] == 0.1875
 
     async def test_404_for_missing(self) -> None:
         """Returns 404 for non-existent thread ID."""

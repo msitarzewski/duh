@@ -245,3 +245,56 @@ class TestAskEndpoint:
         assert resp.status_code == 200
         assert resp.json()["protocol_used"] == "decompose"
         mock_fn.assert_called_once()
+
+
+# ── TestPersistResult ─────────────────────────────────────────
+
+
+class TestPersistResult:
+    async def _factory(self) -> async_sessionmaker:
+        engine = create_async_engine("sqlite+aiosqlite://")
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+        return async_sessionmaker(engine, expire_on_commit=False)
+
+    async def test_persists_usage_json(self) -> None:
+        """_persist_result records run-level usage on the thread."""
+        from duh.api.routes.ask import _persist_result
+        from duh.memory.repository import MemoryRepository
+
+        factory = await self._factory()
+        tid = await _persist_result(
+            factory,
+            "Which database?",
+            "Use PostgreSQL",
+            0.9,
+            None,
+            rigor=1.0,
+            usage={"input_tokens": 6257, "output_tokens": 2945, "cost_usd": 0.037},
+        )
+
+        async with factory() as session:
+            repo = MemoryRepository(session)
+            thread = await repo.get_thread(tid)
+            assert thread is not None
+            assert thread.usage_json is not None
+            import json as _json
+
+            stored = _json.loads(thread.usage_json)
+            assert stored["input_tokens"] == 6257
+            assert stored["output_tokens"] == 2945
+            assert stored["cost_usd"] == 0.037
+
+    async def test_no_usage_leaves_column_null(self) -> None:
+        """Omitting usage leaves usage_json unset (backward compatible)."""
+        from duh.api.routes.ask import _persist_result
+        from duh.memory.repository import MemoryRepository
+
+        factory = await self._factory()
+        tid = await _persist_result(factory, "Q", "A", 0.8, None)
+
+        async with factory() as session:
+            repo = MemoryRepository(session)
+            thread = await repo.get_thread(tid)
+            assert thread is not None
+            assert thread.usage_json is None

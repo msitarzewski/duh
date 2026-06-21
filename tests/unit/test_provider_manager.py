@@ -191,6 +191,27 @@ class TestCostTracking:
         mgr.record_usage(info, usage)  # $2.0
         assert mgr.total_cost == pytest.approx(4.0)
 
+    def test_record_usage_accumulates_token_counts(self) -> None:
+        mgr = ProviderManager()
+        info = _make_model_info(input_cost=1.0, output_cost=1.0)
+
+        mgr.record_usage(info, TokenUsage(input_tokens=1000, output_tokens=500))
+        mgr.record_usage(info, TokenUsage(input_tokens=200, output_tokens=300))
+
+        assert mgr.total_input_tokens == 1200
+        assert mgr.total_output_tokens == 800
+
+    def test_reset_cost_clears_token_counts(self) -> None:
+        mgr = ProviderManager()
+        info = _make_model_info(input_cost=1.0, output_cost=1.0)
+        mgr.record_usage(info, TokenUsage(input_tokens=1000, output_tokens=500))
+
+        mgr.reset_cost()
+
+        assert mgr.total_input_tokens == 0
+        assert mgr.total_output_tokens == 0
+        assert mgr.total_cost == 0.0
+
     def test_cost_by_provider_tracks_separately(self) -> None:
         mgr = ProviderManager()
         info_a = _make_model_info(provider_id="alpha", input_cost=1.0, output_cost=1.0)

@@ -45,6 +45,8 @@ class ProviderManager:
         self._model_index: dict[str, ModelInfo] = {}  # model_ref -> ModelInfo
         self._cost_hard_limit = cost_hard_limit
         self._total_cost: float = 0.0
+        self._total_input_tokens: int = 0
+        self._total_output_tokens: int = 0
         self._cost_by_provider: dict[str, float] = {}
         self._provider_rate_limits: dict[str, int] = {}  # provider_id -> rpm
         self._provider_requests: dict[str, list[float]] = {}  # pid -> ts
@@ -133,6 +135,16 @@ class ProviderManager:
         return self._total_cost
 
     @property
+    def total_input_tokens(self) -> int:
+        """Cumulative input tokens across all providers."""
+        return self._total_input_tokens
+
+    @property
+    def total_output_tokens(self) -> int:
+        """Cumulative output tokens across all providers."""
+        return self._total_output_tokens
+
+    @property
     def cost_by_provider(self) -> dict[str, float]:
         """Cost breakdown by provider_id."""
         return dict(self._cost_by_provider)
@@ -158,6 +170,8 @@ class ProviderManager:
         call_cost = input_cost + output_cost
 
         self._total_cost += call_cost
+        self._total_input_tokens += usage.input_tokens
+        self._total_output_tokens += usage.output_tokens
         pid = model_info.provider_id
         self._cost_by_provider[pid] = self._cost_by_provider.get(pid, 0.0) + call_cost
 
@@ -170,8 +184,10 @@ class ProviderManager:
         return call_cost
 
     def reset_cost(self) -> None:
-        """Reset the cost accumulator to zero."""
+        """Reset the cost and token accumulators to zero."""
         self._total_cost = 0.0
+        self._total_input_tokens = 0
+        self._total_output_tokens = 0
         self._cost_by_provider.clear()
 
     # ── Provider rate limiting ───────────────────────────────────

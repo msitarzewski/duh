@@ -45,12 +45,19 @@ class AskRequest(BaseModel):
     challengers: list[str] | None = None
 
 
+class UsageResponse(BaseModel):
+    input_tokens: int = 0
+    output_tokens: int = 0
+    cost_usd: float = 0.0
+
+
 class AskResponse(BaseModel):
     decision: str
     confidence: float
     rigor: float = 0.0
     dissent: str | None = None
     cost: float
+    usage: UsageResponse = UsageResponse()
     thread_id: str | None = None
     protocol_used: str = "consensus"
 
@@ -128,7 +135,17 @@ async def _handle_consensus(  # type: ignore[no-untyped-def]
     if db_factory is not None:
         try:
             thread_id = await _persist_result(
-                db_factory, body.question, decision, confidence, dissent, rigor=rigor
+                db_factory,
+                body.question,
+                decision,
+                confidence,
+                dissent,
+                rigor=rigor,
+                usage={
+                    "input_tokens": pm.total_input_tokens,
+                    "output_tokens": pm.total_output_tokens,
+                    "cost_usd": cost,
+                },
             )
         except Exception:
             logger.exception("Failed to persist consensus thread")
@@ -139,6 +156,11 @@ async def _handle_consensus(  # type: ignore[no-untyped-def]
         rigor=rigor,
         dissent=dissent,
         cost=cost,
+        usage=UsageResponse(
+            input_tokens=pm.total_input_tokens,
+            output_tokens=pm.total_output_tokens,
+            cost_usd=cost,
+        ),
         thread_id=thread_id,
         protocol_used="consensus",
     )
@@ -154,6 +176,11 @@ async def _handle_voting(body: AskRequest, config, pm) -> AskResponse:  # type: 
         confidence=result.confidence,
         rigor=result.rigor,
         cost=pm.total_cost,
+        usage=UsageResponse(
+            input_tokens=pm.total_input_tokens,
+            output_tokens=pm.total_output_tokens,
+            cost_usd=pm.total_cost,
+        ),
         protocol_used="voting",
     )
 
@@ -225,17 +252,22 @@ async def _persist_result(
     dissent: str | None,
     *,
     rigor: float = 0.0,
+    usage: dict[str, float] | None = None,
 ) -> str:
     """Persist a consensus result to the database.
 
     Returns the new thread ID.
     """
+    import json as _json
+
     from duh.memory.repository import MemoryRepository
 
     async with db_factory() as session:  # type: ignore[operator]
         repo = MemoryRepository(session)
         thread = await repo.create_thread(question)
         thread.status = "complete"
+        if usage:
+            thread.usage_json = _json.dumps(usage)
         turn = await repo.create_turn(thread.id, 1, "COMMIT")
         await repo.save_decision(
             turn.id, thread.id, decision, confidence, rigor=rigor, dissent=dissent

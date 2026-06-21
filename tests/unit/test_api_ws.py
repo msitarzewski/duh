@@ -50,6 +50,8 @@ def _create_test_app() -> FastAPI:
 
     pm = MagicMock()
     pm.total_cost = 0.05
+    pm.total_input_tokens = 1000
+    pm.total_output_tokens = 500
     pm.list_all_models.return_value = [
         _make_model_info("test:model-a"),
         _make_model_info("test:model-b"),
@@ -267,6 +269,9 @@ class TestWebSocketAsk:
         assert complete["rigor"] == 1.0
         assert complete["dissent"] == "Minor dissent"
         assert "cost" in complete
+        assert complete["usage"]["input_tokens"] == 1000
+        assert complete["usage"]["output_tokens"] == 500
+        assert complete["usage"]["cost_usd"] == 0.05
 
     def test_commit_event_has_confidence_and_dissent(self):
         """Commit events include confidence score and dissent."""

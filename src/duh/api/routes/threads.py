@@ -41,6 +41,12 @@ class TurnResponse(BaseModel):
     decision: DecisionResponse | None = None
 
 
+class UsageSummary(BaseModel):
+    input_tokens: int = 0
+    output_tokens: int = 0
+    cost_usd: float = 0.0
+
+
 class ThreadSummaryResponse(BaseModel):
     thread_id: str
     question: str
@@ -57,6 +63,7 @@ class ThreadDetailResponse(BaseModel):
     created_at: str
     turns: list[TurnResponse] = Field(default_factory=list)
     followups: list[str] = Field(default_factory=list)
+    usage: UsageSummary = UsageSummary()
 
 
 class ThreadListResponse(BaseModel):
@@ -200,6 +207,35 @@ def _build_thread_detail(thread: object) -> ThreadDetailResponse:
         with contextlib.suppress(ValueError, TypeError):
             followups = _json.loads(followups_raw)
 
+    # Prefer the run-level usage total recorded at persist time; fall back to
+    # aggregating per-contribution counts for threads saved before usage_json.
+    total_in = sum(
+        c.input_tokens
+        for turn in thread.turns  # type: ignore[attr-defined]
+        for c in turn.contributions
+    )
+    total_out = sum(
+        c.output_tokens
+        for turn in thread.turns  # type: ignore[attr-defined]
+        for c in turn.contributions
+    )
+    total_cost: float = sum(
+        c.cost_usd
+        for turn in thread.turns  # type: ignore[attr-defined]
+        for c in turn.contributions
+    )
+
+    usage_raw = getattr(thread, "usage_json", None)
+    if usage_raw:
+        import contextlib
+        import json as _json
+
+        with contextlib.suppress(ValueError, TypeError):
+            stored = _json.loads(usage_raw)
+            total_in = int(stored.get("input_tokens", total_in))
+            total_out = int(stored.get("output_tokens", total_out))
+            total_cost = float(stored.get("cost_usd", total_cost))
+
     return ThreadDetailResponse(
         thread_id=thread.id,  # type: ignore[attr-defined]
         question=thread.question,  # type: ignore[attr-defined]
@@ -207,6 +243,11 @@ def _build_thread_detail(thread: object) -> ThreadDetailResponse:
         created_at=thread.created_at.isoformat(),  # type: ignore[attr-defined]
         turns=turns,
         followups=followups,
+        usage=UsageSummary(
+            input_tokens=total_in,
+            output_tokens=total_out,
+            cost_usd=total_cost,
+        ),
     )
 
 
