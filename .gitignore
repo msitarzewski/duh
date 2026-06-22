@@ -61,3 +61,6 @@ web/dist/
 # npm wrapper
 npm/like-duh/node_modules/
 
+
+# TypeScript incremental build info
+web/tsconfig.tsbuildinfo
