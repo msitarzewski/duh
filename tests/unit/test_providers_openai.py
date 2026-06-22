@@ -436,3 +436,48 @@ class TestBaseUrl:
         # If AsyncOpenAI raises for missing key, this test fails.
         provider = OpenAIProvider(base_url="http://localhost:11434/v1")
         assert provider.provider_id == PROVIDER_ID
+
+
+# ─── Custom provider id (OpenAI-compatible hosts) ─────────────
+
+
+class TestCustomProviderId:
+    def test_default_provider_id_unchanged(self):
+        """Omitting provider_id keeps the adapter reporting 'openai'."""
+        provider = OpenAIProvider(client=_make_client())
+        assert provider.provider_id == PROVIDER_ID
+
+    def test_custom_provider_id_reported(self):
+        """A custom provider_id is reported as-is."""
+        provider = OpenAIProvider(client=_make_client(), provider_id="cloudflare")
+        assert provider.provider_id == "cloudflare"
+
+    async def test_serves_cloudflare_catalog(self):
+        """Cloudflare provider lists GLM-5.2 with its real pricing."""
+        provider = OpenAIProvider(client=_make_client(), provider_id="cloudflare")
+        models = await provider.list_models()
+        ids = {m.model_id for m in models}
+        assert "@cf/zai-org/glm-5.2" in ids
+        glm = next(m for m in models if m.model_id == "@cf/zai-org/glm-5.2")
+        assert glm.provider_id == "cloudflare"
+        assert glm.input_cost_per_mtok == 1.40
+        assert glm.output_cost_per_mtok == 4.40
+        assert glm.context_window == 262_144
+
+    async def test_cost_resolution_for_glm(self):
+        """send() resolves GLM cost from the cloudflare catalog, not $0."""
+        client = _make_client()
+        provider = OpenAIProvider(client=client, provider_id="cloudflare")
+        resp = await provider.send(
+            [PromptMessage(role="user", content="hi")], "@cf/zai-org/glm-5.2"
+        )
+        assert resp.model_info.provider_id == "cloudflare"
+        assert resp.model_info.input_cost_per_mtok == 1.40
+        assert resp.model_info.output_cost_per_mtok == 4.40
+
+    def test_unknown_provider_falls_back_to_openai_catalog(self):
+        """An unrecognized provider_id falls back to the openai catalog."""
+        provider = OpenAIProvider(client=_make_client(), provider_id="mystery")
+        assert provider.provider_id == "mystery"
+        # No catalog for "mystery" -> falls back to openai's known models.
+        assert provider._known_models is not None

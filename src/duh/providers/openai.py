@@ -101,7 +101,14 @@ class OpenAIProvider:
         *,
         base_url: str | None = None,
         client: openai.AsyncOpenAI | None = None,
+        provider_id: str = PROVIDER_ID,
     ) -> None:
+        # provider_id lets one adapter serve any OpenAI-compatible host under a
+        # distinct id (e.g. "cloudflare" for Workers AI) so it can run alongside
+        # real OpenAI without colliding. Models/caps come from that id's catalog.
+        self._provider_id = provider_id
+        self._known_models = MODEL_CATALOG.get(provider_id, _KNOWN_MODELS)
+        self._caps = PROVIDER_CAPS.get(provider_id, _DEFAULT_CAPS)
         if client is not None:
             self._client = client
         else:
@@ -117,21 +124,21 @@ class OpenAIProvider:
 
     @property
     def provider_id(self) -> str:
-        return PROVIDER_ID
+        return self._provider_id
 
     async def list_models(self) -> list[ModelInfo]:
         return [
             ModelInfo(
-                provider_id=PROVIDER_ID,
+                provider_id=self._provider_id,
                 model_id=m["model_id"],
                 display_name=m["display_name"],
-                capabilities=_DEFAULT_CAPS,
+                capabilities=self._caps,
                 context_window=m["context_window"],
                 max_output_tokens=m["max_output_tokens"],
                 input_cost_per_mtok=m["input_cost_per_mtok"],
                 output_cost_per_mtok=m["output_cost_per_mtok"],
             )
-            for m in _KNOWN_MODELS
+            for m in self._known_models
         ]
 
     async def send(
@@ -287,13 +294,13 @@ class OpenAIProvider:
 
     def _resolve_model_info(self, model_id: str) -> ModelInfo:
         """Look up ModelInfo for a model_id, or create a generic one."""
-        for m in _KNOWN_MODELS:
+        for m in self._known_models:
             if m["model_id"] == model_id:
                 return ModelInfo(
-                    provider_id=PROVIDER_ID,
+                    provider_id=self._provider_id,
                     model_id=model_id,
                     display_name=m["display_name"],
-                    capabilities=_DEFAULT_CAPS,
+                    capabilities=self._caps,
                     context_window=m["context_window"],
                     max_output_tokens=m["max_output_tokens"],
                     input_cost_per_mtok=m["input_cost_per_mtok"],
@@ -301,10 +308,10 @@ class OpenAIProvider:
                 )
         # Unknown model — return generic info
         return ModelInfo(
-            provider_id=PROVIDER_ID,
+            provider_id=self._provider_id,
             model_id=model_id,
-            display_name=f"OpenAI ({model_id})",
-            capabilities=_DEFAULT_CAPS,
+            display_name=f"{self._provider_id} ({model_id})",
+            capabilities=self._caps,
             context_window=200_000,
             max_output_tokens=4096,
             input_cost_per_mtok=0.0,

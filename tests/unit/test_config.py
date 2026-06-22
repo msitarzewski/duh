@@ -313,3 +313,43 @@ class TestFileDiscovery:
         cfg = load_config()
         assert cfg.cost.hard_limit == 50.0
         assert cfg.general.max_rounds == 6
+
+
+class TestCloudflareEnv:
+    def _isolate(self, tmp_path, monkeypatch) -> None:
+        monkeypatch.chdir(tmp_path)
+        monkeypatch.setenv("HOME", str(tmp_path))
+        monkeypatch.delenv("DUH_CONFIG", raising=False)
+        monkeypatch.delenv("XDG_CONFIG_HOME", raising=False)
+
+    def test_cloudflare_configured_from_env(self, tmp_path, monkeypatch):
+        """Both CLOUDFLARE_* env vars -> a cloudflare provider is configured."""
+        self._isolate(tmp_path, monkeypatch)
+        monkeypatch.setenv("CLOUDFLARE_ACCOUNT_ID", "acct123")
+        monkeypatch.setenv("CLOUDFLARE_WORKERS_AI_TOKEN", "tok-secret")
+
+        cfg = load_config()
+        assert "cloudflare" in cfg.providers
+        prov = cfg.providers["cloudflare"]
+        assert prov.api_key == "tok-secret"
+        assert prov.base_url == (
+            "https://api.cloudflare.com/client/v4/accounts/acct123/ai/v1"
+        )
+
+    def test_cloudflare_absent_without_env(self, tmp_path, monkeypatch):
+        """Missing either var -> no cloudflare provider."""
+        self._isolate(tmp_path, monkeypatch)
+        monkeypatch.delenv("CLOUDFLARE_ACCOUNT_ID", raising=False)
+        monkeypatch.delenv("CLOUDFLARE_WORKERS_AI_TOKEN", raising=False)
+
+        cfg = load_config()
+        assert "cloudflare" not in cfg.providers
+
+    def test_cloudflare_requires_both(self, tmp_path, monkeypatch):
+        """Only the account ID (no token) -> not configured."""
+        self._isolate(tmp_path, monkeypatch)
+        monkeypatch.setenv("CLOUDFLARE_ACCOUNT_ID", "acct123")
+        monkeypatch.delenv("CLOUDFLARE_WORKERS_AI_TOKEN", raising=False)
+
+        cfg = load_config()
+        assert "cloudflare" not in cfg.providers

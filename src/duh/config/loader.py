@@ -93,6 +93,30 @@ def _resolve_api_keys(config: DuhConfig) -> None:
             provider.api_key = os.environ.get(provider.api_key_env)
 
 
+def _resolve_cloudflare(config: DuhConfig) -> None:
+    """Configure a Cloudflare Workers AI provider from env vars (in-place).
+
+    When both ``CLOUDFLARE_ACCOUNT_ID`` and ``CLOUDFLARE_WORKERS_AI_TOKEN`` are
+    set, register a ``cloudflare`` provider pointing at the account's
+    OpenAI-compatible Workers AI endpoint. Env always wins when both are set.
+    """
+    from duh.config.schema import ProviderConfig
+
+    account = os.environ.get("CLOUDFLARE_ACCOUNT_ID")
+    token = os.environ.get("CLOUDFLARE_WORKERS_AI_TOKEN")
+    if not account or not token:
+        return
+    base_url = f"https://api.cloudflare.com/client/v4/accounts/{account}/ai/v1"
+    existing = config.providers.get("cloudflare")
+    if existing is not None:
+        existing.api_key = token
+        existing.base_url = base_url
+    else:
+        config.providers["cloudflare"] = ProviderConfig(
+            api_key=token, base_url=base_url
+        )
+
+
 def load_config(
     path: str | Path | None = None,
     overrides: dict[str, Any] | None = None,
@@ -142,6 +166,9 @@ def load_config(
 
     # Resolve API keys from env vars
     _resolve_api_keys(config)
+
+    # Configure Cloudflare Workers AI provider from env vars (if present)
+    _resolve_cloudflare(config)
 
     # Auto-generate a dev JWT secret if none is configured
     if not config.auth.jwt_secret:

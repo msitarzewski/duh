@@ -189,6 +189,17 @@ async def _setup_providers(config: DuhConfig) -> ProviderManager:
 
             perplexity_prov = PerplexityProvider(api_key=prov_config.api_key)
             await pm.register(perplexity_prov)  # type: ignore[arg-type]
+        elif prov_config.base_url is not None and prov_config.api_key is not None:
+            # Generic OpenAI-compatible host (e.g. Cloudflare Workers AI,
+            # Groq, Together) registered under its own provider id.
+            from duh.providers.openai import OpenAIProvider
+
+            compat_prov = OpenAIProvider(
+                api_key=prov_config.api_key,
+                base_url=prov_config.base_url,
+                provider_id=name,
+            )
+            await pm.register(compat_prov)  # type: ignore[arg-type]
 
     return pm
 
