@@ -297,6 +297,15 @@ NO_TEMPERATURE_MODELS: set[str] = {
     "gpt-5.5",
 }
 
+# ── Anthropic models that reject the temperature param ─────────
+# The newest thinking models (Opus 4.7+) deprecated `temperature`; older
+# models (Opus 4.6, Sonnet, Haiku) still accept it. Verified empirically.
+
+ANTHROPIC_NO_TEMPERATURE_MODELS: set[str] = {
+    "claude-opus-4-8",
+    "claude-opus-4-7",
+}
+
 # ── Providers that are challenger-only (not proposer-eligible) ──
 
 CHALLENGER_ONLY_PROVIDERS: set[str] = {"perplexity"}
