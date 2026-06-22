@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { GlassPanel, GlowButton, Markdown, Disclosure } from '@/components/shared'
 import { ConfidenceMeter } from './ConfidenceMeter'
 import { DissentBanner } from './DissentBanner'
@@ -103,7 +103,20 @@ function downloadFile(content: string | Blob, filename: string, mimeType: string
 export function ConsensusComplete({ decision, confidence, rigor, dissent, cost, usage, collapsible, overview }: ConsensusCompleteProps) {
   const [copied, setCopied] = useState(false)
   const [exportOpen, setExportOpen] = useState(false)
+  const exportRef = useRef<HTMLDivElement>(null)
   const { question, rounds, threadId } = useConsensusStore()
+
+  // Close the export menu when clicking outside it
+  useEffect(() => {
+    if (!exportOpen) return
+    const handler = (e: MouseEvent) => {
+      if (exportRef.current && !exportRef.current.contains(e.target as Node)) {
+        setExportOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [exportOpen])
 
   const handleCopy = async () => {
     await navigator.clipboard.writeText(overview ?? decision)
@@ -138,8 +151,50 @@ export function ConsensusComplete({ decision, confidence, rigor, dissent, cost, 
     </>
   )
 
+  const actions = (
+    <div className="flex gap-2 mb-4">
+      <GlowButton variant="ghost" size="sm" onClick={handleCopy}>
+        {copied ? 'Copied' : 'Copy'}
+      </GlowButton>
+      <div className="relative" ref={exportRef}>
+        <GlowButton variant="ghost" size="sm" onClick={() => setExportOpen(!exportOpen)}>
+          Export
+        </GlowButton>
+        {exportOpen && (
+          <div className="absolute top-full left-0 mt-1 bg-[var(--color-surface-solid)] border border-[var(--color-border)] rounded-[var(--radius-md)] shadow-lg py-1 min-w-[200px] z-[var(--z-dropdown)]">
+            <button
+              className="w-full text-left px-3 py-1.5 text-xs hover:bg-[var(--color-surface-hover)] text-[var(--color-text)]"
+              onClick={() => handleExportMarkdown('decision')}
+            >
+              Markdown (decision only)
+            </button>
+            <button
+              className="w-full text-left px-3 py-1.5 text-xs hover:bg-[var(--color-surface-hover)] text-[var(--color-text)]"
+              onClick={() => handleExportMarkdown('full')}
+            >
+              Markdown (full report)
+            </button>
+            <button
+              className="w-full text-left px-3 py-1.5 text-xs hover:bg-[var(--color-surface-hover)] text-[var(--color-text)]"
+              onClick={() => handleExportPdf('decision')}
+            >
+              PDF (decision only)
+            </button>
+            <button
+              className="w-full text-left px-3 py-1.5 text-xs hover:bg-[var(--color-surface-hover)] text-[var(--color-text)]"
+              onClick={() => handleExportPdf('full')}
+            >
+              PDF (full report)
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+
   const body = (
     <>
+      {actions}
       {overview ? (
         <>
           <Markdown className="text-sm">{overview}</Markdown>
@@ -152,45 +207,6 @@ export function ConsensusComplete({ decision, confidence, rigor, dissent, cost, 
       ) : (
         <Markdown className="text-sm">{decision}</Markdown>
       )}
-
-      <div className="flex gap-2 mt-4">
-        <GlowButton variant="ghost" size="sm" onClick={handleCopy}>
-          {copied ? 'Copied' : 'Copy'}
-        </GlowButton>
-        <div className="relative">
-          <GlowButton variant="ghost" size="sm" onClick={() => setExportOpen(!exportOpen)}>
-            Export
-          </GlowButton>
-          {exportOpen && (
-            <div className="absolute bottom-full left-0 mb-1 bg-[var(--glass-bg)] backdrop-blur-[var(--glass-blur)] border border-[var(--color-border)] rounded-[var(--radius-md)] shadow-lg py-1 min-w-[200px] z-[var(--z-dropdown)]">
-              <button
-                className="w-full text-left px-3 py-1.5 text-xs hover:bg-[var(--color-bg-tertiary)] text-[var(--color-text)]"
-                onClick={() => handleExportMarkdown('decision')}
-              >
-                Markdown (decision only)
-              </button>
-              <button
-                className="w-full text-left px-3 py-1.5 text-xs hover:bg-[var(--color-bg-tertiary)] text-[var(--color-text)]"
-                onClick={() => handleExportMarkdown('full')}
-              >
-                Markdown (full report)
-              </button>
-              <button
-                className="w-full text-left px-3 py-1.5 text-xs hover:bg-[var(--color-bg-tertiary)] text-[var(--color-text)]"
-                onClick={() => handleExportPdf('decision')}
-              >
-                PDF (decision only)
-              </button>
-              <button
-                className="w-full text-left px-3 py-1.5 text-xs hover:bg-[var(--color-bg-tertiary)] text-[var(--color-text)]"
-                onClick={() => handleExportPdf('full')}
-              >
-                PDF (full report)
-              </button>
-            </div>
-          )}
-        </div>
-      </div>
     </>
   )
 
