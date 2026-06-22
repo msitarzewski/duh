@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import logging
 from typing import TYPE_CHECKING, Any
 
@@ -10,7 +9,7 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 if TYPE_CHECKING:
     from duh.config.schema import DuhConfig
-    from duh.consensus.machine import RoundResult
+    from duh.memory.persist import IncrementalPersister
     from duh.providers.manager import ProviderManager
     from duh.tools.registry import ToolRegistry
 
@@ -126,6 +125,22 @@ async def _stream_consensus(
     effective_panel = panel or config.consensus.panel or None
     use_native_search = config.tools.enabled and config.tools.web_search.native
 
+    # Persist incrementally so a mid-run disconnect/crash leaves a real
+    # partial thread. Create it up front and tell the client its ID early.
+    persister: IncrementalPersister | None = None
+    db_factory = getattr(ws.app.state, "db_factory", None)
+    if db_factory is not None:
+        from duh.memory.persist import IncrementalPersister
+
+        persister = IncrementalPersister(db_factory, question)
+        try:
+            thread_id_early = await persister.start()
+            ctx.thread_id = thread_id_early
+            await ws.send_json({"type": "thread_started", "thread_id": thread_id_early})
+        except Exception:
+            logger.exception("Failed to create consensus thread")
+            persister = None
+
     for _round in range(config.general.max_rounds):
         # PROPOSE
         sm.transition(ConsensusState.PROPOSE)
@@ -205,6 +220,11 @@ async def _stream_consensus(
         # COMMIT
         sm.transition(ConsensusState.COMMIT)
         await handle_commit(ctx, pm)
+        if persister is not None:
+            try:
+                await persister.persist_round(ctx.snapshot_round())
+            except Exception:
+                logger.exception("Failed to persist consensus round")
         await ws.send_json(
             {
                 "type": "commit",
@@ -226,16 +246,13 @@ async def _stream_consensus(
 
     await generate_followups(ctx, pm)
 
-    # Persist to DB if available
-    thread_id: str | None = None
-    db_factory = getattr(ws.app.state, "db_factory", None)
-    if db_factory is not None:
+    # Finalize the incrementally-persisted thread (mark complete, attach
+    # overview / follow-ups / usage). The thread + all rounds are already saved.
+    thread_id: str | None = ctx.thread_id or None
+    if persister is not None:
         try:
-            thread_id = await _persist_consensus(
-                db_factory,
-                question,
-                ctx.round_history,
-                ctx.overview,
+            await persister.finalize(
+                overview=ctx.overview,
                 followups=ctx.followups or None,
                 usage={
                     "input_tokens": pm.total_input_tokens,
@@ -244,7 +261,7 @@ async def _stream_consensus(
                 },
             )
         except Exception:
-            logger.exception("Failed to persist consensus thread")
+            logger.exception("Failed to finalize consensus thread")
 
     await ws.send_json(
         {
@@ -357,92 +374,3 @@ async def _stream_challenges(
         raise ConsensusError(msg)
 
     ctx.challenges = challenges  # type: ignore[attr-defined]
-
-
-async def _persist_consensus(
-    db_factory: object,
-    question: str,
-    round_history: list[RoundResult],
-    overview: str | None = None,
-    followups: list[str] | None = None,
-    usage: dict[str, float] | None = None,
-) -> str:
-    """Persist consensus round history to the database.
-
-    Returns the new thread ID.
-    """
-    from duh.memory.repository import MemoryRepository
-
-    async with db_factory() as session:  # type: ignore[operator]
-        repo = MemoryRepository(session)
-        thread = await repo.create_thread(question)
-        thread.status = "complete"
-
-        for rr in round_history:
-            turn = await repo.create_turn(thread.id, rr.round_number, "COMMIT")
-            proposal_cit = None
-            if rr.proposal_citations:
-                proposal_cit = json.dumps(
-                    [
-                        {"url": c["url"], "title": c.get("title")}
-                        for c in rr.proposal_citations
-                    ]
-                )
-            await repo.add_contribution(
-                turn.id,
-                rr.proposal_model,
-                "proposer",
-                rr.proposal,
-                citations_json=proposal_cit,
-            )
-            for ch in rr.challenges:
-                ch_cit = None
-                if ch.citations:
-                    ch_cit = json.dumps(
-                        [
-                            {"url": c["url"], "title": c.get("title")}
-                            for c in ch.citations
-                        ]
-                    )
-                await repo.add_contribution(
-                    turn.id,
-                    ch.model_ref,
-                    "challenger",
-                    ch.content,
-                    citations_json=ch_cit,
-                )
-            rev_cit = None
-            if rr.revision_citations:
-                rev_cit = json.dumps(
-                    [
-                        {"url": c["url"], "title": c.get("title")}
-                        for c in rr.revision_citations
-                    ]
-                )
-            await repo.add_contribution(
-                turn.id,
-                rr.proposal_model,
-                "reviser",
-                rr.revision,
-                citations_json=rev_cit,
-            )
-            await repo.save_decision(
-                turn.id,
-                thread.id,
-                rr.decision,
-                rr.confidence,
-                rigor=rr.rigor,
-                dissent=rr.dissent,
-            )
-
-        if overview:
-            await repo.save_thread_summary(thread.id, overview, "overview")
-
-        if followups:
-            thread.followups_json = json.dumps(followups)
-
-        if usage:
-            thread.usage_json = json.dumps(usage)
-
-        await session.commit()
-        return str(thread.id)

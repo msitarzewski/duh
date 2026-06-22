@@ -27,6 +27,7 @@ if TYPE_CHECKING:
     from duh.config.schema import DuhConfig
     from duh.consensus.machine import RoundResult
     from duh.memory.models import Thread, Vote
+    from duh.memory.persist import IncrementalPersister
     from duh.providers.base import ModelInfo
     from duh.providers.manager import ProviderManager
     from duh.tools.registry import ToolRegistry
@@ -229,98 +230,24 @@ async def persist_consensus(
     followups: list[str] | None = None,
     usage: dict[str, float] | None = None,
 ) -> str:
-    """Persist full consensus round history to the database.
+    """Persist a full consensus round history to the database.
 
-    Saves proposals, challenger responses, revisions, citations,
-    decisions, and overview — the same rich format used by the web UI.
+    Thin wrapper over :func:`duh.memory.persist.persist_consensus` (the
+    canonical incremental implementation). Retained for the batch command and
+    backward-compatible imports.
 
     Returns the new thread ID.
     """
-    import json as _json
+    from duh.memory.persist import persist_consensus as _persist
 
-    from duh.memory.repository import MemoryRepository
-
-    async with db_factory() as session:
-        repo = MemoryRepository(session)
-        thread = await repo.create_thread(question)
-        thread.status = "complete"
-
-        for rr in round_history:
-            turn = await repo.create_turn(thread.id, rr.round_number, "COMMIT")
-
-            # Proposal with citations
-            proposal_cit = None
-            if rr.proposal_citations:
-                proposal_cit = _json.dumps(
-                    [
-                        {"url": c["url"], "title": c.get("title")}
-                        for c in rr.proposal_citations
-                    ]
-                )
-            await repo.add_contribution(
-                turn.id,
-                rr.proposal_model,
-                "proposer",
-                rr.proposal,
-                citations_json=proposal_cit,
-            )
-
-            # Challenger responses with citations
-            for ch in rr.challenges:
-                ch_cit = None
-                if ch.citations:
-                    ch_cit = _json.dumps(
-                        [
-                            {"url": c["url"], "title": c.get("title")}
-                            for c in ch.citations
-                        ]
-                    )
-                await repo.add_contribution(
-                    turn.id,
-                    ch.model_ref,
-                    "challenger",
-                    ch.content,
-                    citations_json=ch_cit,
-                )
-
-            # Revision with citations
-            rev_cit = None
-            if rr.revision_citations:
-                rev_cit = _json.dumps(
-                    [
-                        {"url": c["url"], "title": c.get("title")}
-                        for c in rr.revision_citations
-                    ]
-                )
-            await repo.add_contribution(
-                turn.id,
-                rr.proposal_model,
-                "reviser",
-                rr.revision,
-                citations_json=rev_cit,
-            )
-
-            # Decision
-            await repo.save_decision(
-                turn.id,
-                thread.id,
-                rr.decision,
-                rr.confidence,
-                rigor=rr.rigor,
-                dissent=rr.dissent,
-            )
-
-        if overview:
-            await repo.save_thread_summary(thread.id, overview, "overview")
-
-        if followups:
-            thread.followups_json = _json.dumps(followups)
-
-        if usage:
-            thread.usage_json = _json.dumps(usage)
-
-        await session.commit()
-        return str(thread.id)
+    return await _persist(
+        db_factory,
+        question,
+        round_history,
+        overview=overview,
+        followups=followups,
+        usage=usage,
+    )
 
 
 async def _run_consensus(
@@ -376,6 +303,21 @@ async def _run_consensus(
 
     # Resolve effective panel from config or explicit arg
     effective_panel = panel or config.consensus.panel or None
+
+    # Persist incrementally so a mid-run crash leaves a real partial thread
+    # instead of nothing. The thread is created up front (status "active").
+    persister: IncrementalPersister | None = None
+    if db_factory is not None:
+        from duh.memory.persist import IncrementalPersister
+
+        persister = IncrementalPersister(db_factory, question)
+        try:
+            ctx.thread_id = await persister.start()
+        except Exception:
+            import logging as _logging
+
+            _logging.getLogger(__name__).exception("Failed to create consensus thread")
+            persister = None
 
     for _round in range(config.general.max_rounds):
         # PROPOSE
@@ -451,6 +393,15 @@ async def _run_consensus(
         # COMMIT
         sm.transition(ConsensusState.COMMIT)
         await handle_commit(ctx, pm)
+        if persister is not None:
+            try:
+                await persister.persist_round(ctx.snapshot_round())
+            except Exception:
+                import logging as _logging
+
+                _logging.getLogger(__name__).exception(
+                    "Failed to persist consensus round"
+                )
         if display:
             display.show_commit(ctx.confidence, ctx.rigor, ctx.dissent)
             display.round_footer(
@@ -494,13 +445,11 @@ async def _run_consensus(
         all_citations.extend(ch.citations)
     all_citations.extend(ctx.revision_citations)
 
-    # Persist full round history if DB available
-    if db_factory is not None:
+    # Finalize the incrementally-persisted thread: mark complete and attach
+    # the overview, follow-ups, and usage totals.
+    if persister is not None:
         try:
-            await persist_consensus(
-                db_factory,
-                question,
-                ctx.round_history,
+            await persister.finalize(
                 overview=ctx.overview,
                 followups=ctx.followups or None,
                 usage={
@@ -512,7 +461,9 @@ async def _run_consensus(
         except Exception:
             import logging as _logging
 
-            _logging.getLogger(__name__).exception("Failed to persist consensus thread")
+            _logging.getLogger(__name__).exception(
+                "Failed to finalize consensus thread"
+            )
 
     return (
         ctx.decision or "",
