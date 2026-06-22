@@ -111,6 +111,11 @@ async def _handle_consensus(  # type: ignore[no-untyped-def]
     from duh.cli.app import _run_consensus
 
     use_native_search = config.tools.enabled and config.tools.web_search.native
+
+    # Persist the full debate via the shared incremental path (same as CLI/WS),
+    # capturing the thread ID it creates up front. Replaces the old lite path
+    # that only saved the final decision.
+    created: dict[str, str] = {}
     (
         decision,
         confidence,
@@ -129,26 +134,10 @@ async def _handle_consensus(  # type: ignore[no-untyped-def]
         proposer_override=body.proposer,
         challengers_override=body.challengers,
         web_search=use_native_search,
+        db_factory=db_factory,
+        on_thread_created=lambda tid: created.__setitem__("id", tid),
     )
-
-    thread_id: str | None = None
-    if db_factory is not None:
-        try:
-            thread_id = await _persist_result(
-                db_factory,
-                body.question,
-                decision,
-                confidence,
-                dissent,
-                rigor=rigor,
-                usage={
-                    "input_tokens": pm.total_input_tokens,
-                    "output_tokens": pm.total_output_tokens,
-                    "cost_usd": cost,
-                },
-            )
-        except Exception:
-            logger.exception("Failed to persist consensus thread")
+    thread_id: str | None = created.get("id")
 
     return AskResponse(
         decision=decision,
@@ -242,38 +231,6 @@ async def _handle_decompose(body: AskRequest, config, pm) -> AskResponse:  # typ
         cost=pm.total_cost,
         protocol_used="decompose",
     )
-
-
-async def _persist_result(
-    db_factory: object,
-    question: str,
-    decision: str,
-    confidence: float,
-    dissent: str | None,
-    *,
-    rigor: float = 0.0,
-    usage: dict[str, float] | None = None,
-) -> str:
-    """Persist a consensus result to the database.
-
-    Returns the new thread ID.
-    """
-    import json as _json
-
-    from duh.memory.repository import MemoryRepository
-
-    async with db_factory() as session:  # type: ignore[operator]
-        repo = MemoryRepository(session)
-        thread = await repo.create_thread(question)
-        thread.status = "complete"
-        if usage:
-            thread.usage_json = _json.dumps(usage)
-        turn = await repo.create_turn(thread.id, 1, "COMMIT")
-        await repo.save_decision(
-            turn.id, thread.id, decision, confidence, rigor=rigor, dissent=dissent
-        )
-        await session.commit()
-        return str(thread.id)
 
 
 @router.post("/refine", response_model=RefineResponse)
