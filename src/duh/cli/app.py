@@ -21,6 +21,8 @@ from duh.config.loader import load_config
 from duh.core.errors import ConfigError, DuhError
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
     from duh.cli.display import ConsensusDisplay
@@ -263,6 +265,7 @@ async def _run_consensus(
     challenger_count: int | None = None,
     web_search: bool = False,
     db_factory: async_sessionmaker[AsyncSession] | None = None,
+    on_thread_created: Callable[[str], None] | None = None,
 ) -> tuple[
     str,
     float,
@@ -313,6 +316,8 @@ async def _run_consensus(
         persister = IncrementalPersister(db_factory, question)
         try:
             ctx.thread_id = await persister.start()
+            if on_thread_created is not None:
+                on_thread_created(ctx.thread_id)
         except Exception:
             import logging as _logging
 

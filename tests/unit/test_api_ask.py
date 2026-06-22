@@ -247,54 +247,45 @@ class TestAskEndpoint:
         mock_fn.assert_called_once()
 
 
-# ── TestPersistResult ─────────────────────────────────────────
+# ── TestUnifiedPersistence ────────────────────────────────────
 
 
-class TestPersistResult:
-    async def _factory(self) -> async_sessionmaker:
-        engine = create_async_engine("sqlite+aiosqlite://")
-        async with engine.begin() as conn:
-            await conn.run_sync(Base.metadata.create_all)
-        return async_sessionmaker(engine, expire_on_commit=False)
+class TestUnifiedPersistence:
+    """REST persists via the shared incremental path (not a lite path)."""
 
-    async def test_persists_usage_json(self) -> None:
-        """_persist_result records run-level usage on the thread."""
-        from duh.api.routes.ask import _persist_result
-        from duh.memory.repository import MemoryRepository
+    async def test_forwards_db_factory_and_returns_thread_id(self) -> None:
+        """REST hands its db_factory to _run_consensus and returns the
+        thread ID the incremental persister creates up front."""
+        client, _ = await _make_app()
+        seen: dict[str, object] = {}
 
-        factory = await self._factory()
-        tid = await _persist_result(
-            factory,
-            "Which database?",
-            "Use PostgreSQL",
-            0.9,
-            None,
-            rigor=1.0,
-            usage={"input_tokens": 6257, "output_tokens": 2945, "cost_usd": 0.037},
-        )
+        async def fake_run_consensus(question, config, pm, *args, **kwargs):  # type: ignore[no-untyped-def]
+            seen["db_factory"] = kwargs.get("db_factory")
+            cb = kwargs.get("on_thread_created")
+            if cb is not None:
+                cb("thread-xyz")
+            return ("Decision", 0.9, 1.0, None, 0.01, None, [], [])
 
-        async with factory() as session:
-            repo = MemoryRepository(session)
-            thread = await repo.get_thread(tid)
-            assert thread is not None
-            assert thread.usage_json is not None
-            import json as _json
+        with patch("duh.cli.app._run_consensus", side_effect=fake_run_consensus):
+            resp = client.post("/api/ask", json={"question": "Which DB?"})
 
-            stored = _json.loads(thread.usage_json)
-            assert stored["input_tokens"] == 6257
-            assert stored["output_tokens"] == 2945
-            assert stored["cost_usd"] == 0.037
+        assert resp.status_code == 200
+        # The factory was forwarded so persistence happens inside the run.
+        assert seen["db_factory"] is not None
+        # The thread ID surfaced via the on_thread_created callback.
+        assert resp.json()["thread_id"] == "thread-xyz"
 
-    async def test_no_usage_leaves_column_null(self) -> None:
-        """Omitting usage leaves usage_json unset (backward compatible)."""
-        from duh.api.routes.ask import _persist_result
-        from duh.memory.repository import MemoryRepository
+    async def test_thread_id_null_when_no_thread_created(self) -> None:
+        """If the persister never fires its callback (e.g. start() failed),
+        the response reports a null thread_id rather than erroring."""
+        client, _ = await _make_app()
 
-        factory = await self._factory()
-        tid = await _persist_result(factory, "Q", "A", 0.8, None)
+        async def fake_run_consensus(question, config, pm, *args, **kwargs):  # type: ignore[no-untyped-def]
+            # Simulate persistence not producing a thread: callback not called.
+            return ("Decision", 0.9, 1.0, None, 0.01, None, [], [])
 
-        async with factory() as session:
-            repo = MemoryRepository(session)
-            thread = await repo.get_thread(tid)
-            assert thread is not None
-            assert thread.usage_json is None
+        with patch("duh.cli.app._run_consensus", side_effect=fake_run_consensus):
+            resp = client.post("/api/ask", json={"question": "Which DB?"})
+
+        assert resp.status_code == 200
+        assert resp.json()["thread_id"] is None
