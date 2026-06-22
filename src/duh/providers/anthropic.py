@@ -28,6 +28,11 @@ from duh.providers.catalog import (
     MODEL_CATALOG,
     PROVIDER_CAPS,
 )
+from duh.providers.temperature import (
+    is_temperature_error,
+    omit_temperature,
+    record_no_temperature,
+)
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
@@ -128,7 +133,7 @@ class AnthropicProvider:
             "messages": api_messages,
         }
         # Newest thinking models reject temperature; older ones accept it.
-        if model_id not in ANTHROPIC_NO_TEMPERATURE_MODELS:
+        if not omit_temperature(model_id, ANTHROPIC_NO_TEMPERATURE_MODELS):
             kwargs["temperature"] = temperature
         if stop_sequences:
             kwargs["stop_sequences"] = stop_sequences
@@ -158,7 +163,21 @@ class AnthropicProvider:
             # timeout on non-streaming requests with large max_tokens.
             response = await self._collect_stream(kwargs)
         except anthropic.APIError as e:
-            raise _map_error(e) from e
+            # Self-heal: a model that newly rejects temperature -> record it and
+            # retry once without it (handles models not yet in the catalog set).
+            if (
+                isinstance(e, anthropic.BadRequestError)
+                and "temperature" in kwargs
+                and is_temperature_error(e)
+            ):
+                record_no_temperature(model_id)
+                kwargs.pop("temperature", None)
+                try:
+                    response = await self._collect_stream(kwargs)
+                except anthropic.APIError as retry_exc:
+                    raise _map_error(retry_exc) from retry_exc
+            else:
+                raise _map_error(e) from e
 
         latency_ms = (time.monotonic() - start) * 1000
 
@@ -252,7 +271,7 @@ class AnthropicProvider:
             "system": system,
             "messages": api_messages,
         }
-        if model_id not in ANTHROPIC_NO_TEMPERATURE_MODELS:
+        if not omit_temperature(model_id, ANTHROPIC_NO_TEMPERATURE_MODELS):
             kwargs["temperature"] = temperature
         if stop_sequences:
             kwargs["stop_sequences"] = stop_sequences

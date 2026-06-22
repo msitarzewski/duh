@@ -27,6 +27,11 @@ from duh.providers.catalog import (
     NO_TEMPERATURE_MODELS,
     PROVIDER_CAPS,
 )
+from duh.providers.temperature import (
+    is_temperature_error,
+    omit_temperature,
+    record_no_temperature,
+)
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
@@ -160,7 +165,7 @@ class OpenAIProvider:
             "max_completion_tokens": max_tokens,
             "messages": api_messages,
         }
-        if model_id not in _NO_TEMPERATURE_MODELS:
+        if not omit_temperature(model_id, _NO_TEMPERATURE_MODELS):
             kwargs["temperature"] = temperature
         if stop_sequences:
             kwargs["stop"] = stop_sequences
@@ -190,7 +195,21 @@ class OpenAIProvider:
         try:
             response = await self._client.chat.completions.create(**kwargs)
         except openai.APIError as e:
-            raise _map_error(e) from e
+            # Self-heal: a model that newly rejects temperature -> record it and
+            # retry once without it (handles models not yet in the catalog set).
+            if (
+                isinstance(e, openai.BadRequestError)
+                and "temperature" in kwargs
+                and is_temperature_error(e)
+            ):
+                record_no_temperature(model_id)
+                kwargs.pop("temperature", None)
+                try:
+                    response = await self._client.chat.completions.create(**kwargs)
+                except openai.APIError as retry_exc:
+                    raise _map_error(retry_exc) from retry_exc
+            else:
+                raise _map_error(e) from e
 
         latency_ms = (time.monotonic() - start) * 1000
 
@@ -250,7 +269,7 @@ class OpenAIProvider:
             "messages": api_messages,
             "stream_options": {"include_usage": True},
         }
-        if model_id not in _NO_TEMPERATURE_MODELS:
+        if not omit_temperature(model_id, _NO_TEMPERATURE_MODELS):
             kwargs["temperature"] = temperature
         if model_id in _REASONING_EFFORT_MODELS:
             kwargs["reasoning_effort"] = "high"

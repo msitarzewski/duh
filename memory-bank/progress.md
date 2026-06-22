@@ -12,9 +12,11 @@ Merged to `main` via PRs #16–#21 (details in `tasks/2026-06/README.md` and `ac
 - **Incremental persistence** (`IncrementalPersister`) across CLI/WS/REST — mid-run crash leaves a real partial thread
 - **Cloudflare Workers AI provider** with Zhipu GLM-5.2; `OpenAIProvider` generalized to any OpenAI-compatible host
 - **Unified `ConsensusReport`** for live + history; history now shows the executive summary
+- **Temperature self-heal**: providers retry once without temperature on a temperature-related 400
+  and learn the model (`src/duh/providers/temperature.py`) — cross-provider safety net, live-verified
 - **Prior (2026-06-21)**: token usage tracking end-to-end + `npm/like-duh` wrapper
-- **Tests**: 1677 Python + 204 Vitest, mypy clean (63 files), ruff clean, build clean
-- **Open follow-ups**: self-healing temperature retry (cross-provider); gitignore `web/tsconfig.tsbuildinfo`
+- **Tests**: 1681 Python + 204 Vitest, mypy clean (64 files), ruff clean, build clean
+- **No open follow-ups outstanding from this session** (temperature retry + tsbuildinfo both done)
 
 ---
 
