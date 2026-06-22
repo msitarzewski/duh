@@ -36,6 +36,7 @@
 - [tasks/2026-06/260622_incremental-persistence.md](./tasks/2026-06/260622_incremental-persistence.md) — IncrementalPersister + REST unification
 - [tasks/2026-06/260622_cloudflare-glm-provider.md](./tasks/2026-06/260622_cloudflare-glm-provider.md) — Cloudflare Workers AI + Zhipu GLM-5.2
 - [tasks/2026-06/260622_unified-consensus-report.md](./tasks/2026-06/260622_unified-consensus-report.md) — shared ConsensusReport + overview in history
+- [tasks/2026-06/260622_temperature-self-heal.md](./tasks/2026-06/260622_temperature-self-heal.md) — cross-provider self-healing temperature retry
 
 ## Phase 0 Code (not memory bank — in repo root)
 - `phase0/` — Benchmark framework (config, models, prompts, methods, questions, runner, judge, analyze)

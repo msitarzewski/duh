@@ -51,6 +51,14 @@
 - Markdown parity verified (same shared `<Markdown>`; `.duh-prose` sets no own font-size)
 - See: [260622_unified-consensus-report.md](./260622_unified-consensus-report.md)
 
+## 2026-06-22: Temperature Self-Heal (cross-provider safety net)
+- New `src/duh/providers/temperature.py`: runtime-learned no-temperature set + helpers
+- OpenAI + Anthropic `send()` retry once without `temperature` on a temperature-related 400,
+  record the model, and skip it thereafter; `stream()` honors the learned set
+- Static catalog sets stay the fast path; this self-corrects unknown/new models
+- Live-verified against a real Anthropic 400. Closes the prior open follow-up.
+- See: [260622_temperature-self-heal.md](./260622_temperature-self-heal.md)
+
 ---
-**End-of-session state (2026-06-22)**: 1677 Python + 204 Vitest tests passing, mypy clean
-(63 files), ruff clean, build clean. All work merged to `main` via PRs #16–#21.
+**End-of-session state (2026-06-22)**: 1681 Python + 204 Vitest tests passing, mypy clean
+(64 files), ruff clean, build clean. All work merged to `main` via PRs #16–#22 (+ this fix).

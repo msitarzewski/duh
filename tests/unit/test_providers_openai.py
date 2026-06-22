@@ -481,3 +481,59 @@ class TestCustomProviderId:
         assert provider.provider_id == "mystery"
         # No catalog for "mystery" -> falls back to openai's known models.
         assert provider._known_models is not None
+
+
+# ─── Temperature self-heal (cross-provider safety net) ────────
+
+
+class TestTemperatureSelfHeal:
+    def _bad_request(self, msg: str) -> openai.BadRequestError:
+        response = MagicMock()
+        response.status_code = 400
+        response.headers = {}
+        return openai.BadRequestError(message=msg, response=response, body=None)
+
+    async def test_retries_without_temperature_on_400(self):
+        """A temperature-deprecated 400 is retried without temperature and
+        the model is recorded so later calls skip it."""
+        from duh.providers import temperature as temp_mod
+
+        temp_mod._LEARNED_NO_TEMPERATURE.discard("brand-new-model")
+        client = _make_client()
+        client.chat.completions.create = AsyncMock(
+            side_effect=[
+                self._bad_request(
+                    "Unsupported value: 'temperature' does not support 0.7"
+                ),
+                _make_response(),
+            ]
+        )
+        provider = OpenAIProvider(client=client)
+        try:
+            resp = await provider.send(
+                [PromptMessage(role="user", content="hi")],
+                "brand-new-model",
+                temperature=0.7,
+            )
+            assert resp.content
+            assert client.chat.completions.create.call_count == 2
+            first = client.chat.completions.create.call_args_list[0].kwargs
+            second = client.chat.completions.create.call_args_list[1].kwargs
+            assert "temperature" in first
+            assert "temperature" not in second
+            assert temp_mod.omit_temperature("brand-new-model", set())
+        finally:
+            temp_mod._LEARNED_NO_TEMPERATURE.discard("brand-new-model")
+
+    async def test_non_temperature_400_not_retried(self):
+        """A 400 unrelated to temperature is not retried."""
+        client = _make_client()
+        client.chat.completions.create = AsyncMock(
+            side_effect=self._bad_request("messages: invalid role")
+        )
+        provider = OpenAIProvider(client=client)
+        with pytest.raises(Exception):  # noqa: B017
+            await provider.send(
+                [PromptMessage(role="user", content="hi")], "gpt-4o", temperature=0.7
+            )
+        assert client.chat.completions.create.call_count == 1

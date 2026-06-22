@@ -355,3 +355,60 @@ class TestTemperatureHandling:
             pass
         call_kwargs = client.messages.stream.call_args.kwargs
         assert "temperature" not in call_kwargs
+
+
+# ─── Temperature self-heal (cross-provider safety net) ────────
+
+
+class TestTemperatureSelfHeal:
+    def _bad_request(self, msg: str) -> anthropic.BadRequestError:
+        response = MagicMock()
+        response.status_code = 400
+        response.headers = {}
+        return anthropic.BadRequestError(message=msg, response=response, body=None)
+
+    async def test_retries_without_temperature_on_400(self):
+        """A 'temperature is deprecated' 400 is retried without temperature and
+        the model is recorded so later calls skip it."""
+        from duh.providers import temperature as temp_mod
+
+        temp_mod._LEARNED_NO_TEMPERATURE.discard("brand-new-claude")
+        client = _make_client()
+        stream_cm = client.messages.stream.return_value
+        client.messages.stream = MagicMock(
+            side_effect=[
+                self._bad_request("`temperature` is deprecated for this model"),
+                stream_cm,
+            ]
+        )
+        provider = AnthropicProvider(client=client)
+        try:
+            resp = await provider.send(
+                [PromptMessage(role="user", content="hi")],
+                "brand-new-claude",
+                temperature=0.7,
+            )
+            assert resp.content is not None
+            assert client.messages.stream.call_count == 2
+            first = client.messages.stream.call_args_list[0].kwargs
+            second = client.messages.stream.call_args_list[1].kwargs
+            assert "temperature" in first
+            assert "temperature" not in second
+            assert temp_mod.omit_temperature("brand-new-claude", set())
+        finally:
+            temp_mod._LEARNED_NO_TEMPERATURE.discard("brand-new-claude")
+
+    async def test_non_temperature_400_not_retried(self):
+        """A 400 unrelated to temperature is not retried."""
+        client = _make_client()
+        client.messages.stream = MagicMock(
+            side_effect=self._bad_request("invalid request: bad messages")
+        )
+        provider = AnthropicProvider(client=client)
+        with pytest.raises(Exception):  # noqa: B017
+            await provider.send(
+                [PromptMessage(role="user", content="hi")],
+                "claude-opus-4-6",
+                temperature=0.7,
+            )
+        assert client.messages.stream.call_count == 1

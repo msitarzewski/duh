@@ -41,10 +41,17 @@
   (`ThreadDetail`) identically; export per-view via an `exportSlot`
 - Markdown parity confirmed (same `<Markdown>`; `.duh-prose` has no own font-size)
 
+### Temperature Self-Heal (cross-provider safety net)
+- New `src/duh/providers/temperature.py`: runtime-learned `_LEARNED_NO_TEMPERATURE` set +
+  `omit_temperature` / `record_no_temperature` / `is_temperature_error`
+- OpenAI + Anthropic `send()` retry once without temperature on a temperature-related 400, record
+  the model, and skip it thereafter. `stream()` honors the learned set. Static catalog sets remain
+  the fast path. Live-verified against a real Anthropic 400. Closes the prior open follow-up.
+
 ### End-of-session state
-- **1677 Python + 204 Vitest tests**, mypy clean (63 files), ruff clean, build clean
-- **Open follow-ups**: (1) self-healing temperature retry as a cross-provider safety net (this bug
-  hit twice: gpt-5.5, then Opus 4.8); (2) gitignore `web/tsconfig.tsbuildinfo` (tracked build artifact)
+- **1681 Python + 204 Vitest tests**, mypy clean (64 files), ruff clean, build clean
+- **Resolved this session**: self-healing temperature retry; `web/tsconfig.tsbuildinfo` gitignored
+- **No open follow-ups outstanding from this session**
 
 ---
 
