@@ -238,6 +238,33 @@ class TestGetThread:
         assert turn["decision"] is None
         assert len(turn["contributions"]) == 1
 
+    async def test_returns_overview(self) -> None:
+        """The executive overview (thread summary) is returned for history."""
+        app = await _make_app()
+        async with app.state.db_factory() as session:
+            repo = MemoryRepository(session)
+            thread = await repo.create_thread("Has overview")
+            await repo.save_thread_summary(
+                thread.id, "Executive summary text.", "overview"
+            )
+            thread.status = "complete"
+            await session.commit()
+            tid = thread.id
+
+        client = TestClient(app, raise_server_exceptions=False)
+        resp = client.get(f"/api/threads/{tid}")
+        assert resp.status_code == 200
+        assert resp.json()["overview"] == "Executive summary text."
+
+    async def test_overview_null_when_absent(self) -> None:
+        """Threads without a summary report a null overview."""
+        app = await _make_app()
+        tid = await _seed_thread(app, "No overview")
+        client = TestClient(app, raise_server_exceptions=False)
+        resp = client.get(f"/api/threads/{tid}")
+        assert resp.status_code == 200
+        assert resp.json()["overview"] is None
+
     async def test_usage_prefers_stored_usage_json(self) -> None:
         """Run-level usage_json overrides the per-contribution sum."""
         app = await _make_app()

@@ -1,9 +1,8 @@
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useThreadsStore } from '@/stores'
-import { GlassPanel, GlowButton, Skeleton, Badge, ExportMenu, Markdown, Disclosure } from '@/components/shared'
-import { ConfidenceMeter } from '@/components/consensus/ConfidenceMeter'
-import { DissentBanner } from '@/components/consensus/DissentBanner'
+import { GlassPanel, GlowButton, Skeleton, Badge, ExportMenu } from '@/components/shared'
+import { ConsensusReport } from '@/components/consensus/ConsensusReport'
 import { PhaseCard } from '@/components/consensus/PhaseCard'
 import { CostTicker } from '@/components/consensus/CostTicker'
 import type { Turn } from '@/api/types'
@@ -99,36 +98,23 @@ export function ThreadDetail() {
             <Badge variant={statusVariant[currentThread.status] ?? 'default'} size="md">
               {currentThread.status}
             </Badge>
-            {currentThread.status === 'complete' && <ExportMenu thread={currentThread} />}
           </div>
         </div>
       </GlassPanel>
 
       {finalDecision && (
         <div id="thread-decision">
-          <GlassPanel glow="strong" padding="lg" className="animate-fade-in-up">
-            <Disclosure
-              header={
-                <>
-                  <span className="font-mono text-xs text-[var(--color-green)] font-semibold">DECISION</span>
-                  <div className="flex items-center gap-2 ml-auto">
-                    <ConfidenceMeter value={finalDecision.confidence} size={48} label="Confidence" />
-                    <ConfidenceMeter value={finalDecision.rigor} size={36} label="Rigor" />
-                  </div>
-                </>
-              }
-              defaultOpen
-            >
-              <div className="text-sm">
-                <Markdown>{finalDecision.content}</Markdown>
-              </div>
-              {finalDecision.dissent && (
-                <div className="mt-4">
-                  <DissentBanner dissent={finalDecision.dissent} defaultOpen={false} />
-                </div>
-              )}
-            </Disclosure>
-          </GlassPanel>
+          <ConsensusReport
+            label="CONSENSUS REACHED"
+            decision={finalDecision.content}
+            overview={currentThread.overview}
+            confidence={finalDecision.confidence}
+            rigor={finalDecision.rigor}
+            dissent={finalDecision.dissent}
+            cost={currentThread.usage?.cost_usd ?? null}
+            usage={currentThread.usage}
+            exportSlot={<ExportMenu thread={currentThread} />}
+          />
         </div>
       )}
 

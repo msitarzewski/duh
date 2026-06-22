@@ -141,6 +141,7 @@ export interface ThreadDetail {
   question: string
   status: string
   created_at: string
+  overview?: string | null
   turns: Turn[]
   followups?: string[]
   usage?: Usage | null
