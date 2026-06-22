@@ -1,10 +1,54 @@
 # Active Context
 
-**Last Updated**: 2026-06-21
-**Current Phase**: Token usage tracking + npm wrapper — committed and pushed to main
+**Last Updated**: 2026-06-22
+**Current Phase**: Catalog refresh + tooling, incremental persistence, Cloudflare/GLM provider, unified report — all merged to main (PRs #16–#21)
 **Next Action**: Continue feature work or address open questions
 
-## Latest Work (2026-06-21)
+## Latest Work (2026-06-22) — PRs #16–#21
+
+### Model Catalog Refresh + Refresh Tool (PR #16 catalog, #19)
+- Added frontier models (Opus 4.8/4.7, GPT-5.5, GPT-5.4 mini, Gemini 3.5 Flash); dropped deprecated o3
+- Fixed GA context windows (Opus 4.6 + Sonnet 4.6 → 1M; Sonnet 4.5 stays 200k — its 1M is beta-gated)
+- **Temperature sets** (the recurring gotcha): `NO_TEMPERATURE_MODELS` (OpenAI) gained `gpt-5.5`;
+  new `ANTHROPIC_NO_TEMPERATURE_MODELS` (Opus 4.8/4.7) fixed a production 400. `AnthropicProvider`
+  omits `temperature` for those in `send`/`stream`. The OpenAI no-temp set is coupled to
+  `_REASONING_EFFORT_MODELS` (effort=high forces temperature=default).
+- `scripts/refresh_catalog.py` — propose-only drift detector: diffs catalog vs truefoundry feed +
+  live APIs, hashes a per-model projection (`scripts/catalog_snapshot.json`), discovers new models,
+  and empirically probes OpenAI + Anthropic temperature. **Feed is reliable for price, wrong for behavior.**
+
+### Incremental Persistence + REST Unification (PR #16 persist, #17)
+- New `src/duh/memory/persist.py` `IncrementalPersister`: create thread `active` up front →
+  `persist_round()` commits each finished round → `finalize()` marks `complete` + attaches
+  overview/followups/usage. Mid-run crash leaves a real partial thread instead of nothing.
+- `ConsensusContext.snapshot_round()` extracted from `_archive_round`
+- WS streams `thread_started` (real id) early for mid-run deep-linking
+- REST `/api/ask` now persists the **full** debate via the shared path (was lite/decision-only);
+  `_run_consensus` gained an additive `on_thread_created` callback — 8-tuple return unchanged
+- 3 duplicated persist paths consolidated into the one module
+
+### Cloudflare Workers AI + Zhipu GLM-5.2 (PR #18)
+- `cloudflare` provider via Workers AI's OpenAI-compatible endpoint; `@cf/zai-org/glm-5.2` in catalog
+  (262k ctx, $1.40/$4.40 per Mtok)
+- `OpenAIProvider` generalized with optional `provider_id` → serves any OpenAI-compatible host
+- `.env`: `CLOUDFLARE_ACCOUNT_ID` + `CLOUDFLARE_WORKERS_AI_TOKEN` → loader builds the base URL
+- Live-validated (text + JSON mode); shows in `duh models`
+
+### Unified Consensus Report + Overview in History (PR #20, #21)
+- Copy/Export moved to top of report; dropdown downward + opaque + click-outside
+- `ThreadDetailResponse` now returns `overview` (history previously couldn't show the executive summary)
+- New shared `ConsensusReport` component renders **both** live (`ConsensusComplete`) and history
+  (`ThreadDetail`) identically; export per-view via an `exportSlot`
+- Markdown parity confirmed (same `<Markdown>`; `.duh-prose` has no own font-size)
+
+### End-of-session state
+- **1677 Python + 204 Vitest tests**, mypy clean (63 files), ruff clean, build clean
+- **Open follow-ups**: (1) self-healing temperature retry as a cross-provider safety net (this bug
+  hit twice: gpt-5.5, then Opus 4.8); (2) gitignore `web/tsconfig.tsbuildinfo` (tracked build artifact)
+
+---
+
+## Prior Work (2026-06-21)
 
 ### Token Usage Tracking (end-to-end)
 - `ProviderManager` accumulates `total_input_tokens` / `total_output_tokens` alongside `total_cost`, all reset in `reset_cost()`
@@ -119,9 +163,9 @@
 
 ## Current State
 
-- **Branch `main`** — all work committed and pushed
-- All previous features intact (v0.1-v0.6, PR #13-#15)
-- 1657 Python + 204 Vitest tests passing, build clean
+- **Branch `main`** — all work committed and pushed (through PR #21)
+- All previous features intact (v0.1-v0.6, PR #13-#21)
+- 1677 Python + 204 Vitest tests passing, mypy clean (63 files), build clean
 
 ## Open Questions (Still Unresolved)
 

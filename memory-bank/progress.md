@@ -1,10 +1,24 @@
 # Progress
 
-**Last Updated**: 2026-03-20
+**Last Updated**: 2026-06-22
 
 ---
 
-## Current State: Thread View Parity + PDF Overhaul + Server Fixes
+## Current State (2026-06-22): Catalog, Persistence, Cloudflare/GLM, Unified Report
+
+Merged to `main` via PRs #16–#21 (details in `tasks/2026-06/README.md` and `activeContext.md`):
+- **Model catalog refresh** + propose-only `scripts/refresh_catalog.py` drift tool; OpenAI + Anthropic
+  temperature correctness (`NO_TEMPERATURE_MODELS`, `ANTHROPIC_NO_TEMPERATURE_MODELS`)
+- **Incremental persistence** (`IncrementalPersister`) across CLI/WS/REST — mid-run crash leaves a real partial thread
+- **Cloudflare Workers AI provider** with Zhipu GLM-5.2; `OpenAIProvider` generalized to any OpenAI-compatible host
+- **Unified `ConsensusReport`** for live + history; history now shows the executive summary
+- **Prior (2026-06-21)**: token usage tracking end-to-end + `npm/like-duh` wrapper
+- **Tests**: 1677 Python + 204 Vitest, mypy clean (63 files), ruff clean, build clean
+- **Open follow-ups**: self-healing temperature retry (cross-provider); gitignore `web/tsconfig.tsbuildinfo`
+
+---
+
+## Prior State: Thread View Parity + PDF Overhaul + Server Fixes
 
 ### Thread View Parity + PDF Overhaul + Server/UI Fixes (2026-03-20)
 
