@@ -54,9 +54,25 @@ PROVIDER_CAPS: dict[str, ModelCapability] = {
 MODEL_CATALOG: dict[str, list[dict[str, Any]]] = {
     "anthropic": [
         {
+            "model_id": "claude-opus-4-8",
+            "display_name": "Claude Opus 4.8",
+            "context_window": 1_000_000,
+            "max_output_tokens": 128_000,
+            "input_cost_per_mtok": 5.00,
+            "output_cost_per_mtok": 25.00,
+        },
+        {
+            "model_id": "claude-opus-4-7",
+            "display_name": "Claude Opus 4.7",
+            "context_window": 1_000_000,
+            "max_output_tokens": 128_000,
+            "input_cost_per_mtok": 5.00,
+            "output_cost_per_mtok": 25.00,
+        },
+        {
             "model_id": "claude-opus-4-6",
             "display_name": "Claude Opus 4.6",
-            "context_window": 200_000,
+            "context_window": 1_000_000,
             "max_output_tokens": 128_000,
             "input_cost_per_mtok": 5.00,
             "output_cost_per_mtok": 25.00,
@@ -64,7 +80,7 @@ MODEL_CATALOG: dict[str, list[dict[str, Any]]] = {
         {
             "model_id": "claude-sonnet-4-6",
             "display_name": "Claude Sonnet 4.6",
-            "context_window": 200_000,
+            "context_window": 1_000_000,
             "max_output_tokens": 64_000,
             "input_cost_per_mtok": 3.00,
             "output_cost_per_mtok": 15.00,
@@ -88,12 +104,28 @@ MODEL_CATALOG: dict[str, list[dict[str, Any]]] = {
     ],
     "openai": [
         {
+            "model_id": "gpt-5.5",
+            "display_name": "GPT-5.5",
+            "context_window": 1_050_000,
+            "max_output_tokens": 128_000,
+            "input_cost_per_mtok": 5.00,
+            "output_cost_per_mtok": 30.00,
+        },
+        {
             "model_id": "gpt-5.4",
             "display_name": "GPT-5.4",
-            "context_window": 1_048_576,
+            "context_window": 1_050_000,
             "max_output_tokens": 128_000,
             "input_cost_per_mtok": 2.50,
             "output_cost_per_mtok": 15.00,
+        },
+        {
+            "model_id": "gpt-5.4-mini",
+            "display_name": "GPT-5.4 mini",
+            "context_window": 400_000,
+            "max_output_tokens": 128_000,
+            "input_cost_per_mtok": 0.75,
+            "output_cost_per_mtok": 4.50,
         },
         {
             "model_id": "gpt-5.2",
@@ -111,16 +143,16 @@ MODEL_CATALOG: dict[str, list[dict[str, Any]]] = {
             "input_cost_per_mtok": 0.25,
             "output_cost_per_mtok": 2.00,
         },
-        {
-            "model_id": "o3",
-            "display_name": "o3",
-            "context_window": 200_000,
-            "max_output_tokens": 100_000,
-            "input_cost_per_mtok": 2.00,
-            "output_cost_per_mtok": 8.00,
-        },
     ],
     "google": [
+        {
+            "model_id": "gemini-3.5-flash",
+            "display_name": "Gemini 3.5 Flash",
+            "context_window": 1_048_576,
+            "max_output_tokens": 65_536,
+            "input_cost_per_mtok": 1.50,
+            "output_cost_per_mtok": 9.00,
+        },
         {
             "model_id": "gemini-3.1-pro-preview",
             "display_name": "Gemini 3.1 Pro (Preview)",
@@ -243,6 +275,7 @@ NO_TEMPERATURE_MODELS: set[str] = {
     "gpt-5-nano",
     "gpt-5.2",
     "gpt-5.4",
+    "gpt-5.5",
 }
 
 # ── Providers that are challenger-only (not proposer-eligible) ──

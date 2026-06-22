@@ -51,6 +51,7 @@ _REASONING_EFFORT_MODELS: set[str] = {
     "gpt-5-nano",
     "gpt-5.2",
     "gpt-5.4",
+    "gpt-5.5",
 }
 
 
