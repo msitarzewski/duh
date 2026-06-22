@@ -23,7 +23,11 @@ from duh.providers.base import (
     TokenUsage,
     ToolCallData,
 )
-from duh.providers.catalog import MODEL_CATALOG, PROVIDER_CAPS
+from duh.providers.catalog import (
+    ANTHROPIC_NO_TEMPERATURE_MODELS,
+    MODEL_CATALOG,
+    PROVIDER_CAPS,
+)
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
@@ -120,10 +124,12 @@ class AnthropicProvider:
         kwargs: dict[str, Any] = {
             "model": model_id,
             "max_tokens": max_tokens,
-            "temperature": temperature,
             "system": system,
             "messages": api_messages,
         }
+        # Newest thinking models reject temperature; older ones accept it.
+        if model_id not in ANTHROPIC_NO_TEMPERATURE_MODELS:
+            kwargs["temperature"] = temperature
         if stop_sequences:
             kwargs["stop_sequences"] = stop_sequences
         if tools:
@@ -243,10 +249,11 @@ class AnthropicProvider:
         kwargs: dict[str, Any] = {
             "model": model_id,
             "max_tokens": max_tokens,
-            "temperature": temperature,
             "system": system,
             "messages": api_messages,
         }
+        if model_id not in ANTHROPIC_NO_TEMPERATURE_MODELS:
+            kwargs["temperature"] = temperature
         if stop_sequences:
             kwargs["stop_sequences"] = stop_sequences
 

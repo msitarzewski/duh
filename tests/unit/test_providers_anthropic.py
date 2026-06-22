@@ -313,3 +313,45 @@ class TestHealthCheck:
         client.messages.create.side_effect = Exception("connection failed")
         provider = AnthropicProvider(client=client)
         assert await provider.health_check() is False
+
+
+# ── Temperature handling (newest models reject it) ───────────────
+
+
+class TestTemperatureHandling:
+    async def test_omits_temperature_for_no_temp_model(self):
+        """Opus 4.8 rejects temperature -> it must not be sent."""
+        client = _make_client()
+        provider = AnthropicProvider(client=client)
+        await provider.send(
+            [PromptMessage(role="user", content="hi")],
+            "claude-opus-4-8",
+            temperature=0.7,
+        )
+        call_kwargs = client.messages.stream.call_args.kwargs
+        assert "temperature" not in call_kwargs
+
+    async def test_sends_temperature_for_regular_model(self):
+        """Opus 4.6 still accepts temperature -> it is sent."""
+        client = _make_client()
+        provider = AnthropicProvider(client=client)
+        await provider.send(
+            [PromptMessage(role="user", content="hi")],
+            "claude-opus-4-6",
+            temperature=0.55,
+        )
+        call_kwargs = client.messages.stream.call_args.kwargs
+        assert call_kwargs["temperature"] == 0.55
+
+    async def test_stream_omits_temperature_for_no_temp_model(self):
+        """The streaming path also omits temperature for Opus 4.8."""
+        client = _make_client()
+        provider = AnthropicProvider(client=client)
+        async for _ in provider.stream(
+            [PromptMessage(role="user", content="hi")],
+            "claude-opus-4-8",
+            temperature=0.7,
+        ):
+            pass
+        call_kwargs = client.messages.stream.call_args.kwargs
+        assert "temperature" not in call_kwargs

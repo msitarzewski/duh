@@ -337,10 +337,16 @@ class TestCloudflareEnv:
         )
 
     def test_cloudflare_absent_without_env(self, tmp_path, monkeypatch):
-        """Missing either var -> no cloudflare provider."""
+        """Missing either var -> no cloudflare provider.
+
+        Set to empty rather than delete: load_config() runs load_dotenv(),
+        which would otherwise repopulate these from the repo .env. An empty
+        env var is treated as "existing" (not overridden) and as absent by
+        _resolve_cloudflare.
+        """
         self._isolate(tmp_path, monkeypatch)
-        monkeypatch.delenv("CLOUDFLARE_ACCOUNT_ID", raising=False)
-        monkeypatch.delenv("CLOUDFLARE_WORKERS_AI_TOKEN", raising=False)
+        monkeypatch.setenv("CLOUDFLARE_ACCOUNT_ID", "")
+        monkeypatch.setenv("CLOUDFLARE_WORKERS_AI_TOKEN", "")
 
         cfg = load_config()
         assert "cloudflare" not in cfg.providers
@@ -349,7 +355,7 @@ class TestCloudflareEnv:
         """Only the account ID (no token) -> not configured."""
         self._isolate(tmp_path, monkeypatch)
         monkeypatch.setenv("CLOUDFLARE_ACCOUNT_ID", "acct123")
-        monkeypatch.delenv("CLOUDFLARE_WORKERS_AI_TOKEN", raising=False)
+        monkeypatch.setenv("CLOUDFLARE_WORKERS_AI_TOKEN", "")
 
         cfg = load_config()
         assert "cloudflare" not in cfg.providers

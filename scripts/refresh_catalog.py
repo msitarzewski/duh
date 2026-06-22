@@ -38,7 +38,11 @@ from typing import Any
 
 from dotenv import load_dotenv
 
-from duh.providers.catalog import MODEL_CATALOG, NO_TEMPERATURE_MODELS
+from duh.providers.catalog import (
+    ANTHROPIC_NO_TEMPERATURE_MODELS,
+    MODEL_CATALOG,
+    NO_TEMPERATURE_MODELS,
+)
 
 # truefoundry provider directory names (differ from our provider_id keys)
 _TF_BASE = "https://raw.githubusercontent.com/truefoundry/models/main/providers"
@@ -196,6 +200,33 @@ def probe_openai_temperature(model_id: str) -> bool | None:
     return True
 
 
+def probe_anthropic_temperature(model_id: str) -> bool | None:
+    """True if the model accepts temperature, False if it rejects, None on error."""
+    key = os.environ.get("ANTHROPIC_API_KEY")
+    if not key:
+        return None
+    resp = _post_json(
+        "https://api.anthropic.com/v1/messages",
+        {
+            "x-api-key": key,
+            "anthropic-version": "2023-06-01",
+            "Content-Type": "application/json",
+        },
+        {
+            "model": model_id,
+            "max_tokens": 16,
+            "temperature": 0.7,
+            "messages": [{"role": "user", "content": "hi"}],
+        },
+    )
+    if resp is None:
+        return None
+    err = resp.get("error") if isinstance(resp, dict) else None
+    if isinstance(err, dict):
+        return False if "temperature" in err.get("message", "") else None
+    return True
+
+
 # ── report ─────────────────────────────────────────────────────
 
 
@@ -288,6 +319,28 @@ def main() -> int:
                 print(
                     f"  {mid}: accepts temp but IS in NO_TEMPERATURE_MODELS"
                     " — review (may be intentional w/ reasoning_effort)"
+                )
+            else:
+                print(f"  {mid}: ok ({'no-temp' if rejects else 'temp'})")
+
+        print("\n## BEHAVIOR — Anthropic temperature probe vs catalog set")
+        anthropic_ids = {m["model_id"] for m in MODEL_CATALOG.get("anthropic", [])}
+        for mid in sorted(anthropic_ids):
+            accepts = probe_anthropic_temperature(mid)
+            if accepts is None:
+                print(f"  {mid}: probe inconclusive")
+                continue
+            listed = mid in ANTHROPIC_NO_TEMPERATURE_MODELS
+            rejects = not accepts
+            if rejects and not listed:
+                print(
+                    f"  {mid}: REJECTS temp but NOT in "
+                    "ANTHROPIC_NO_TEMPERATURE_MODELS — ADD"
+                )
+            elif accepts and listed:
+                print(
+                    f"  {mid}: accepts temp but IS in "
+                    "ANTHROPIC_NO_TEMPERATURE_MODELS — REMOVE"
                 )
             else:
                 print(f"  {mid}: ok ({'no-temp' if rejects else 'temp'})")
