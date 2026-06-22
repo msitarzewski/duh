@@ -673,3 +673,25 @@ class TestAskIntegration:
         assert "SQLite" in result.output or "repository" in result.output
         assert "Confidence:" in result.output
         assert "Cost:" in result.output
+
+
+# ── Generic OpenAI-compatible provider setup ─────────────────────
+
+
+class TestSetupProvidersCloudflare:
+    async def test_registers_cloudflare_glm(self) -> None:
+        """A config with a base_url+key provider registers it under its id."""
+        from duh.cli.app import _setup_providers
+        from duh.config.schema import DuhConfig, ProviderConfig
+
+        config = DuhConfig()
+        # Other default providers have no api_key -> skipped by _setup_providers.
+        config.providers["cloudflare"] = ProviderConfig(
+            api_key="tok",
+            base_url="https://api.cloudflare.com/client/v4/accounts/acct/ai/v1",
+        )
+
+        pm = await _setup_providers(config)
+        models = pm.list_all_models()
+        cf = [m for m in models if m.provider_id == "cloudflare"]
+        assert any(m.model_id == "@cf/zai-org/glm-5.2" for m in cf)

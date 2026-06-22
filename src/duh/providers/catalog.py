@@ -47,6 +47,13 @@ PROVIDER_CAPS: dict[str, ModelCapability] = {
         | ModelCapability.JSON_MODE
         | ModelCapability.WEB_SEARCH
     ),
+    # Cloudflare Workers AI (OpenAI-compatible endpoint), e.g. Zhipu GLM
+    "cloudflare": (
+        ModelCapability.TEXT
+        | ModelCapability.STREAMING
+        | ModelCapability.SYSTEM_PROMPT
+        | ModelCapability.JSON_MODE
+    ),
 }
 
 # ── Model catalog keyed by provider_id ─────────────────────────
@@ -260,6 +267,18 @@ MODEL_CATALOG: dict[str, list[dict[str, Any]]] = {
             "max_output_tokens": 8_192,
             "input_cost_per_mtok": 2.0,
             "output_cost_per_mtok": 8.0,
+        },
+    ],
+    "cloudflare": [
+        {
+            # Zhipu GLM-5.2 served on Cloudflare Workers AI. Pricing/context per
+            # the Workers AI model page (max_output not published; conservative).
+            "model_id": "@cf/zai-org/glm-5.2",
+            "display_name": "GLM-5.2 (Cloudflare)",
+            "context_window": 262_144,
+            "max_output_tokens": 32_768,
+            "input_cost_per_mtok": 1.40,
+            "output_cost_per_mtok": 4.40,
         },
     ],
 }
