@@ -132,23 +132,29 @@ class ConsensusContext:
         self.dissent = None
         self.converged = False
 
+    def snapshot_round(self) -> RoundResult:
+        """Build a RoundResult from the current (in-progress) round data.
+
+        Used both to archive a finished round to ``round_history`` and to
+        persist a round incrementally before it is archived.
+        """
+        return RoundResult(
+            round_number=self.current_round,
+            proposal=self.proposal or "",
+            proposal_model=self.proposal_model or "",
+            challenges=tuple(self.challenges),
+            revision=self.revision or "",
+            decision=self.decision or "",
+            confidence=self.confidence,
+            rigor=self.rigor,
+            dissent=self.dissent,
+            proposal_citations=tuple(self.proposal_citations),
+            revision_citations=tuple(self.revision_citations),
+        )
+
     def _archive_round(self) -> None:
         """Archive current round data to history."""
-        self.round_history.append(
-            RoundResult(
-                round_number=self.current_round,
-                proposal=self.proposal or "",
-                proposal_model=self.proposal_model or "",
-                challenges=tuple(self.challenges),
-                revision=self.revision or "",
-                decision=self.decision or "",
-                confidence=self.confidence,
-                rigor=self.rigor,
-                dissent=self.dissent,
-                proposal_citations=tuple(self.proposal_citations),
-                revision_citations=tuple(self.revision_citations),
-            )
-        )
+        self.round_history.append(self.snapshot_round())
 
 
 # ── State machine ─────────────────────────────────────────────
