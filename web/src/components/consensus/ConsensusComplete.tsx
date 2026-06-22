@@ -1,8 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
-import { GlassPanel, GlowButton, Markdown, Disclosure } from '@/components/shared'
-import { ConfidenceMeter } from './ConfidenceMeter'
-import { DissentBanner } from './DissentBanner'
-import { CostTicker } from './CostTicker'
+import { GlowButton } from '@/components/shared'
+import { ConsensusReport } from './ConsensusReport'
 import { useConsensusStore } from '@/stores/consensus'
 import type { RoundData } from '@/stores/consensus'
 import type { Usage } from '@/api/types'
@@ -101,7 +99,6 @@ function downloadFile(content: string | Blob, filename: string, mimeType: string
 }
 
 export function ConsensusComplete({ decision, confidence, rigor, dissent, cost, usage, collapsible, overview }: ConsensusCompleteProps) {
-  const [copied, setCopied] = useState(false)
   const [exportOpen, setExportOpen] = useState(false)
   const exportRef = useRef<HTMLDivElement>(null)
   const { question, rounds, threadId } = useConsensusStore()
@@ -117,12 +114,6 @@ export function ConsensusComplete({ decision, confidence, rigor, dissent, cost, 
     document.addEventListener('mousedown', handler)
     return () => document.removeEventListener('mousedown', handler)
   }, [exportOpen])
-
-  const handleCopy = async () => {
-    await navigator.clipboard.writeText(overview ?? decision)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
-  }
 
   const handleExportMarkdown = (content: 'full' | 'decision') => {
     const md = generateExportMarkdown(question, decision, confidence, rigor, dissent, cost, rounds, content, true, overview)
@@ -140,105 +131,58 @@ export function ConsensusComplete({ decision, confidence, rigor, dissent, cost, 
     setExportOpen(false)
   }
 
-  const header = (
-    <>
-      <span className="font-mono text-xs text-[var(--color-green)] font-semibold">CONSENSUS REACHED</span>
-      <CostTicker cost={cost} usage={usage} />
-      <div className="flex items-center gap-3 ml-auto">
-        <ConfidenceMeter value={confidence} label="Confidence" />
-        <ConfidenceMeter value={rigor} size={48} label="Rigor" />
-      </div>
-    </>
-  )
-
-  const actions = (
-    <div className="flex gap-2 mb-4">
-      <GlowButton variant="ghost" size="sm" onClick={handleCopy}>
-        {copied ? 'Copied' : 'Copy'}
+  // Live export uses round data from the store (the thread may not be loaded
+  // as a ThreadDetail yet). The stored view uses the shared ExportMenu instead.
+  const exportSlot = (
+    <div className="relative" ref={exportRef}>
+      <GlowButton variant="ghost" size="sm" onClick={() => setExportOpen(!exportOpen)}>
+        Export
       </GlowButton>
-      <div className="relative" ref={exportRef}>
-        <GlowButton variant="ghost" size="sm" onClick={() => setExportOpen(!exportOpen)}>
-          Export
-        </GlowButton>
-        {exportOpen && (
-          <div className="absolute top-full left-0 mt-1 bg-[var(--color-surface-solid)] border border-[var(--color-border)] rounded-[var(--radius-md)] shadow-lg py-1 min-w-[200px] z-[var(--z-dropdown)]">
-            <button
-              className="w-full text-left px-3 py-1.5 text-xs hover:bg-[var(--color-surface-hover)] text-[var(--color-text)]"
-              onClick={() => handleExportMarkdown('decision')}
-            >
-              Markdown (decision only)
-            </button>
-            <button
-              className="w-full text-left px-3 py-1.5 text-xs hover:bg-[var(--color-surface-hover)] text-[var(--color-text)]"
-              onClick={() => handleExportMarkdown('full')}
-            >
-              Markdown (full report)
-            </button>
-            <button
-              className="w-full text-left px-3 py-1.5 text-xs hover:bg-[var(--color-surface-hover)] text-[var(--color-text)]"
-              onClick={() => handleExportPdf('decision')}
-            >
-              PDF (decision only)
-            </button>
-            <button
-              className="w-full text-left px-3 py-1.5 text-xs hover:bg-[var(--color-surface-hover)] text-[var(--color-text)]"
-              onClick={() => handleExportPdf('full')}
-            >
-              PDF (full report)
-            </button>
-          </div>
-        )}
-      </div>
+      {exportOpen && (
+        <div className="absolute top-full left-0 mt-1 bg-[var(--color-surface-solid)] border border-[var(--color-border)] rounded-[var(--radius-md)] shadow-lg py-1 min-w-[200px] z-[var(--z-dropdown)]">
+          <button
+            className="w-full text-left px-3 py-1.5 text-xs hover:bg-[var(--color-surface-hover)] text-[var(--color-text)]"
+            onClick={() => handleExportMarkdown('decision')}
+          >
+            Markdown (decision only)
+          </button>
+          <button
+            className="w-full text-left px-3 py-1.5 text-xs hover:bg-[var(--color-surface-hover)] text-[var(--color-text)]"
+            onClick={() => handleExportMarkdown('full')}
+          >
+            Markdown (full report)
+          </button>
+          <button
+            className="w-full text-left px-3 py-1.5 text-xs hover:bg-[var(--color-surface-hover)] text-[var(--color-text)]"
+            onClick={() => handleExportPdf('decision')}
+          >
+            PDF (decision only)
+          </button>
+          <button
+            className="w-full text-left px-3 py-1.5 text-xs hover:bg-[var(--color-surface-hover)] text-[var(--color-text)]"
+            onClick={() => handleExportPdf('full')}
+          >
+            PDF (full report)
+          </button>
+        </div>
+      )}
     </div>
   )
 
-  const body = (
-    <>
-      {actions}
-      {overview ? (
-        <>
-          <Markdown className="text-sm">{overview}</Markdown>
-          <div className="mt-4">
-            <Disclosure header={<span className="font-mono text-xs text-[var(--color-text-dim)]">Full Decision</span>} defaultOpen={false}>
-              <Markdown className="text-sm">{decision}</Markdown>
-            </Disclosure>
-          </div>
-        </>
-      ) : (
-        <Markdown className="text-sm">{decision}</Markdown>
-      )}
-    </>
-  )
-
-  if (collapsible) {
-    return (
-      <div className="space-y-4 animate-fade-in-up">
-        <GlassPanel glow="strong" padding="lg">
-          <Disclosure header={header} defaultOpen>
-            {body}
-            {dissent && <div className="mt-4"><DissentBanner dissent={dissent} /></div>}
-          </Disclosure>
-        </GlassPanel>
-      </div>
-    )
-  }
-
   return (
     <div className="space-y-4 animate-fade-in-up">
-      <GlassPanel glow="strong" padding="lg">
-        <div className="flex items-start justify-between gap-4 mb-4">
-          <div className="flex items-center gap-3">
-            <span className="font-mono text-xs text-[var(--color-green)] font-semibold">CONSENSUS REACHED</span>
-            <CostTicker cost={cost} usage={usage} />
-          </div>
-          <div className="flex items-center gap-3">
-            <ConfidenceMeter value={confidence} label="Confidence" />
-            <ConfidenceMeter value={rigor} size={48} label="Rigor" />
-          </div>
-        </div>
-        {body}
-        {dissent && <div className="mt-4"><DissentBanner dissent={dissent} /></div>}
-      </GlassPanel>
+      <ConsensusReport
+        label="CONSENSUS REACHED"
+        decision={decision}
+        overview={overview}
+        confidence={confidence}
+        rigor={rigor}
+        dissent={dissent}
+        cost={cost}
+        usage={usage}
+        exportSlot={exportSlot}
+        collapsible={collapsible}
+      />
     </div>
   )
 }

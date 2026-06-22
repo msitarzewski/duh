@@ -61,6 +61,7 @@ class ThreadDetailResponse(BaseModel):
     question: str
     status: str
     created_at: str
+    overview: str | None = None
     turns: list[TurnResponse] = Field(default_factory=list)
     followups: list[str] = Field(default_factory=list)
     usage: UsageSummary = UsageSummary()
@@ -236,11 +237,15 @@ def _build_thread_detail(thread: object) -> ThreadDetailResponse:
             total_out = int(stored.get("output_tokens", total_out))
             total_cost = float(stored.get("cost_usd", total_cost))
 
+    summary = getattr(thread, "summary", None)
+    overview = summary.summary if summary else None
+
     return ThreadDetailResponse(
         thread_id=thread.id,  # type: ignore[attr-defined]
         question=thread.question,  # type: ignore[attr-defined]
         status=thread.status,  # type: ignore[attr-defined]
         created_at=thread.created_at.isoformat(),  # type: ignore[attr-defined]
+        overview=overview,
         turns=turns,
         followups=followups,
         usage=UsageSummary(
