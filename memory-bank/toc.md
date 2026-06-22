@@ -3,8 +3,8 @@
 ## Core Files
 - [projectbrief.md](./projectbrief.md) — Vision, tenets, architecture, build sequence
 - [techContext.md](./techContext.md) — Tech stack decisions with rationale (Python, Docker, SQLAlchemy, frontend, tools, etc.)
-- [decisions.md](./decisions.md) — Architectural decisions with context, alternatives, and consequences (26 ADRs)
-- [activeContext.md](./activeContext.md) — Current state, post PR #14 — follow-ups, revision citations, CLI persistence
+- [decisions.md](./decisions.md) — Architectural decisions with context, alternatives, and consequences (30 ADRs)
+- [activeContext.md](./activeContext.md) — Current state (2026-06-22), PRs #16–#21: catalog refresh + tooling, incremental persistence, Cloudflare/GLM provider, unified report
 - [progress.md](./progress.md) — Milestone tracking, what's built, what's next
 - [competitive-landscape.md](./competitive-landscape.md) — Research on existing tools, frameworks, and academic work
 - [quick-start.md](./quick-start.md) — Session entry point, v0.5 complete, key file references
@@ -29,6 +29,13 @@
 - [tasks/2026-02/150215_provider-interface.md](./tasks/2026-02/150215_provider-interface.md) — v0.1 Task 3: provider adapter interface
 - [tasks/2026-02/150215_configuration.md](./tasks/2026-02/150215_configuration.md) — v0.1 Task 4: configuration
 - [tasks/2026-02/170217_v04-web-ui.md](./tasks/2026-02/170217_v04-web-ui.md) — v0.4: Web UI implementation (React, Three.js, WebSocket)
+- [tasks/2026-03/README.md](./tasks/2026-03/README.md) — March 2026 monthly summary (password reset, refinement, citations, thread parity, PDF overhaul)
+- [tasks/2026-06/README.md](./tasks/2026-06/README.md) — June 2026 monthly summary
+- [tasks/2026-06/260621_token-usage-tracking.md](./tasks/2026-06/260621_token-usage-tracking.md) — token usage end-to-end + npm wrapper
+- [tasks/2026-06/260622_model-catalog-refresh.md](./tasks/2026-06/260622_model-catalog-refresh.md) — catalog refresh, refresh tool, OpenAI/Anthropic temperature fixes
+- [tasks/2026-06/260622_incremental-persistence.md](./tasks/2026-06/260622_incremental-persistence.md) — IncrementalPersister + REST unification
+- [tasks/2026-06/260622_cloudflare-glm-provider.md](./tasks/2026-06/260622_cloudflare-glm-provider.md) — Cloudflare Workers AI + Zhipu GLM-5.2
+- [tasks/2026-06/260622_unified-consensus-report.md](./tasks/2026-06/260622_unified-consensus-report.md) — shared ConsensusReport + overview in history
 
 ## Phase 0 Code (not memory bank — in repo root)
 - `phase0/` — Benchmark framework (config, models, prompts, methods, questions, runner, judge, analyze)

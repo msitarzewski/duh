@@ -1,6 +1,6 @@
 # Architectural Decisions
 
-**Last Updated**: 2026-03-08
+**Last Updated**: 2026-06-22
 
 ---
 
@@ -438,3 +438,57 @@
 - Sequential challengers (defeats the purpose of multi-model)
 **Consequences**: First challenger to respond appears immediately. More engaging real-time experience. WS test mocks now patch `_stream_challenges` instead of `handle_challenge`. Challenge order in UI reflects completion speed, not configuration order.
 **References**: `src/duh/api/routes/ws.py:253-347`, `tests/unit/test_api_ws.py`
+
+---
+
+## 2026-06-22: Incremental Per-Round Persistence Over Single Write at COMPLETE
+
+**Status**: Approved (implemented)
+**Context**: All three persistence paths (CLI, WebSocket, REST) built the full thread in memory and wrote once at COMPLETE. A crash mid-run lost the entire consensus. REST additionally had a "lite" path that saved only the decision.
+**Decision**: A single shared `IncrementalPersister` (`src/duh/memory/persist.py`): create the thread `active` up front, commit each finished round in its own transaction, finalize to `complete` at the end. All three entry points use it. `_run_consensus` exposes the created thread id via an additive `on_thread_created` callback (keeping the 8-tuple return stable).
+**Alternatives**:
+- Keep single-write (simpler, but mid-run crash = total loss)
+- Write-ahead log / event sourcing (more robust, much heavier for a SQLite app)
+- Bump `_run_consensus` to a 9-tuple to return the id (breaks ~7 callers + test mocks)
+**Consequences**: Mid-run crash leaves a real partial `active` thread. Three duplicated implementations collapsed into one. Final DB state identical to before, so state-asserting tests stayed green.
+**References**: `tasks/2026-06/260622_incremental-persistence.md`, `src/duh/memory/persist.py`
+
+---
+
+## 2026-06-22: Empirical Behavior Probing + Propose-Only Catalog Refresh Over Trusting Feeds
+
+**Status**: Approved (implemented)
+**Context**: The model catalog goes stale (new models, price changes, deprecations). A community feed (truefoundry/models) has the data but is unreliable on *behavioral* fields — it was wrong about GPT-5.5 rejecting temperature.
+**Decision**: Model IDs come from live provider APIs; pricing/context/status from the feed, cross-checked against known anchors; **temperature/behavior is probed against the live endpoint, never trusted**. `scripts/refresh_catalog.py` is a manual, propose-only tool — it diffs and reports, never auto-edits `catalog.py`. Temperature membership is encoded in `NO_TEMPERATURE_MODELS` (OpenAI) and `ANTHROPIC_NO_TEMPERATURE_MODELS`.
+**Alternatives**:
+- Trust the feed wholesale (would have shipped a gpt-5.5 temperature bug)
+- Runtime fetch of the catalog (adds a third-party dependency to billing-critical cost math + an availability surface)
+- Self-healing retry on the "temperature deprecated" 400 (more robust; deferred as a cross-provider safety net — see open follow-up)
+**Consequences**: No fabricated catalog data. The refresh tool caught two of my own context-window mistakes during development. The static-set approach must be maintained per release — the tool now probes both OpenAI and Anthropic so drift is visible. Note: this class of bug bit users twice (gpt-5.5, then Opus 4.8).
+**References**: `tasks/2026-06/260622_model-catalog-refresh.md`, `scripts/refresh_catalog.py`
+
+---
+
+## 2026-06-22: One OpenAI-Compatible Adapter for Any Host (provider_id)
+
+**Status**: Approved (implemented)
+**Context**: `OpenAIProvider`'s `provider_id` was hardcoded to `"openai"`, so it couldn't serve a second OpenAI-compatible host (e.g. Cloudflare Workers AI) without colliding. Adding GLM-5.2 needed a distinct provider.
+**Decision**: `OpenAIProvider` takes an optional `provider_id` and resolves its catalog/capabilities from it. `_setup_providers` registers any enabled provider that has a `base_url` + key as an OpenAI-compatible adapter under its config name. Cloudflare is configured purely from `CLOUDFLARE_ACCOUNT_ID` + `CLOUDFLARE_WORKERS_AI_TOKEN`.
+**Alternatives**:
+- A bespoke `CloudflareProvider` class (duplicates the OpenAI adapter)
+- Repoint the existing `openai` provider's base_url (would replace real OpenAI — can't run both)
+**Consequences**: Any OpenAI-compatible host (Cloudflare, Groq, Together, OpenRouter, AI Gateway) works by config alone. GLM-5.2 runs alongside the existing panel.
+**References**: `tasks/2026-06/260622_cloudflare-glm-provider.md`, `src/duh/providers/openai.py`
+
+---
+
+## 2026-06-22: One Shared ConsensusReport for Live and History Views
+
+**Status**: Approved (implemented)
+**Context**: The live view and the stored-thread view rendered the decision differently, and history couldn't show the executive summary (the thread-detail API never returned the overview).
+**Decision**: `ThreadDetailResponse` returns `overview`; a shared `ConsensusReport` component renders the decision block (meters, Copy/Export at top, executive-overview-first with the full decision in a disclosure, dissent) for both `ConsensusComplete` and `ThreadDetail`. Export differs per-view via an `exportSlot` (store-based dropdown live; shared `ExportMenu` for stored threads).
+**Alternatives**:
+- Keep two displays (the divergence the user objected to)
+- Force the live view to build a `ThreadDetail` object to reuse `ExportMenu` (awkward — no turns/contributions mid-run)
+**Consequences**: Identical rendering across both contexts; history finally shows the executive summary. Export stays per-view but in the same position.
+**References**: `tasks/2026-06/260622_unified-consensus-report.md`, `web/src/components/consensus/ConsensusReport.tsx`
