@@ -6,8 +6,8 @@ Consolidate consensus orchestration behind one typed public API, isolate executi
 ## Outcome
 - User approved implementation completion and rollout on 2026-10-29.
 - Approved source revision: `0a4dc9ffd070897f5cc68e4b23730e5480ddbd79`.
-- State: APPLY rollout IN PROGRESS. Live deployment verification is pending; this record does not claim a completed deployment.
-- Validation: 1,733 Python tests passed; 12 load tests deliberately excluded. Mypy passed for 65 source files; Ruff and changed-file formatting passed.
+- State: approved public source rollout complete. PR #25 is merged; public CI passed and the installed engine source hash/public exports match the immutable revision.
+- Validation: 1,745 Python tests passed: 1,733 core tests and the 12 additional load tests. Mypy passed for 65 source files; Ruff and changed-file formatting passed.
 - The public Docker image passed smoke checks on its advertised Python 3.11 runtime.
 - Frontend source is unchanged by this batch. Coverage was not remeasured; existing test warnings remain. No live provider behavior is inferred from the offline regression suite.
 
@@ -46,5 +46,5 @@ Consolidate consensus orchestration behind one typed public API, isolate executi
 
 ## Artifacts and Rollout
 - Approved source commit: `0a4dc9f`; review branch: `codex/recovery-engine`.
-- User-authorized publishing and rollout are in progress. Record the actual installed revision and observed live result before marking APPLY complete.
+- Merged in [PR #25](https://github.com/msitarzewski/duh/pull/25), merge commit `3efe8ea4fb3f40cd071d1282ade2b608e7f855aa`. Installed source hash and public engine exports were verified against `0a4dc9ffd070897f5cc68e4b23730e5480ddbd79`. Package metadata remains unchanged; no new registry release was assigned.
 - Prior task: [261029_security-foundation.md](./261029_security-foundation.md).

@@ -286,7 +286,7 @@ React app built by Vite to `web/dist/`, served by FastAPI as static files. SPA f
 - File reads: `tools.file_read_allowed_dir` must be configured before registration at `src/duh/cli/app.py:235`.
 - Reset links: `auth.public_base_url` or `DUH_PUBLIC_BASE_URL` supplies the trusted origin; password resets bind to the current password hash and use a conditional update.
 - Container: build and runtime environments use `/app/.venv` with a non-editable installation. npm wrappers no longer auto-install or execute an unrelated registry package.
-- Status: source and documentation included in the authorized feature-branch commit; not deployed. See `tasks/2026-10/261029_security-foundation.md`.
+- Status: source and documentation included in the authorized feature-branch commit, subsequently published with PR #25. See `tasks/2026-10/261029_security-foundation.md`.
 
 ## Memory Bank Privacy Policy
 
@@ -303,4 +303,4 @@ Record public interfaces, implementation patterns, verified checks, and remainin
 - Contribution identity: `src/duh/consensus/machine.py:37` and `src/duh/consensus/engine.py:50` carry occurrence identity so repeated model/framing calls retain measured usage despite out-of-order completion.
 - Failure boundaries: awaited event-sink errors and thread-created callback errors abort execution. Iteration shutdown drains owned tasks; configured provider deadlines and fatal error propagation remain in effect.
 - Validation: 1,733 Python tests passed (12 load tests excluded), mypy for 65 source files, Ruff/formatting, and Docker smoke on Python 3.11 passed. Coverage was not remeasured; frontend source is unchanged by this batch.
-- Status: source `0a4dc9f` approved for rollout; APPLY IN PROGRESS, deployment verification pending. See `tasks/2026-10/261029_shared-engine.md`.
+- Status: source `0a4dc9f` merged in PR #25; public CI passed and installed source hash/public exports were verified. See `tasks/2026-10/261029_shared-engine.md`.

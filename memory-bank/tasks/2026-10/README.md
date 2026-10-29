@@ -6,20 +6,20 @@
 - Closed API authentication, reset, sharing, traversal, filesystem-tool, and execution-limit defects through existing components.
 - Corrected provider schema/search behavior and container installation; removed unsafe registry fallbacks.
 - Reviewed validation: 1,714 Python and 204 frontend tests passed, public mypy/Ruff and frontend/Docker builds passed.
-- Post-application verification: 90 focused tests passed. Source and documentation are included in the authorized commit on `codex/security-foundation`; not deployed.
+- Post-application verification: 90 focused tests passed. Source and documentation are included in the authorized commit on `codex/security-foundation`; subsequently published with PR #25.
 - Pattern: `memory-bank/techContext.md#security-foundation-2026-10-29`.
 - See: [261029_security-foundation.md](./261029_security-foundation.md).
 
 ## Remaining Modernization
 Migration convergence, provider/platform upgrades, package boundaries, frontend accessibility, and later delivery work remain outside the completed implementation batches.
 
-## Work in Progress
+## Rollout Completed
 
-### 2026-10-29: Shared engine and run-scoped usage — approved; rollout [IN-PROGRESS]
+### 2026-10-29: Shared engine and run-scoped usage — approved and rolled out
 - Completed orchestration behind one typed public API with CLI, REST, WebSocket, MCP, scheduler, and storage adapters; the legacy eight-tuple interface remains compatible.
 - Isolated concurrent request budgets while retaining aggregate telemetry and child-task accounting. Refinement shares the owning request's manager and budget.
-- Validation: 1,733 Python tests passed (12 load tests excluded), mypy for 65 source files, Ruff/formatting, and Python 3.11 Docker smoke passed.
-- User approved completion and rollout. State: APPLY IN PROGRESS for source `0a4dc9f`; deployment verification remains pending.
+- Validation: 1,745 Python tests passed (1,733 core and 12 load tests), mypy for 65 source files, Ruff/formatting, and Python 3.11 Docker smoke passed.
+- User-approved source `0a4dc9f` is merged in [PR #25](https://github.com/msitarzewski/duh/pull/25). CI passed; installed source hash and public exports match the immutable revision.
 - See [261029_shared-engine.md](./261029_shared-engine.md).
 
 ## Memory Bank Refresh (2026-10-29)

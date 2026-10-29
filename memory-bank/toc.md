@@ -4,7 +4,7 @@
 - [projectbrief.md](./projectbrief.md) — Vision, tenets, architecture, build sequence
 - [techContext.md](./techContext.md) — Tech stack decisions with rationale (Python, Docker, SQLAlchemy, frontend, tools, etc.)
 - [decisions.md](./decisions.md) — Architectural decisions, including approved security and shared-engine/usage consolidation
-- [activeContext.md](./activeContext.md) — Current state (2026-10-29), approved shared-engine rollout in progress
+- [activeContext.md](./activeContext.md) — Current state (2026-10-29), verified shared-engine source rollout
 - [progress.md](./progress.md) — Milestone tracking, what's built, what's next
 - [competitive-landscape.md](./competitive-landscape.md) — Research on existing tools, frameworks, and academic work
 - [quick-start.md](./quick-start.md) — Current session entry point, public engine/usage interfaces, validation, and key file references
