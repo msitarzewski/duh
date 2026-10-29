@@ -4,16 +4,16 @@
 
 ## Current State (2026-10-29): Approved Shared Engine and Run-Scoped Usage
 
-- Implementation complete at source revision `0a4dc9f`; user approved completion and rollout. APPLY rollout is IN PROGRESS; deployment verification remains pending.
+- Implementation complete at source revision `0a4dc9f`; user approved completion and rollout. Public source is merged in PR #25, CI passed, and the installed engine source hash and public exports were verified against the immutable revision.
 - One typed orchestration API now serves CLI, REST, WebSocket, MCP, scheduler, and incremental-storage adapters. Existing tuple/wire contracts remain compatible.
 - Concurrent executions have isolated ledgers; asynchronous children and refinement share the owning hard budget. Aggregate telemetry remains available separately.
 - Audited fixes cover callback aborts before computation, supported framing validation, repeated-model occurrence identity, and cancellation cleanup.
-- Validation: 1,733 Python tests passed (12 load tests excluded), mypy for 65 files, Ruff/formatting, and public Docker smoke on Python 3.11 passed. Coverage was not remeasured.
+- Validation: 1,745 Python tests passed (1,733 core and 12 load tests), mypy for 65 files, Ruff/formatting, and public Docker smoke on Python 3.11 passed. Coverage was not remeasured.
 - See `tasks/2026-10/261029_shared-engine.md`. Migration convergence, provider/platform upgrades, package boundaries, frontend accessibility, and later delivery work remain.
 
 ## Approved Security Foundation (2026-10-29)
 
-- User-approved batch and documentation included in the authorized commit on `codex/security-foundation`; not deployed.
+- User-approved batch and documentation included in the authorized commit on `codex/security-foundation`, subsequently published in PR #25.
 - API authentication, reset, sharing, traversal, provider limits/schema handling, tool registration, container startup, and registry fallback fixes completed.
 - Validation: 1,714 Python + 204 frontend tests; post-application smoke 90 tests; mypy/Ruff and frontend/container builds passed.
 - See `tasks/2026-10/261029_security-foundation.md` for scope, compatibility changes, remaining work, and test limits.

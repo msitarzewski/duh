@@ -6,7 +6,7 @@
 
 ## Where We Are
 
-The security foundation and shared-engine/run-scoped-usage implementation are approved. Shared-engine source revision `0a4dc9f` is in APPLY rollout IN PROGRESS; live deployment verification remains pending. Package metadata remains 0.6.0; no new release number was assigned.
+The security foundation and shared-engine/run-scoped-usage implementation are approved. Shared-engine source revision `0a4dc9f` is merged in PR #25; public CI and installed-source/export verification passed. Package metadata remains 0.6.0; no new release number was assigned.
 
 - Latest checks: 1,733 Python tests passed; 12 load tests excluded; mypy for 65 source files, Ruff/formatting, and Docker smoke on Python 3.11 passed. Frontend source is unchanged by this batch; the preceding security batch recorded 204 frontend tests.
 - Improvements: one typed public consensus API with compatibility adapters; isolated run budgets with child-task accounting; refinement cost retention; validated framing keys; occurrence-aware contribution usage; and fatal sink/iterator cleanup. Existing authentication, provider deadlines, sandbox boundaries, and installation fixes remain.
