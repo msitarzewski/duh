@@ -2,18 +2,20 @@
 
 **Last Updated**: 2026-10-29
 **Current Phase**: Shared engine and run-scoped usage consolidation
-**State**: QA in an isolated review branch; public source checks passed
+**State**: APPLY for the approved shared engine and run-scoped usage batch; rollout IN PROGRESS
 **Documentation policy**: Record public source behavior and validation only; omit credentials, personal information, machine access details, and restricted downstream implementation.
-**Branch**: `codex/recovery-engine` review branch based on the committed security foundation; original working branch and `main` unchanged
-**Next Action**: Consolidate orchestration behind typed public events/results, preserve compatibility adapters, isolate concurrent run budgets, and validate offline. No publication or deployment is authorized.
+**Review Branch**: `codex/recovery-engine`; approved source revision `0a4dc9f`
+**Next Action**: Complete the user-authorized rollout, verify the installed revision and application behavior, then record the observed result. Deployment is not yet recorded as complete.
 
-## Shared Engine Work in Progress
-- User authorized implementing the recommended remaining engine/usage work.
-- Extend existing CLI, REST, WebSocket, MCP, scheduler, provider manager, and persistence consumers around one public orchestration module.
-- Preserve legacy tuple compatibility, selected models, optional flows, deadlines, fatal-error cancellation, and incremental persistence.
-- Use run-scoped usage and budgets inherited by child tasks; aggregate telemetry must not mix request budgets.
+## Approved Shared Engine and Run-Scoped Usage
+- User approved completion and rollout on 2026-10-29. Implementation is complete; APPLY rollout remains in progress and live verification is pending.
+- Existing CLI, REST, WebSocket, MCP, scheduler, provider manager, and persistence consumers now share the typed public orchestration API.
+- Legacy eight-tuple compatibility, selected models, optional flows, deadlines, fatal-error cancellation, and incremental persistence are preserved.
+- Run-scoped usage and budgets are inherited by child tasks; aggregate telemetry remains separate from request budgets.
 - Keep consumer-specific behavior outside public engine source and entries; omit credentials and operational access details.
-- Working QA: shared engine/compatibility adapters and scoped ledgers passed 1,733 tests (12 load tests excluded), mypy for 65 files, Ruff, and formatting. Refinement budgets, callback aborts, framing validation, and repeated-model usage passed audit regressions. Source is frozen for an immutable review revision; full integration remains pending.
+- Final public QA: shared engine/compatibility adapters and scoped ledgers passed 1,733 tests (12 load tests excluded), mypy for 65 files, Ruff, and formatting. Refinement budgets, callback aborts, framing validation, and repeated-model usage passed audit regressions. Source is frozen at the immutable review revision below.
+- Approved source revision: `0a4dc9ffd070897f5cc68e4b23730e5480ddbd79`. Integration and container checks passed, including the advertised Python 3.11 runtime. Completion record: `tasks/2026-10/261029_shared-engine.md`.
+- Remaining modernization: migration convergence, provider/platform upgrades, package boundaries, frontend accessibility, and later delivery work. Shared engine and per-run accounting are complete in this batch.
 
 ## Approved Security Foundation
 - Scope: reusable engine, API, provider, tool, and validation improvements in this repository.
@@ -21,7 +23,7 @@
 - Post-application smoke: 90 focused tests passed; reviewed source matches the working branch.
 - Completion approved by the user on 2026-10-29; task documentation: `tasks/2026-10/261029_security-foundation.md`.
 - Source and documentation are included in the authorized feature-branch commit; no merge, package publication, or deployment performed.
-- Remaining: engine consolidation, request-scoped usage ledger, schema convergence, provider/dependency upgrades, shared UI packaging, frontend accessibility, and delivery.
+- Engine consolidation and request-scoped usage were completed in the shared-engine follow-up. Remaining work is listed above; the security task remains the historical record of the earlier batch.
 
 ---
 
@@ -204,3 +206,6 @@
 - MCP server transport: stdio vs SSE vs streamable HTTP?
 - Hosted demo economics (try.duh.dev) -- deferred to post-1.0
 - A2A protocol -- deferred to post-1.0
+
+## Rollout Precheck
+- The previously excluded 12 load tests also passed offline; Ruff formatting checked 162 files. Remote CI and live rollout verification remain pending.

@@ -6,19 +6,19 @@
 
 ## Where We Are
 
-The approved security foundation is included in the authorized commit on `codex/security-foundation`. Package metadata remains 0.6.0; no new release number was assigned. Deployment remains separate.
+The security foundation and shared-engine/run-scoped-usage implementation are approved. Shared-engine source revision `0a4dc9f` is in APPLY rollout IN PROGRESS; live deployment verification remains pending. Package metadata remains 0.6.0; no new release number was assigned.
 
-- Latest reviewed checks: 1,714 Python and 204 frontend tests passed; 12 load tests excluded; public mypy/Ruff, frontend build, and Docker build/smoke passed. Post-application smoke: 90 tests passed.
-- Improvements: shared HTTP/WebSocket authentication, safe reset/sharing behavior, bounded provider calls, fatal-error propagation, schema-constrained utility output, capability-aware search, sandbox-only file-tool registration, and corrected container installation.
-- Scope, compatibility, and remaining work: `memory-bank/tasks/2026-10/261029_security-foundation.md`.
+- Latest checks: 1,733 Python tests passed; 12 load tests excluded; mypy for 65 source files, Ruff/formatting, and Docker smoke on Python 3.11 passed. Frontend source is unchanged by this batch; the preceding security batch recorded 204 frontend tests.
+- Improvements: one typed public consensus API with compatibility adapters; isolated run budgets with child-task accounting; refinement cost retention; validated framing keys; occurrence-aware contribution usage; and fatal sink/iterator cleanup. Existing authentication, provider deadlines, sandbox boundaries, and installation fixes remain.
+- Scope, compatibility, and remaining work: `memory-bank/tasks/2026-10/261029_shared-engine.md`; preceding security record: `memory-bank/tasks/2026-10/261029_security-foundation.md`.
 - Repository license: AGPL-3.0 (`LICENSE:1`). Public documentation omits credentials, personal data, live infrastructure access, and restricted downstream details.
 
 ## Starting a Session
 
-1. `memory-bank/activeContext.md#approved-security-foundation` — current approved scope and remaining work.
+1. `memory-bank/activeContext.md#approved-shared-engine-and-run-scoped-usage` — current approved scope and rollout status.
 2. `memory-bank/tasks/2026-10/README.md` — current monthly record.
-3. `memory-bank/techContext.md#security-foundation-2026-10-29` — implementation patterns and compatibility changes.
-4. `memory-bank/decisions.md#2026-10-29-explicit-api-composition-and-bounded-provider-execution` — approved design choices.
+3. `memory-bank/techContext.md#shared-engine-and-run-scoped-usage-2026-10-29` — implementation patterns and compatibility changes.
+4. `memory-bank/decisions.md#2026-10-29-one-public-engine-and-run-scoped-usage` — approved design choices.
 
 Use the older roadmap as planning history; it does not mean later modernization batches are complete.
 
@@ -71,7 +71,7 @@ docker compose up                          # full stack on :8080
 | Area | Files |
 |------|-------|
 | CLI | `src/duh/cli/app.py`, `src/duh/cli/display.py` |
-| Consensus | `src/duh/consensus/machine.py`, `src/duh/consensus/handlers.py` |
+| Consensus | `src/duh/consensus/engine.py`, `src/duh/consensus/machine.py`, `src/duh/consensus/handlers.py` |
 | Voting | `src/duh/consensus/voting.py`, `src/duh/consensus/classifier.py` |
 | Decomposition | `src/duh/consensus/decompose.py`, `src/duh/consensus/scheduler.py`, `src/duh/consensus/synthesis.py` |
 | Tools | `src/duh/tools/base.py`, `src/duh/tools/registry.py`, `src/duh/tools/augmented_send.py` |
@@ -108,7 +108,9 @@ docker compose up                          # full stack on :8080
 - **CLI command**: `src/duh/cli/app.py` — Click commands, async wrappers
 - **Config schema**: `src/duh/config/schema.py` — Pydantic models with defaults
 - **Repository**: `src/duh/memory/repository.py` — async CRUD, flush-not-commit
-- **Consensus loop**: `src/duh/cli/app.py` — `_run_consensus()` reusable for REST
+- **Consensus loop**: `src/duh/consensus/engine.py:237` — `run_consensus()` typed result/events; `src/duh/cli/app.py:276` retains the eight-tuple compatibility adapter
+- **Usage scope**: `src/duh/providers/manager.py:165` — per-run ledger with nested child accounting and a shared parent hard budget
+- **Incremental storage**: `src/duh/memory/persist.py:37` — common public storage adapter around typed engine events
 - **REST route**: `src/duh/api/routes/ask.py` — FastAPI endpoint wrapping consensus
 - **MCP tool**: `src/duh/mcp/server.py` — direct Python calls, no REST dependency
 - **Frontend component**: `web/src/components/shared/GlassPanel.tsx` — glassmorphism pattern

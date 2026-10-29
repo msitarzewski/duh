@@ -11,14 +11,16 @@
 - See: [261029_security-foundation.md](./261029_security-foundation.md).
 
 ## Remaining Modernization
-Unified engine and per-run usage, migration convergence, provider/platform upgrades, package boundaries, frontend accessibility, and release delivery remain outside this completed batch.
+Migration convergence, provider/platform upgrades, package boundaries, frontend accessibility, and later delivery work remain outside the completed implementation batches.
 
 ## Work in Progress
 
-### 2026-10-29: Shared engine and run-scoped usage [IN-PROGRESS]
-- Consolidating orchestration behind one typed public API with compatibility adapters.
-- Isolating concurrent request budgets while retaining aggregate telemetry and child-task accounting.
-- State: QA on the isolated review branch; 1,733 tests passed (12 load tests excluded), mypy/Ruff/formatting passed. Source is frozen for the review revision; integration remains pending.
+### 2026-10-29: Shared engine and run-scoped usage — approved; rollout [IN-PROGRESS]
+- Completed orchestration behind one typed public API with CLI, REST, WebSocket, MCP, scheduler, and storage adapters; the legacy eight-tuple interface remains compatible.
+- Isolated concurrent request budgets while retaining aggregate telemetry and child-task accounting. Refinement shares the owning request's manager and budget.
+- Validation: 1,733 Python tests passed (12 load tests excluded), mypy for 65 source files, Ruff/formatting, and Python 3.11 Docker smoke passed.
+- User approved completion and rollout. State: APPLY IN PROGRESS for source `0a4dc9f`; deployment verification remains pending.
+- See [261029_shared-engine.md](./261029_shared-engine.md).
 
 ## Memory Bank Refresh (2026-10-29)
 

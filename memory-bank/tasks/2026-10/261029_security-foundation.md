@@ -33,6 +33,8 @@ Apply the approved first modernization batch: close API and filesystem access de
 - Configuration and resource boundaries are documented in `memory-bank/decisions.md#2026-10-29-explicit-api-composition-and-bounded-provider-execution`.
 
 ## Compatibility and Remaining Work
+
+Follow-up: shared orchestration and run-scoped accounting were implemented and approved in [261029_shared-engine.md](./261029_shared-engine.md). The original remaining-work list below records this security batch's boundary; current rollout status is tracked by the follow-up task.
 - Anthropic structured output now requires an explicit JSON schema; an unconstrained `response_format="json"` fails explicitly. All in-repository utility callers were migrated.
 - Local unauthenticated engine mode remains available only when neither users nor API keys exist. Hosts omitting engine routes may use their own router dependencies.
 - Set `DUH_PUBLIC_BASE_URL` for externally delivered reset links; default remains the local API URL.
