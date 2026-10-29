@@ -9,7 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from duh.core.errors import ConsensusError
+from duh.core.errors import ConsensusError, ProviderError
 from duh.providers.base import PromptMessage
 
 if TYPE_CHECKING:
@@ -179,7 +179,7 @@ async def synthesize(
             max_tokens=4096,
             temperature=0.5,
         )
-    except Exception as exc:
+    except ProviderError as exc:
         msg = f"Synthesis model call failed: {exc}"
         raise ConsensusError(msg) from exc
 

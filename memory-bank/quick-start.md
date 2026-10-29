@@ -1,26 +1,26 @@
 # Quick Start — Session Entry Point
 
-**Last Updated**: 2026-02-17
+**Last Updated**: 2026-10-29
 
 ---
 
 ## Where We Are
 
-**v0.5 COMPLETE** — "It Scales". Multi-user auth, PostgreSQL, production hardening.
+The approved security foundation is included in the authorized commit on `codex/security-foundation`. Package metadata remains 0.6.0; no new release number was assigned. Deployment remains separate.
 
-- 1354 Python tests + 12 load tests + 117 Vitest tests (1483 total), ~60 Python + 66 frontend source files
-- 6 providers (Anthropic, OpenAI, Google, Mistral, Perplexity, local via Ollama) — 17 models
-- Version 0.5.0, branch `v0.5.0`, ready to merge to main
-- MkDocs docs live at https://msitarzewski.github.io/duh/
-- GitHub repo: https://github.com/msitarzewski/duh
+- Latest reviewed checks: 1,714 Python and 204 frontend tests passed; 12 load tests excluded; public mypy/Ruff, frontend build, and Docker build/smoke passed. Post-application smoke: 90 tests passed.
+- Improvements: shared HTTP/WebSocket authentication, safe reset/sharing behavior, bounded provider calls, fatal-error propagation, schema-constrained utility output, capability-aware search, sandbox-only file-tool registration, and corrected container installation.
+- Scope, compatibility, and remaining work: `memory-bank/tasks/2026-10/261029_security-foundation.md`.
+- Repository license: AGPL-3.0 (`LICENSE:1`). Public documentation omits credentials, personal data, live infrastructure access, and restricted downstream details.
 
 ## Starting a Session
 
-Load these files:
-1. `activeContext.md` — current state, v0.5 complete, open questions
-2. `roadmap.md:513+` — v1.0 spec (next version)
-3. `techContext.md` — tech stack + all decided patterns (Python + frontend)
-4. `decisions.md` — 18 ADRs, all foundational + v0.2 + v0.3 + v0.4 decisions
+1. `memory-bank/activeContext.md#approved-security-foundation` — current approved scope and remaining work.
+2. `memory-bank/tasks/2026-10/README.md` — current monthly record.
+3. `memory-bank/techContext.md#security-foundation-2026-10-29` — implementation patterns and compatibility changes.
+4. `memory-bank/decisions.md#2026-10-29-explicit-api-composition-and-bounded-provider-execution` — approved design choices.
+
+Use the older roadmap as planning history; it does not mean later modernization batches are complete.
 
 ## Project Commands
 
@@ -49,7 +49,7 @@ duh user-list                             # list users
 
 # Backend Development
 uv sync                                    # install deps
-uv run pytest tests/ -v                    # run all tests
+PYTHON_DOTENV_DISABLED=1 uv run pytest tests/ -v  # isolated test configuration
 uv run mypy src/duh/                       # type check
 uv run ruff check --fix src/ tests/        # lint + fix
 uv run ruff format src/ tests/             # format
@@ -57,7 +57,7 @@ uv run alembic upgrade head                # run migrations
 
 # Frontend Development
 cd web && npm ci                           # install deps
-cd web && npm run dev                      # Vite dev server (:3000, proxies to :8080)
+cd web && npm run dev                      # Vite dev server; proxy config: web/vite.config.ts
 cd web && npm run build                    # production build to dist/
 cd web && npm test                         # run Vitest tests
 cd web && npx tsc --noEmit                 # TypeScript check
@@ -102,6 +102,8 @@ docker compose up                          # full stack on :8080
 
 ### Key Architecture Patterns
 
+- **Provider deadlines and cancellation**: `src/duh/providers/base.py:24` and `src/duh/providers/base.py:43`
+- **HTTP/WS authentication**: `src/duh/api/auth.py:139`
 - **Provider adapter**: `src/duh/providers/openai.py` — template for new adapters
 - **CLI command**: `src/duh/cli/app.py` — Click commands, async wrappers
 - **Config schema**: `src/duh/config/schema.py` — Pydantic models with defaults

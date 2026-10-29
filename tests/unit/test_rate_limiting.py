@@ -26,6 +26,16 @@ from duh.config.schema import ProviderConfig
 from duh.memory.models import Base
 from duh.memory.repository import MemoryRepository
 
+_TEST_APPS: list[FastAPI] = []
+
+
+@pytest.fixture(autouse=True)
+async def dispose_test_databases():
+    yield
+    for app in _TEST_APPS:
+        await app.state.engine.dispose()
+    _TEST_APPS.clear()
+
 
 def _hash(key: str) -> str:
     return hashlib.sha256(key.encode()).hexdigest()
@@ -38,7 +48,7 @@ async def _make_app(
     *,
     rate_limit: int = 100,
     window: int = 60,
-    jwt_secret: str = "test-secret",
+    jwt_secret: str = "test-secret-for-rate-limit-tests-32bytes",
 ) -> FastAPI:
     """Create a minimal FastAPI app with middleware and in-memory DB."""
     engine = create_async_engine("sqlite+aiosqlite://")
@@ -65,6 +75,7 @@ async def _make_app(
     )
     app.state.db_factory = factory
     app.state.engine = engine
+    _TEST_APPS.append(app)
 
     app.add_middleware(RateLimitMiddleware, rate_limit=rate_limit, window=window)
     app.add_middleware(APIKeyMiddleware)
@@ -89,6 +100,21 @@ async def _seed_key(app: FastAPI, name: str, raw_key: str) -> str:
         return api_key.id
 
 
+async def _seed_user(app: FastAPI, user_id: str) -> None:
+    from duh.memory.models import User
+
+    async with app.state.db_factory() as session:
+        session.add(
+            User(
+                id=user_id,
+                email=f"{user_id}@example.com",
+                display_name=user_id,
+                is_guest=True,
+            )
+        )
+        await session.commit()
+
+
 # ── Rate Limit by User ID ───────────────────────────────────
 
 
@@ -98,10 +124,15 @@ class TestRateLimitByUserId:
         """Requests with JWT token should be rate-limited by user_id."""
         from duh.api.auth import create_token
 
-        app = await _make_app(rate_limit=3, window=60, jwt_secret="test-secret")
+        app = await _make_app(
+            rate_limit=3,
+            window=60,
+            jwt_secret="test-secret-for-rate-limit-tests-32bytes",
+        )
         client = TestClient(app, raise_server_exceptions=False)
 
-        token = create_token("user-123", "test-secret")
+        await _seed_user(app, "user-123")
+        token = create_token("user-123", "test-secret-for-rate-limit-tests-32bytes")
         headers = {"Authorization": f"Bearer {token}"}
 
         # First 3 requests should succeed
@@ -118,11 +149,17 @@ class TestRateLimitByUserId:
         """Different users should have independent rate limits."""
         from duh.api.auth import create_token
 
-        app = await _make_app(rate_limit=2, window=60, jwt_secret="test-secret")
+        app = await _make_app(
+            rate_limit=2,
+            window=60,
+            jwt_secret="test-secret-for-rate-limit-tests-32bytes",
+        )
         client = TestClient(app, raise_server_exceptions=False)
 
-        token_a = create_token("user-A", "test-secret")
-        token_b = create_token("user-B", "test-secret")
+        await _seed_user(app, "user-A")
+        await _seed_user(app, "user-B")
+        token_a = create_token("user-A", "test-secret-for-rate-limit-tests-32bytes")
+        token_b = create_token("user-B", "test-secret-for-rate-limit-tests-32bytes")
 
         # User A uses 2 requests
         headers_a = {"Authorization": f"Bearer {token_a}"}
@@ -367,10 +404,15 @@ class TestRateLimitHeaders:
         """Response should include X-RateLimit-Key with user info when JWT auth used."""
         from duh.api.auth import create_token
 
-        app = await _make_app(rate_limit=10, window=60, jwt_secret="test-secret")
+        app = await _make_app(
+            rate_limit=10,
+            window=60,
+            jwt_secret="test-secret-for-rate-limit-tests-32bytes",
+        )
         client = TestClient(app, raise_server_exceptions=False)
 
-        token = create_token("user-42", "test-secret")
+        await _seed_user(app, "user-42")
+        token = create_token("user-42", "test-secret-for-rate-limit-tests-32bytes")
         resp = client.get("/api/test", headers={"Authorization": f"Bearer {token}"})
         assert resp.status_code == 200
         assert resp.headers["X-RateLimit-Limit"] == "10"

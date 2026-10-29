@@ -7,12 +7,12 @@ Models answer a question independently and in parallel. A meta-judge
 
 from __future__ import annotations
 
-import asyncio
 import logging
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from duh.providers.base import PromptMessage
+from duh.core.errors import ProviderError
+from duh.providers.base import PromptMessage, gather_provider_calls
 
 if TYPE_CHECKING:
     from duh.providers.base import ModelInfo, ModelResponse
@@ -66,7 +66,7 @@ async def _collect_vote(
             model_ref=model_info.model_ref,
             content=response.content,
         )
-    except Exception as exc:
+    except ProviderError as exc:
         logger.warning("Vote failed for %s: %s", model_info.model_ref, exc)
         return exc
 
@@ -192,7 +192,7 @@ async def run_voting(
 
     # Fan out to all models in parallel
     tasks = [_collect_vote(question, m, provider_manager) for m in models]
-    results = await asyncio.gather(*tasks, return_exceptions=True)
+    results = await gather_provider_calls(tasks)
 
     # Filter successful votes
     votes: list[VoteResult] = [r for r in results if isinstance(r, VoteResult)]

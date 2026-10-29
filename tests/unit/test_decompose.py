@@ -375,7 +375,8 @@ class TestHandleDecompose:
         await handle_decompose(ctx, pm)
 
         call = provider.call_log[-1]
-        assert call["response_format"] == "json"
+        assert call["response_format"]["required"] == ["subtasks"]
+        assert call["response_format"]["additionalProperties"] is False
 
     async def test_invalid_dag_from_model_raises(self) -> None:
         """Model returns valid JSON but with a cycle."""

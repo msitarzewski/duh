@@ -2,10 +2,16 @@
 
 from __future__ import annotations
 
+import asyncio
+import json
 import logging
 from typing import TYPE_CHECKING, Any
 
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
+from pydantic import BaseModel, Field, ValidationError
+
+from duh.api.auth import authenticate_connection
+from duh.core.errors import ProviderError
 
 if TYPE_CHECKING:
     from duh.config.schema import DuhConfig
@@ -16,6 +22,18 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["websocket"])
+
+
+class WebSocketAskRequest(BaseModel):
+    """Bound the authenticated first message before starting paid provider work."""
+
+    question: str = Field(min_length=1, max_length=20_000)
+    rounds: int = Field(default=3, ge=1, le=10, strict=True)
+    panel: list[str] | None = Field(default=None, max_length=20)
+    proposer: str | None = Field(default=None, max_length=200)
+    challengers: list[str] | None = Field(default=None, max_length=20)
+    token: str | None = Field(default=None, max_length=16_384)
+    api_key: str | None = Field(default=None, max_length=512)
 
 
 @router.websocket("/ws/ask")
@@ -48,21 +66,24 @@ async def ws_ask(websocket: WebSocket) -> None:
     await websocket.accept()
 
     try:
-        data = await websocket.receive_json()
-        question = data.get("question", "")
-        if not question:
-            await websocket.send_json({"type": "error", "message": "Missing question"})
-            await websocket.close()
-            return
+        raw = await asyncio.wait_for(websocket.receive_text(), timeout=10)
+        if len(raw.encode("utf-8")) > 65_536:
+            raise ValueError("Request too large")
+        data = json.loads(raw)
+        if not isinstance(data, dict):
+            raise ValueError("Expected a request object")
+        if not isinstance(data.get("question"), str) or not data["question"].strip():
+            raise ValueError("Missing question")
+        body = WebSocketAskRequest.model_validate(data)
+        await authenticate_connection(websocket, token=body.token, api_key=body.api_key)
+        question = body.question.strip()
+        panel = body.panel or None
+        proposer_override = body.proposer
+        challengers_raw = body.challengers or None
 
-        rounds = data.get("rounds", 3)
-        panel: list[str] | None = data.get("panel") or None
-        proposer_override: str | None = data.get("proposer") or None
-        challengers_raw: list[str] | None = data.get("challengers") or None
-
-        config: DuhConfig = websocket.app.state.config
+        config: DuhConfig = websocket.app.state.config.model_copy(deep=True)
         pm: ProviderManager = websocket.app.state.provider_manager
-        config.general.max_rounds = rounds
+        config.general.max_rounds = body.rounds
 
         tool_registry = getattr(websocket.app.state, "tool_registry", None)
 
@@ -79,10 +100,18 @@ async def ws_ask(websocket: WebSocket) -> None:
 
     except WebSocketDisconnect:
         pass
-    except Exception as e:
+    except (HTTPException, ValidationError, ValueError, TimeoutError) as exc:
+        message = exc.detail if isinstance(exc, HTTPException) else "Invalid request"
+        if isinstance(exc, ValueError) and str(exc) == "Missing question":
+            message = "Missing question"
+        await websocket.send_json({"type": "error", "message": message})
+        await websocket.close(code=1008)
+    except Exception:
         logger.exception("WebSocket error during /ws/ask")
         try:
-            await websocket.send_json({"type": "error", "message": str(e)})
+            await websocket.send_json(
+                {"type": "error", "message": "Consensus failed. Please try again."}
+            )
             await websocket.close()
         except Exception:
             pass
@@ -323,43 +352,49 @@ async def _stream_challenges(
 
     challenges: list[ChallengeResult] = []
 
-    for coro in asyncio.as_completed(tasks):
-        try:
-            _idx, (model_ref, framing, response) = await coro
-            citation_dicts = tuple(
-                {
-                    "url": c.url,
-                    "title": c.title,
-                    "snippet": c.snippet,
-                }
-                for c in (response.citations or [])
-            )
-            ch = ChallengeResult(
-                model_ref=model_ref,
-                content=response.content,
-                sycophantic=detect_sycophancy(response.content),
-                framing=framing,
-                citations=citation_dicts,
-            )
-            challenges.append(ch)
+    try:
+        for coro in asyncio.as_completed(tasks):
+            try:
+                _idx, (model_ref, framing, response) = await coro
+                citation_dicts = tuple(
+                    {
+                        "url": c.url,
+                        "title": c.title,
+                        "snippet": c.snippet,
+                    }
+                    for c in (response.citations or [])
+                )
+                ch = ChallengeResult(
+                    model_ref=model_ref,
+                    content=response.content,
+                    sycophantic=detect_sycophancy(response.content),
+                    framing=framing,
+                    citations=citation_dicts,
+                )
+                challenges.append(ch)
 
-            # Stream to client immediately
-            ch_citations = (
-                [{"url": c["url"], "title": c.get("title")} for c in ch.citations]
-                if ch.citations
-                else None
-            )
-            await ws.send_json(
-                {
-                    "type": "challenge",
-                    "model": ch.model_ref,
-                    "content": ch.content,
-                    "truncated": response.finish_reason != "stop",
-                    "citations": ch_citations,
-                }
-            )
-        except Exception:
-            logger.warning("Challenger failed", exc_info=True)
+                # Stream to client immediately
+                ch_citations = (
+                    [{"url": c["url"], "title": c.get("title")} for c in ch.citations]
+                    if ch.citations
+                    else None
+                )
+                await ws.send_json(
+                    {
+                        "type": "challenge",
+                        "model": ch.model_ref,
+                        "content": ch.content,
+                        "truncated": response.finish_reason != "stop",
+                        "citations": ch_citations,
+                    }
+                )
+            except ProviderError:
+                logger.warning("Challenger failed", exc_info=True)
+    finally:
+        for task in tasks:
+            if not task.done():
+                task.cancel()
+        await asyncio.gather(*tasks, return_exceptions=True)
 
     # Report failures
     succeeded = {ch.model_ref for ch in challenges}

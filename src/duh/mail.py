@@ -45,12 +45,14 @@ def send_email(
 
     if config.encryption == "ssl":
         ctx = ssl.create_default_context()
-        with smtplib.SMTP_SSL(config.host, config.port, context=ctx) as server:
+        with smtplib.SMTP_SSL(
+            config.host, config.port, context=ctx, timeout=10
+        ) as server:
             if config.username:
                 server.login(config.username, config.password)
             server.sendmail(config.from_address, to, message.as_string())
     else:
-        with smtplib.SMTP(config.host, config.port) as server:
+        with smtplib.SMTP(config.host, config.port, timeout=10) as server:
             if config.encryption == "tls":
                 ctx = ssl.create_default_context()
                 server.starttls(context=ctx)

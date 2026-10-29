@@ -7,14 +7,13 @@ Handlers read from and write to :class:`ConsensusContext` and use
 
 from __future__ import annotations
 
-import asyncio
 import logging
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 from duh.consensus.machine import ChallengeResult, ConsensusState
-from duh.core.errors import ConsensusError, InsufficientModelsError
-from duh.providers.base import PromptMessage
+from duh.core.errors import ConsensusError, InsufficientModelsError, ProviderError
+from duh.providers.base import PromptMessage, gather_provider_calls
 
 logger = logging.getLogger(__name__)
 
@@ -564,13 +563,13 @@ async def handle_challenge(
         )
         for i, ref in enumerate(challenger_models)
     ]
-    raw_results = await asyncio.gather(*tasks, return_exceptions=True)
+    raw_results = await gather_provider_calls(tasks)
 
     challenges: list[ChallengeResult] = []
     responses: list[ModelResponse] = []
 
     for i, result in enumerate(raw_results):
-        if isinstance(result, BaseException):
+        if isinstance(result, ProviderError):
             failed_ref = challenger_models[i]
             logger.warning("Challenger %s failed: %s", failed_ref, result)
             continue
@@ -868,16 +867,42 @@ async def _classify_decision(
             model_id,
             max_tokens=200,
             temperature=0.3,
-            response_format="json",
+            response_format={
+                "additionalProperties": False,
+                "properties": {
+                    "category": {"type": "string"},
+                    "genus": {"type": ["string", "null"]},
+                    "intent": {
+                        "enum": [
+                            "factual",
+                            "judgment",
+                            "creative",
+                            "strategic",
+                            "technical",
+                        ],
+                        "type": "string",
+                    },
+                },
+                "required": ["intent", "category", "genus"],
+                "type": "object",
+            },
         )
-        data = extract_json(response.content)
         provider_manager.record_usage(cheapest, response.usage)
+        data = extract_json(response.content)
+        if data.get("intent") not in {
+            "factual",
+            "judgment",
+            "creative",
+            "strategic",
+            "technical",
+        }:
+            return None
         return {
-            "intent": str(data.get("intent", "")),
+            "intent": str(data["intent"]),
             "category": str(data.get("category", "")),
             "genus": str(data.get("genus", "")) if data.get("genus") else "",
         }
-    except (JSONExtractionError, Exception):
+    except (JSONExtractionError, ProviderError):
         return None
 
 
@@ -928,7 +953,7 @@ async def generate_overview(
             ctx.overview = overview
             return overview
         return None
-    except Exception:
+    except ProviderError:
         return None
 
 
@@ -980,15 +1005,24 @@ async def generate_followups(
             model_id,
             max_tokens=1000,
             temperature=0.7,
-            response_format="json",
+            response_format={
+                "additionalProperties": False,
+                "properties": {
+                    "questions": {"items": {"type": "string"}, "type": "array"}
+                },
+                "required": ["questions"],
+                "type": "object",
+            },
         )
         provider_manager.record_usage(cheapest, response.usage)
         data = _json.loads(response.content)
+        if not isinstance(data, dict):
+            return []
         questions = data.get("questions", [])
         if isinstance(questions, list):
             followups = [q for q in questions if isinstance(q, str)][:count]
             ctx.followups = followups
             return followups
         return []
-    except Exception:
+    except (ProviderError, _json.JSONDecodeError):
         return []

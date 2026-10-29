@@ -8,7 +8,6 @@ REVISE -> COMMIT) using the existing handlers.
 
 from __future__ import annotations
 
-import asyncio
 import graphlib
 import uuid
 from dataclasses import dataclass
@@ -27,7 +26,8 @@ from duh.consensus.machine import (
     ConsensusState,
     ConsensusStateMachine,
 )
-from duh.core.errors import ConsensusError
+from duh.core.errors import ConsensusError, ProviderError
+from duh.providers.base import gather_provider_calls
 
 if TYPE_CHECKING:
     from duh.cli.display import ConsensusDisplay
@@ -236,8 +236,12 @@ async def schedule_subtasks(
                 )
                 for label in ready
             ]
-            batch_results = await asyncio.gather(*coros)
+            batch_results = await gather_provider_calls(
+                coros, recover_provider_errors=False
+            )
             for result in batch_results:
+                if isinstance(result, ProviderError):
+                    raise result
                 completed += 1
                 if display:
                     display.subtask_footer(result.label, completed, total, result.cost)

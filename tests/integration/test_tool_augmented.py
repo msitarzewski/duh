@@ -191,7 +191,7 @@ class TestToolAugmentedConsensus:
         result = _setup_tools(config)
         assert result is None
 
-    async def test_cli_setup_tools_enabled(self) -> None:
+    async def test_cli_setup_tools_enabled(self, tmp_path) -> None:
         """_setup_tools returns a ToolRegistry when tools are enabled."""
         from duh.cli.app import _setup_tools
         from duh.config.schema import DuhConfig
@@ -202,7 +202,11 @@ class TestToolAugmentedConsensus:
         assert result is not None
         assert isinstance(result, ToolRegistry)
         assert "web_search" in result
-        assert "file_read" in result
+        assert "file_read" not in result
+        config.tools.file_read_allowed_dir = str(tmp_path)
+        sandboxed = _setup_tools(config)
+        assert sandboxed is not None
+        assert "file_read" in sandboxed
         # Code execution not enabled by default
         assert "code_execution" not in result
 

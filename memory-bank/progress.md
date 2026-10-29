@@ -1,10 +1,17 @@
 # Progress
 
-**Last Updated**: 2026-06-22
+**Last Updated**: 2026-10-29
+
+## Current State (2026-10-29): Approved Security Foundation
+
+- User-approved batch and documentation included in the authorized commit on `codex/security-foundation`; not deployed.
+- API authentication, reset, sharing, traversal, provider limits/schema handling, tool registration, container startup, and registry fallback fixes completed.
+- Validation: 1,714 Python + 204 frontend tests; post-application smoke 90 tests; mypy/Ruff and frontend/container builds passed.
+- See `tasks/2026-10/261029_security-foundation.md` for scope, compatibility changes, remaining work, and test limits.
 
 ---
 
-## Current State (2026-06-22): Catalog, Persistence, Cloudflare/GLM, Unified Report
+## Prior State (2026-06-22): Catalog, Persistence, Cloudflare/GLM, Unified Report
 
 Merged to `main` via PRs #16–#21 (details in `tasks/2026-06/README.md` and `activeContext.md`):
 - **Model catalog refresh** + propose-only `scripts/refresh_catalog.py` drift tool; OpenAI + Anthropic

@@ -2,20 +2,33 @@
 
 from __future__ import annotations
 
+import asyncio
 from contextlib import ExitStack
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from duh.api.routes.ws import router
 from duh.config.schema import DuhConfig
 from duh.consensus.machine import ChallengeResult
+from duh.memory.models import Base, User
 from duh.providers.base import ModelCapability, ModelInfo, ModelResponse, TokenUsage
 
 # Patch at the source modules since _stream_consensus uses lazy imports
 _HANDLERS = "duh.consensus.handlers"
 _CONVERGENCE = "duh.consensus.convergence"
+_TEST_APPS: list[FastAPI] = []
+
+
+@pytest.fixture(autouse=True)
+def dispose_test_databases():
+    yield
+    for app in _TEST_APPS:
+        asyncio.run(app.state.engine.dispose())
+    _TEST_APPS.clear()
 
 
 def _make_model_info(ref: str = "test:model-a") -> ModelInfo:
@@ -47,6 +60,17 @@ def _create_test_app() -> FastAPI:
     app = FastAPI()
     app.state.config = DuhConfig()
     app.state.config.general.max_rounds = 1
+    app.state.config.auth.jwt_secret = "ws-test-secret-for-tests-at-least-32bytes"
+    engine = create_async_engine("sqlite+aiosqlite://")
+
+    async def setup_database():
+        async with engine.begin() as connection:
+            await connection.run_sync(Base.metadata.create_all)
+
+    asyncio.run(setup_database())
+    app.state.engine = engine
+    app.state.db_factory = async_sessionmaker(engine, expire_on_commit=False)
+    _TEST_APPS.append(app)
 
     pm = MagicMock()
     pm.total_cost = 0.05
@@ -56,7 +80,9 @@ def _create_test_app() -> FastAPI:
         _make_model_info("test:model-a"),
         _make_model_info("test:model-b"),
     ]
-    pm.get_provider.return_value = (MagicMock(), "model-a")
+    provider = MagicMock()
+    provider.send = AsyncMock(return_value=_make_response("Test overview"))
+    pm.get_provider.return_value = (provider, "model-a")
     pm.get_model_info.return_value = _make_model_info()
     app.state.provider_manager = pm
 
@@ -336,10 +362,11 @@ class TestWebSocketAsk:
                 ws.send_json({"question": "test"})
                 # First event is phase_start for PROPOSE (sent before
                 # handle_propose is called), second is the error.
-                _first = ws.receive_json()
-                data = ws.receive_json()
+                events = _collect_events(ws)
+                data = events[-1]
                 assert data["type"] == "error"
-                assert "Provider exploded" in data["message"]
+                assert "Consensus failed" in data["message"]
+                assert "Provider exploded" not in data["message"]
 
     def test_defaults_to_three_rounds(self):
         """Without rounds param, defaults to 3."""
@@ -374,3 +401,112 @@ class TestWebSocketAsk:
             e for e in events if e["type"] == "phase_start" and e["phase"] == "PROPOSE"
         ]
         assert len(propose_starts) == 1
+
+
+class TestWebSocketAuthentication:
+    @pytest.mark.parametrize("rounds", [0, -1, 11, 1000000, "3", True])
+    def test_rejects_invalid_rounds_before_provider_work(self, rounds):
+        app = _create_test_app()
+        with patch(
+            "duh.api.routes.ws._stream_consensus", new_callable=AsyncMock
+        ) as run:
+            with TestClient(app).websocket_connect("/ws/ask") as ws:
+                ws.send_json({"question": "test", "rounds": rounds})
+                assert ws.receive_json()["type"] == "error"
+            run.assert_not_awaited()
+
+    def test_rejects_invalid_token_before_provider_work(self):
+        app = _create_test_app()
+        with patch(
+            "duh.api.routes.ws._stream_consensus", new_callable=AsyncMock
+        ) as run:
+            with TestClient(app).websocket_connect("/ws/ask") as ws:
+                ws.send_json({"question": "test", "token": "garbage"})
+                assert ws.receive_json()["type"] == "error"
+            run.assert_not_awaited()
+
+    def test_requires_auth_when_users_exist(self):
+        app = _create_test_app()
+
+        async def create_user():
+            async with app.state.db_factory() as session:
+                user = User(email="ws@example.com", display_name="WS", is_guest=True)
+                session.add(user)
+                await session.commit()
+                return user.id
+
+        user_id = asyncio.run(create_user())
+        from duh.api.auth import create_token
+
+        async def stream_completed(ws, *args, **kwargs):
+            await ws.send_json({"type": "complete"})
+            await ws.close()
+
+        with patch(
+            "duh.api.routes.ws._stream_consensus",
+            new_callable=AsyncMock,
+            side_effect=stream_completed,
+        ) as run:
+            with TestClient(app).websocket_connect("/ws/ask") as ws:
+                ws.send_json({"question": "test"})
+                assert ws.receive_json()["type"] == "error"
+            run.assert_not_awaited()
+            with TestClient(app).websocket_connect("/ws/ask") as ws:
+                ws.send_json(
+                    {
+                        "question": "test",
+                        "rounds": 2,
+                        "token": create_token(
+                            user_id, "ws-test-secret-for-tests-at-least-32bytes"
+                        ),
+                    }
+                )
+                assert ws.receive_json()["type"] == "complete"
+            run.assert_awaited_once()
+            assert run.call_args.args[2].general.max_rounds == 2
+            assert app.state.config.general.max_rounds == 1
+
+    def test_rejects_oversized_first_message(self):
+        app = _create_test_app()
+        with patch(
+            "duh.api.routes.ws._stream_consensus", new_callable=AsyncMock
+        ) as run:
+            with TestClient(app).websocket_connect("/ws/ask") as ws:
+                ws.send_json({"question": "x" * 70000})
+                assert ws.receive_json()["type"] == "error"
+            run.assert_not_awaited()
+
+
+class TestWebSocketCostCancellation:
+    async def test_cost_breach_cancels_remaining_challengers(self):
+        from duh.api.routes.ws import _stream_challenges
+        from duh.consensus.machine import ConsensusContext
+        from duh.core.errors import CostLimitExceededError
+
+        started = asyncio.Event()
+        cancelled = asyncio.Event()
+
+        async def challenge(ctx, pm, ref, framing, **kwargs):
+            if ref == "test:slow":
+                started.set()
+                try:
+                    await asyncio.sleep(30)
+                finally:
+                    cancelled.set()
+            await started.wait()
+            raise CostLimitExceededError(limit=0.01, current=0.02)
+
+        ws = MagicMock()
+        ws.send_json = AsyncMock()
+        with (
+            patch("duh.consensus.handlers._call_challenger", side_effect=challenge),
+            pytest.raises(CostLimitExceededError),
+        ):
+            await _stream_challenges(
+                ws,
+                ConsensusContext("t", "question"),
+                MagicMock(),
+                ["test:cost", "test:slow"],
+            )
+        assert cancelled.is_set()
+        ws.send_json.assert_not_awaited()

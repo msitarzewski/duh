@@ -9,7 +9,7 @@ from __future__ import annotations
 import json
 from typing import TYPE_CHECKING
 
-from duh.providers.base import PromptMessage
+from duh.providers.base import PromptMessage, with_deadline
 
 if TYPE_CHECKING:
     from duh.providers.base import ModelProvider, ModelResponse
@@ -17,6 +17,7 @@ if TYPE_CHECKING:
     from duh.tools.registry import ToolRegistry
 
 
+@with_deadline
 async def tool_augmented_send(
     provider: ModelProvider,
     model_id: str,
@@ -63,9 +64,12 @@ async def tool_augmented_send(
         for td in tool_defs
     ]
 
+    supports_search = getattr(provider, "supports_native_search", None)
+    native_search = bool(web_search and supports_search and supports_search(model_id))
+
     # When native web search is active, remove the DDG web_search tool
     # so the model doesn't see both native and local search.
-    if web_search:
+    if native_search:
         tools_param = [t for t in tools_param if t["name"] != "web_search"]
 
     current_messages = list(messages)
@@ -77,7 +81,7 @@ async def tool_augmented_send(
             max_tokens=max_tokens,
             temperature=temperature,
             tools=tools_param if tools_param else None,
-            web_search=web_search,
+            web_search=native_search,
         )
 
         # If no tool calls, return the response as-is

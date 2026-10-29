@@ -11,6 +11,7 @@ from alembic.config import Config
 
 from duh.consensus.classifier import TaskType, classify_task_type
 from duh.consensus.voting import VoteResult, VotingAggregation, run_voting
+from duh.core.errors import ProviderError
 from duh.memory.models import Vote
 from duh.memory.repository import MemoryRepository
 from duh.providers.manager import ProviderManager
@@ -224,7 +225,7 @@ class TestRunVotingErrors:
 
         class FailProvider(MockProvider):
             async def send(self, *args, **kwargs):  # type: ignore[override]
-                raise RuntimeError("model offline")
+                raise ProviderError("test", "model offline")
 
         fail = FailProvider(
             provider_id="broken",
@@ -252,7 +253,7 @@ class TestRunVotingErrors:
 
         class FailProvider(MockProvider):
             async def send(self, *args, **kwargs):  # type: ignore[override]
-                raise RuntimeError("offline")
+                raise ProviderError("test", "offline")
 
         fail = FailProvider(
             provider_id="fail",
@@ -335,7 +336,7 @@ class TestClassifyTaskType:
     async def test_fallback_on_model_error(self) -> None:
         class FailProvider(MockProvider):
             async def send(self, *args, **kwargs):  # type: ignore[override]
-                raise RuntimeError("model down")
+                raise ProviderError("test", "model down")
 
         provider = FailProvider(
             provider_id="cls",
@@ -390,7 +391,9 @@ class TestClassifyTaskType:
         await classify_task_type("Q?", pm)
 
         # Verify response_format was set to "json"
-        assert provider.call_log[0]["response_format"] == "json"
+        assert provider.call_log[0]["response_format"]["properties"]["task_type"][
+            "enum"
+        ] == ["reasoning", "judgment"]
 
 
 # ── Vote model ──────────────────────────────────────────────────
@@ -585,3 +588,18 @@ class TestVoteMigration:
         conn.close()
 
         assert "votes" in tables
+
+
+async def test_voting_propagates_cost_limit():
+    from duh.core.errors import CostLimitExceededError
+
+    class ExpensiveProvider(MockProvider):
+        pass
+
+    provider = ExpensiveProvider(
+        provider_id="costly", responses={"m": "answer"}, input_cost=1000.0
+    )
+    pm = await _make_pm(provider)
+    pm._cost_hard_limit = 0.01
+    with pytest.raises(CostLimitExceededError):
+        await run_voting("Q", pm)

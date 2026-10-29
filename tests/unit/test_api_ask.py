@@ -174,8 +174,9 @@ class TestAskEndpoint:
             )
 
         assert resp.status_code == 200
-        # The route sets config.general.max_rounds from the request
-        assert config.general.max_rounds == 5
+        # Only the request's copy receives the override.
+        assert mock_fn.call_args.args[1].general.max_rounds == 5
+        assert config.general.max_rounds == 3
 
     async def test_provider_error_returns_503(self) -> None:
         """ProviderError during consensus returns 503."""
@@ -289,3 +290,17 @@ class TestUnifiedPersistence:
 
         assert resp.status_code == 200
         assert resp.json()["thread_id"] is None
+
+
+async def test_round_override_is_request_scoped():
+    from duh.api.routes.ask import AskResponse
+
+    client, config = await _make_app()
+    original_rounds = config.general.max_rounds
+    with patch("duh.api.routes.ask._handle_consensus", new_callable=AsyncMock) as run:
+        run.return_value = AskResponse(decision="ok", confidence=0.9, cost=0.01)
+        response = client.post("/api/ask", json={"question": "Question", "rounds": 1})
+        assert response.status_code == 200
+        assert run.call_args.args[1].general.max_rounds == 1
+        assert config.general.max_rounds == original_rounds
+    await client.app.state.engine.dispose()

@@ -492,3 +492,12 @@
 - Force the live view to build a `ThreadDetail` object to reuse `ExportMenu` (awkward — no turns/contributions mid-run)
 **Consequences**: Identical rendering across both contexts; history finally shows the executive summary. Export stays per-view but in the same position.
 **References**: `tasks/2026-06/260622_unified-consensus-report.md`, `web/src/components/consensus/ConsensusReport.tsx`
+
+## 2026-10-29: Explicit API Composition and Bounded Provider Execution
+
+**Status**: Approved and applied on the feature branch; not deployed.
+**Context**: API composition relied on downstream route removal, authentication differed by transport, and broad exception handling swallowed execution limits.
+**Decision**: Extend the existing app factory with explicit route/frontend/diagnostic/middleware switches; share HTTP/WebSocket credential validation; preserve fatal failures and cancel sibling work; require a sandbox before registering filesystem reads; pass closed output schemas through existing adapters.
+**Alternatives**: Route-list surgery, independent transport authentication, blanket exception recovery, and an engine rewrite were rejected because they retain inconsistent security behavior or expand the approved scope.
+**Consequences**: Default standalone API composition is retained. Consumers can omit engine routes deliberately. Anthropic unconstrained JSON mode now requires a schema; repository callers have migrated. Existing active access tokens without an explicit purpose remain compatible; explicit reset-purpose tokens cannot authenticate API calls.
+**References**: `tasks/2026-10/261029_security-foundation.md`, `src/duh/api/app.py:41`, `src/duh/api/auth.py:139`, `src/duh/providers/base.py:43`.

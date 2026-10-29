@@ -24,6 +24,7 @@ from duh.providers.base import (
     StreamChunk,
     TokenUsage,
     ToolCallData,
+    with_deadline,
 )
 from duh.providers.catalog import MODEL_CATALOG, PROVIDER_CAPS
 
@@ -85,7 +86,9 @@ class PerplexityProvider:
         api_key: str | None = None,
         *,
         client: openai.AsyncOpenAI | None = None,
+        timeout_seconds: float = 120.0,
     ) -> None:
+        self.timeout_seconds = timeout_seconds
         if client is not None:
             self._client = client
         else:
@@ -94,11 +97,15 @@ class PerplexityProvider:
             }
             if api_key is not None:
                 kwargs["api_key"] = api_key
-            self._client = openai.AsyncOpenAI(**kwargs)
+            self._client = openai.AsyncOpenAI(timeout=timeout_seconds, **kwargs)
 
     @property
     def provider_id(self) -> str:
         return PROVIDER_ID
+
+    def supports_native_search(self, model_id: str) -> bool:
+        """Whether this adapter can search natively for this model."""
+        return True
 
     async def list_models(self) -> list[ModelInfo]:
         return [
@@ -123,6 +130,7 @@ class PerplexityProvider:
                 return int(m["max_output_tokens"])
         return 8_192
 
+    @with_deadline
     async def send(
         self,
         messages: list[PromptMessage],
@@ -131,7 +139,7 @@ class PerplexityProvider:
         max_tokens: int = 4096,
         temperature: float = 0.7,
         stop_sequences: list[str] | None = None,
-        response_format: str | None = None,
+        response_format: str | dict[str, object] | None = None,
         tools: list[dict[str, object]] | None = None,
         web_search: bool = False,
     ) -> ModelResponse:
@@ -148,6 +156,15 @@ class PerplexityProvider:
             kwargs["stop"] = stop_sequences
         if response_format == "json":
             kwargs["response_format"] = {"type": "json_object"}
+        elif isinstance(response_format, dict):
+            kwargs["response_format"] = {
+                "type": "json_schema",
+                "json_schema": {
+                    "name": "response",
+                    "schema": response_format,
+                    "strict": True,
+                },
+            }
         if tools:
             kwargs["tools"] = [
                 {

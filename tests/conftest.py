@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import os
+import socket
 from typing import TYPE_CHECKING, Any
 
 import pytest
@@ -91,3 +93,35 @@ def mock_provider_minimal() -> MockProviderType:
     from tests.fixtures.responses import MINIMAL
 
     return MockProvider(provider_id="mock-minimal", responses=MINIMAL)
+
+
+@pytest.fixture(autouse=True)
+def isolated_runtime(monkeypatch, tmp_path):
+    """Never discover developer secrets or contact external services in tests."""
+    from duh.config import loader
+
+    for key in tuple(os.environ):
+        if (
+            key.endswith(("_API_KEY", "_TOKEN", "_SECRET"))
+            or key.startswith(("DUH_MAIL_", "STRIPE_", "SENTRY_", "CLOUDFLARE_"))
+            or key in {"DUH_CONFIG", "DUH_DATABASE_URL"}
+        ):
+            monkeypatch.delenv(key, raising=False)
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "config"))
+    monkeypatch.setattr(loader, "load_dotenv", lambda *args, **kwargs: False)
+    monkeypatch.setattr("dotenv.load_dotenv", lambda *args, **kwargs: False)
+    original_connect = socket.socket.connect
+    original_connect_ex = socket.socket.connect_ex
+
+    def connect(sock, address):
+        if sock.family != socket.AF_UNIX:
+            pytest.fail("Network connections are disabled in the test suite")
+        return original_connect(sock, address)
+
+    def connect_ex(sock, address):
+        if sock.family != socket.AF_UNIX:
+            pytest.fail("Network connections are disabled in the test suite")
+        return original_connect_ex(sock, address)
+
+    monkeypatch.setattr(socket.socket, "connect", connect)
+    monkeypatch.setattr(socket.socket, "connect_ex", connect_ex)

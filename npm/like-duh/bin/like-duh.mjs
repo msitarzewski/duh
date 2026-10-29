@@ -8,10 +8,8 @@ const result = resolve();
 
 if (!result) {
   console.error(`${PACKAGE_NAME}: duh CLI not found.\n`);
-  console.error("Install the Python package with one of:");
-  console.error("  uv tool install duh        # recommended");
-  console.error("  pipx install duh");
-  console.error("  pip install duh");
+  console.error("Install this project from its public repository:");
+  console.error("  uv tool install git+https://github.com/msitarzewski/duh.git");
   console.error(`\nOr set DUH_PATH to the duh executable path.`);
   process.exit(1);
 }

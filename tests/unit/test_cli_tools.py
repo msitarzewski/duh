@@ -45,7 +45,7 @@ class TestSetupTools:
         config = DuhConfig(tools=ToolsConfig(enabled=True))
         result = _setup_tools(config)
         assert result is not None
-        assert len(result) >= 2  # web_search + file_read at minimum
+        assert len(result) == 1  # filesystem access requires an explicit sandbox
 
     def test_registers_web_search(self) -> None:
         config = DuhConfig(tools=ToolsConfig(enabled=True))
@@ -53,8 +53,15 @@ class TestSetupTools:
         assert registry is not None
         assert "web_search" in registry
 
-    def test_registers_file_read(self) -> None:
-        config = DuhConfig(tools=ToolsConfig(enabled=True))
+    def test_does_not_register_unrestricted_file_read(self) -> None:
+        registry = _setup_tools(DuhConfig(tools=ToolsConfig(enabled=True)))
+        assert registry is not None
+        assert "file_read" not in registry
+
+    def test_registers_file_read(self, tmp_path) -> None:
+        config = DuhConfig(
+            tools=ToolsConfig(enabled=True, file_read_allowed_dir=str(tmp_path))
+        )
         registry = _setup_tools(config)
         assert registry is not None
         assert "file_read" in registry
@@ -80,7 +87,7 @@ class TestSetupTools:
         registry = _setup_tools(config)
         assert registry is not None
         assert "code_execution" in registry
-        assert len(registry) == 3
+        assert len(registry) == 2
 
     def test_web_search_config_forwarded(self) -> None:
         ws_config = WebSearchConfig(backend="tavily", max_results=10)
@@ -96,7 +103,7 @@ class TestSetupTools:
         registry = _setup_tools(config)
         assert registry is not None
         defs = registry.list_definitions()
-        assert len(defs) >= 2
+        assert len(defs) >= 1
         for d in defs:
             assert d.name
             assert d.description

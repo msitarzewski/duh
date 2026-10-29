@@ -412,3 +412,37 @@ class TestTemperatureSelfHeal:
                 temperature=0.7,
             )
         assert client.messages.stream.call_count == 1
+
+
+async def test_schema_constrained_json_is_sent_to_sdk():
+    schema = {
+        "type": "object",
+        "properties": {"answer": {"type": "string"}},
+        "required": ["answer"],
+        "additionalProperties": False,
+    }
+    client = _make_client()
+    provider = AnthropicProvider(client=client)
+    await provider.send(
+        [PromptMessage(role="user", content="Q")],
+        "claude-sonnet-4-6",
+        response_format=schema,
+    )
+    kwargs = client.messages.stream.call_args.kwargs
+    assert kwargs["output_config"] == {
+        "format": {"type": "json_schema", "schema": schema}
+    }
+
+
+async def test_unconstrained_json_request_fails_explicitly():
+    from duh.core.errors import ProviderError
+
+    client = _make_client()
+    provider = AnthropicProvider(client=client)
+    with pytest.raises(ProviderError, match="explicit schema"):
+        await provider.send(
+            [PromptMessage(role="user", content="Q")],
+            "claude-sonnet-4-6",
+            response_format="json",
+        )
+    client.messages.stream.assert_not_called()

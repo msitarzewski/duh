@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 from types import SimpleNamespace
 
+import pytest
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.testclient import TestClient
@@ -14,6 +15,16 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from duh.api.middleware import APIKeyMiddleware, RateLimitMiddleware, hash_api_key
 from duh.memory.models import Base
 from duh.memory.repository import MemoryRepository
+
+_TEST_APPS: list[FastAPI] = []
+
+
+@pytest.fixture(autouse=True)
+async def dispose_test_databases():
+    yield
+    for app in _TEST_APPS:
+        await app.state.engine.dispose()
+    _TEST_APPS.clear()
 
 
 def _hash(key: str) -> str:
@@ -53,8 +64,12 @@ async def _make_app(
     )
     app.state.db_factory = factory
     app.state.engine = engine
+    _TEST_APPS.append(app)
 
-    # Middleware (reverse order: CORS outermost, auth innermost)
+    # CORS is added last and wraps authentication failures/preflights.
+    app.add_middleware(RateLimitMiddleware, rate_limit=rate_limit, window=window)
+    app.add_middleware(APIKeyMiddleware)
+
     if cors_origins is not None:
         app.add_middleware(
             CORSMiddleware,
@@ -63,9 +78,6 @@ async def _make_app(
             allow_methods=["*"],
             allow_headers=["*"],
         )
-
-    app.add_middleware(RateLimitMiddleware, rate_limit=rate_limit, window=window)
-    app.add_middleware(APIKeyMiddleware)
 
     @app.get("/api/health")
     async def health() -> dict[str, str]:
@@ -244,6 +256,7 @@ class TestCORSHeaders:
     async def test_preflight_options(self) -> None:
         """OPTIONS preflight returns proper CORS headers."""
         app = await _make_app(cors_origins=["http://localhost:3000"])
+        await _seed_key(app, "protected", "required-key")
         client = TestClient(app, raise_server_exceptions=False)
         resp = client.options(
             "/api/test",
@@ -258,3 +271,15 @@ class TestCORSHeaders:
             resp.headers.get("access-control-allow-origin") == "http://localhost:3000"
         )
         assert "X-API-Key" in resp.headers.get("access-control-allow-headers", "")
+
+    async def test_unauthorized_response_has_cors_headers(self):
+        app = await _make_app(cors_origins=["http://localhost:3000"])
+        await _seed_key(app, "protected", "required-key")
+        with TestClient(app) as client:
+            response = client.get(
+                "/api/test", headers={"Origin": "http://localhost:3000"}
+            )
+        assert response.status_code == 401
+        assert (
+            response.headers["access-control-allow-origin"] == "http://localhost:3000"
+        )

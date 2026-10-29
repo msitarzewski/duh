@@ -320,3 +320,30 @@ class TestCommitPersistence:
         assert loaded.dissent == ctx.dissent
         assert loaded.turn_id == turn.id
         assert loaded.thread_id == thread.id
+
+
+@pytest.mark.parametrize("operation", ["taxonomy", "overview", "followups"])
+async def test_optional_generation_propagates_cost_limit(operation):
+    from unittest.mock import AsyncMock, MagicMock
+
+    from duh.consensus.handlers import (
+        _classify_decision,
+        generate_followups,
+        generate_overview,
+    )
+    from duh.core.errors import CostLimitExceededError
+
+    ctx = ConsensusContext(thread_id="t", question="Q", decision="A")
+    model = MagicMock(input_cost_per_mtok=1.0)
+    provider = MagicMock(send=AsyncMock(return_value=MagicMock(content="not JSON")))
+    pm = MagicMock()
+    pm.list_all_models.return_value = [model]
+    pm.get_provider.return_value = (provider, "model")
+    pm.record_usage.side_effect = CostLimitExceededError(limit=0.01, current=1.0)
+    function = {
+        "taxonomy": _classify_decision,
+        "overview": generate_overview,
+        "followups": generate_followups,
+    }[operation]
+    with pytest.raises(CostLimitExceededError):
+        await function(ctx, pm)

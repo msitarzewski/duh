@@ -1,6 +1,6 @@
 # Technical Context
 
-**Last Updated**: 2026-03-08
+**Last Updated**: 2026-10-29
 
 ---
 
@@ -133,10 +133,10 @@ Most local providers already speak the OpenAI-compatible API, so the Ollama/LM S
 - Per-provider implementation:
   - **Anthropic**: `web_search_20250305` server tool in tools[] — skip generic→native transform for entries with `type` key
   - **Google**: `GoogleSearch()` grounding replaces function tools (can't coexist with `function_declarations`)
-  - **Mistral**: `{"type": "web_search"}` appended to tools list
+  - **Mistral**: native search is not advertised on this chat adapter; registered generic web search remains available
   - **OpenAI**: `web_search_options={}` only for `_SEARCH_MODELS` set; standard models fall back to DDG
   - **Perplexity**: no-op (always searches natively)
-- `tool_augmented_send`: filters DDG `web_search` tool when native=True, passes `web_search` flag to provider
+- `tool_augmented_send`: removes generic search only when the selected model actually supports native search; otherwise retains fallback search
 
 ## Citations (2026-03-08)
 
@@ -211,7 +211,7 @@ React app built by Vite to `web/dist/`, served by FastAPI as static files. SPA f
 - **Testing**: pytest + pytest-asyncio + pytest-cov (1641 tests), Vitest + @testing-library/react (194 tests), asyncio_mode=auto
 - **CI/CD**: GitHub Actions (lint, typecheck, test) + docs deployment to GitHub Pages
 - **Provider interface**: `typing.Protocol` (structural typing), stateless adapters
-- **6 providers shipping**: Anthropic, OpenAI, Google, Mistral, Perplexity — with native web search per provider
+- **Provider search**: native search follows model capability; unsupported models retain configured generic search fallback. Mistral chat does not advertise native web search.
 - **Memory schema**: SQLAlchemy ORM — Thread, Turn, Contribution, TurnSummary, ThreadSummary, Decision, Outcome, Subtask, Vote, APIKey
 - **Configuration**: TOML with Pydantic validation, layered merge (defaults < user < project < env < CLI)
 - **Error handling**: DuhError hierarchy with ProviderError, ConsensusError, ConfigError, StorageError
@@ -276,3 +276,18 @@ React app built by Vite to `web/dist/`, served by FastAPI as static files. SPA f
 - Client library packaging: monorepo `client/` dir vs separate repo
 - MCP server transport: stdio vs SSE vs streamable HTTP
 - Playwright E2E test setup
+
+## Security Foundation (2026-10-29)
+
+- App composition: `src/duh/api/app.py:41` provides explicit engine/frontend/diagnostic/middleware switches; CORS wraps authentication; static paths are resolved and contained.
+- Authentication: `src/duh/api/auth.py:139` validates HTTP/WS credentials against active users/API keys. WebSocket work starts after the bounded authentication frame.
+- Provider calls: `src/duh/providers/base.py:24` bounds retries and response collection; `src/duh/providers/base.py:43` drains sibling work on fatal errors. Provider configuration exposes `timeout_seconds` (default 120).
+- Utility output: existing adapters accept an explicit closed JSON schema in `response_format`; Anthropic requires a schema rather than the unconstrained string mode.
+- File reads: `tools.file_read_allowed_dir` must be configured before registration at `src/duh/cli/app.py:235`.
+- Reset links: `auth.public_base_url` or `DUH_PUBLIC_BASE_URL` supplies the trusted origin; password resets bind to the current password hash and use a conditional update.
+- Container: build and runtime environments use `/app/.venv` with a non-editable installation. npm wrappers no longer auto-install or execute an unrelated registry package.
+- Status: source and documentation included in the authorized feature-branch commit; not deployed. See `tasks/2026-10/261029_security-foundation.md`.
+
+## Memory Bank Privacy Policy
+
+Record public interfaces, implementation patterns, verified checks, and remaining work. Never copy credentials, personal contact details, local account identifiers, machine addresses, connection strings with real values, or restricted downstream implementation into this Memory Bank. Use repository-relative paths and clearly marked examples. Keep approved-on-branch status distinct from publication or deployment.

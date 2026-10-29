@@ -69,7 +69,7 @@ class MockProvider:
         max_tokens: int = 4096,
         temperature: float = 0.7,
         stop_sequences: list[str] | None = None,
-        response_format: str | None = None,
+        response_format: str | dict[str, object] | None = None,
         tools: list[dict[str, object]] | None = None,
         web_search: bool = False,
     ) -> ModelResponse:

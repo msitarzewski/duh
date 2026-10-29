@@ -6,9 +6,6 @@
   "bin": {
     "like-duh": "bin/like-duh.mjs"
   },
-  "scripts": {
-    "postinstall": "node lib/installer.mjs"
-  },
   "engines": {
     "node": ">=18"
   },

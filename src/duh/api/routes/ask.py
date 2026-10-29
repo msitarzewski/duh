@@ -65,7 +65,7 @@ class AskResponse(BaseModel):
 @router.post("/ask", response_model=AskResponse)
 async def ask(body: AskRequest, request: Request) -> AskResponse | JSONResponse:
     """Run a consensus query."""
-    config = request.app.state.config
+    config = request.app.state.config.model_copy(deep=True)
     pm = request.app.state.provider_manager
 
     # Override config from request

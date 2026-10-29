@@ -6,12 +6,63 @@ Data classes are immutable where possible (frozen dataclasses with slots).
 
 from __future__ import annotations
 
+import asyncio
 import enum
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Protocol, runtime_checkable
+from functools import wraps
+from typing import TYPE_CHECKING, ParamSpec, Protocol, TypeVar, runtime_checkable
+
+from duh.core.errors import ProviderError, ProviderTimeoutError
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncIterator
+    from collections.abc import AsyncIterator, Awaitable, Callable, Sequence
+
+P = ParamSpec("P")
+T = TypeVar("T")
+
+
+def with_deadline(method: Callable[P, Awaitable[T]]) -> Callable[P, Awaitable[T]]:
+    """Bound a complete provider call, including SDK retries and stream collection."""
+
+    @wraps(method)
+    async def bounded(*args: P.args, **kwargs: P.kwargs) -> T:
+        provider = args[0]
+        timeout = float(getattr(provider, "timeout_seconds", 120.0))
+        try:
+            async with asyncio.timeout(timeout):
+                return await method(*args, **kwargs)
+        except TimeoutError as exc:
+            raise ProviderTimeoutError(
+                str(getattr(provider, "provider_id", "unknown")),
+                f"Call exceeded {timeout:g}s deadline",
+            ) from exc
+
+    return bounded
+
+
+async def gather_provider_calls(
+    calls: Sequence[Awaitable[T]],
+    *,
+    recover_provider_errors: bool = True,
+) -> list[T | ProviderError]:
+    """Collect provider failures; cancel siblings on fatal errors or cancellation."""
+
+    async def recover(call: Awaitable[T]) -> T | ProviderError:
+        try:
+            return await call
+        except ProviderError as exc:
+            if not recover_provider_errors:
+                raise
+            return exc
+
+    tasks = [asyncio.create_task(recover(call)) for call in calls]
+    try:
+        return list(await asyncio.gather(*tasks))
+    except BaseException:
+        for task in tasks:
+            task.cancel()
+        await asyncio.gather(*tasks, return_exceptions=True)
+        raise
 
 
 class ModelCapability(enum.Flag):
@@ -139,7 +190,7 @@ class ModelProvider(Protocol):
         max_tokens: int = 4096,
         temperature: float = 0.7,
         stop_sequences: list[str] | None = None,
-        response_format: str | None = None,
+        response_format: str | dict[str, object] | None = None,
         tools: list[dict[str, object]] | None = None,
         web_search: bool = False,
     ) -> ModelResponse:

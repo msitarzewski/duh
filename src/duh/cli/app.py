@@ -164,7 +164,9 @@ async def _setup_providers(config: DuhConfig) -> ProviderManager:
         if name == "anthropic":
             from duh.providers.anthropic import AnthropicProvider
 
-            anthropic_prov = AnthropicProvider(api_key=prov_config.api_key)
+            anthropic_prov = AnthropicProvider(
+                api_key=prov_config.api_key, timeout_seconds=prov_config.timeout_seconds
+            )
             await pm.register(anthropic_prov)  # type: ignore[arg-type]
         elif name == "openai":
             from duh.providers.openai import OpenAIProvider
@@ -172,22 +174,29 @@ async def _setup_providers(config: DuhConfig) -> ProviderManager:
             openai_prov = OpenAIProvider(
                 api_key=prov_config.api_key,
                 base_url=prov_config.base_url,
+                timeout_seconds=prov_config.timeout_seconds,
             )
             await pm.register(openai_prov)  # type: ignore[arg-type]
         elif name == "google":
             from duh.providers.google import GoogleProvider
 
-            google_prov = GoogleProvider(api_key=prov_config.api_key)
+            google_prov = GoogleProvider(
+                api_key=prov_config.api_key, timeout_seconds=prov_config.timeout_seconds
+            )
             await pm.register(google_prov)  # type: ignore[arg-type]
         elif name == "mistral":
             from duh.providers.mistral import MistralProvider
 
-            mistral_prov = MistralProvider(api_key=prov_config.api_key)
+            mistral_prov = MistralProvider(
+                api_key=prov_config.api_key, timeout_seconds=prov_config.timeout_seconds
+            )
             await pm.register(mistral_prov)  # type: ignore[arg-type]
         elif name == "perplexity":
             from duh.providers.perplexity import PerplexityProvider
 
-            perplexity_prov = PerplexityProvider(api_key=prov_config.api_key)
+            perplexity_prov = PerplexityProvider(
+                api_key=prov_config.api_key, timeout_seconds=prov_config.timeout_seconds
+            )
             await pm.register(perplexity_prov)  # type: ignore[arg-type]
         elif prov_config.base_url is not None and prov_config.api_key is not None:
             # Generic OpenAI-compatible host (e.g. Cloudflare Workers AI,
@@ -197,6 +206,7 @@ async def _setup_providers(config: DuhConfig) -> ProviderManager:
             compat_prov = OpenAIProvider(
                 api_key=prov_config.api_key,
                 base_url=prov_config.base_url,
+                timeout_seconds=prov_config.timeout_seconds,
                 provider_id=name,
             )
             await pm.register(compat_prov)  # type: ignore[arg-type]
@@ -221,10 +231,11 @@ def _setup_tools(config: DuhConfig) -> ToolRegistry | None:
 
     registry.register(WebSearchTool(config.tools.web_search))
 
-    # File read tool (always available when tools enabled)
-    from duh.tools.file_read import FileReadTool
+    # Filesystem access requires an explicitly configured sandbox.
+    if config.tools.file_read_allowed_dir:
+        from duh.tools.file_read import FileReadTool
 
-    registry.register(FileReadTool())
+        registry.register(FileReadTool(allowed_dir=config.tools.file_read_allowed_dir))
 
     # Code execution tool (only if explicitly enabled)
     if config.tools.code_execution.enabled:

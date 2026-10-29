@@ -3,11 +3,11 @@
 ## Core Files
 - [projectbrief.md](./projectbrief.md) — Vision, tenets, architecture, build sequence
 - [techContext.md](./techContext.md) — Tech stack decisions with rationale (Python, Docker, SQLAlchemy, frontend, tools, etc.)
-- [decisions.md](./decisions.md) — Architectural decisions with context, alternatives, and consequences (30 ADRs)
-- [activeContext.md](./activeContext.md) — Current state (2026-06-22), PRs #16–#21: catalog refresh + tooling, incremental persistence, Cloudflare/GLM provider, unified report
+- [decisions.md](./decisions.md) — Architectural decisions with context, alternatives, and consequences (including the approved security foundation decision)
+- [activeContext.md](./activeContext.md) — Current state (2026-10-29), approved security foundation applied on feature branch
 - [progress.md](./progress.md) — Milestone tracking, what's built, what's next
 - [competitive-landscape.md](./competitive-landscape.md) — Research on existing tools, frameworks, and academic work
-- [quick-start.md](./quick-start.md) — Session entry point, v0.5 complete, key file references
+- [quick-start.md](./quick-start.md) — Current session entry point, approved security improvements, validation, and key file references
 - [v03-build-status.md](./v03-build-status.md) — v0.3 build status, all 17 tasks complete
 
 ## Context Files
@@ -23,6 +23,9 @@
 - [tmp-research-analysis.md](./tmp-research-analysis.md) — Research analyst: competitive cross-reference, prior art, Self-MoA finding, recommendations
 
 ## Tasks
+
+- [tasks/2026-10/README.md](./tasks/2026-10/README.md) — October 2026 approved security batch
+- [tasks/2026-10/261029_security-foundation.md](./tasks/2026-10/261029_security-foundation.md) — Applied security foundation; validation and remaining work
 - [tasks/2026-02/README.md](./tasks/2026-02/README.md) — February 2026 monthly summary
 - [tasks/2026-02/150215_project-scaffolding.md](./tasks/2026-02/150215_project-scaffolding.md) — v0.1 Task 1: project scaffolding
 - [tasks/2026-02/150215_core-errors.md](./tasks/2026-02/150215_core-errors.md) — v0.1 Task 2: core error hierarchy

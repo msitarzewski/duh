@@ -1,10 +1,23 @@
 # Active Context
 
-**Last Updated**: 2026-06-22
-**Current Phase**: Catalog refresh + tooling, incremental persistence, Cloudflare/GLM provider, unified report — all merged to main (PRs #16–#21)
-**Next Action**: Continue feature work or address open questions
+**Last Updated**: 2026-10-29
+**Current Phase**: Approved security foundation applied; batch complete
+**State**: END for this batch (APPLY and DOCS complete)
+**Documentation policy**: Record public source behavior and validation only; omit credentials, personal information, machine access details, and restricted downstream implementation.
+**Branch**: `codex/security-foundation` in the working repository; `main` unchanged
+**Next Action**: Continue remaining modernization; push/PR/release only when requested.
 
-## Latest Work (2026-06-22) — PRs #16–#21
+## Approved Security Foundation
+- Scope: reusable engine, API, provider, tool, and validation improvements in this repository.
+- Validation: 1,714 Python + 204 frontend tests passed; public mypy/Ruff, frontend build, and container build/smoke passed. Twelve load tests were excluded; coverage was not remeasured.
+- Post-application smoke: 90 focused tests passed; reviewed source matches the working branch.
+- Completion approved by the user on 2026-10-29; task documentation: `tasks/2026-10/261029_security-foundation.md`.
+- Source and documentation are included in the authorized feature-branch commit; no merge, package publication, or deployment performed.
+- Remaining: engine consolidation, request-scoped usage ledger, schema convergence, provider/dependency upgrades, shared UI packaging, frontend accessibility, and delivery.
+
+---
+
+## Prior Work (2026-06-22) — PRs #16–#21
 
 ### Model Catalog Refresh + Refresh Tool (PR #16 catalog, #19)
 - Added frontier models (Opus 4.8/4.7, GPT-5.5, GPT-5.4 mini, Gemini 3.5 Flash); dropped deprecated o3
@@ -176,7 +189,7 @@
 
 ## Open Questions (Still Unresolved)
 
-- Licensing (MIT vs Apache 2.0)
+- Repository license is AGPL-3.0 (`LICENSE:1`); output licensing remains a separate open question.
 - Output licensing for multi-provider synthesized content
 - Vector search solution for SQLite (sqlite-vss vs ChromaDB vs FAISS) -- v1.0 decision
 - Client library packaging: monorepo `client/` dir vs separate repo?

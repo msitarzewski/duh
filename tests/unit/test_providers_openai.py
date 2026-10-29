@@ -537,3 +537,23 @@ class TestTemperatureSelfHeal:
                 [PromptMessage(role="user", content="hi")], "gpt-4o", temperature=0.7
             )
         assert client.chat.completions.create.call_count == 1
+
+
+async def test_extracts_url_citation_annotations():
+    response = _make_response()
+    response.choices[0].message.annotations = [
+        MagicMock(
+            type="url_citation",
+            url_citation=MagicMock(
+                url="https://example.com/source",
+                title="Source",
+            ),
+        )
+    ]
+    provider = OpenAIProvider(client=_make_client(response))
+    result = await provider.send(
+        [PromptMessage(role="user", content="Q")], "gpt-5-search-api", web_search=True
+    )
+    assert result.citations is not None
+    assert result.citations[0].url == "https://example.com/source"
+    assert result.citations[0].title == "Source"

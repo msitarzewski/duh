@@ -5,6 +5,8 @@ from __future__ import annotations
 from typing import Any, ClassVar
 from unittest.mock import AsyncMock, MagicMock
 
+import pytest
+
 from duh.config.schema import WebSearchConfig
 from duh.providers.base import (
     ModelCapability,
@@ -242,8 +244,8 @@ class TestGoogleNativeSearch:
 
 
 class TestMistralNativeSearch:
-    async def test_web_search_injects_tool(self) -> None:
-        """web_search=True adds web_search tool to kwargs."""
+    async def test_web_search_omits_unsupported_tool(self) -> None:
+        """Native search is unsupported by the chat endpoint."""
         from duh.providers.mistral import MistralProvider
 
         mock_response = MagicMock()
@@ -269,8 +271,10 @@ class TestMistralNativeSearch:
         )
 
         call_kwargs = mock_client.chat.complete_async.call_args[1]
-        tools = call_kwargs["tools"]
-        assert any(t.get("type") == "web_search" for t in tools)
+        assert "tools" not in call_kwargs
+        from mistralai import models
+
+        models.ChatCompletionRequest.model_validate(call_kwargs)
 
     async def test_web_search_false_no_tool(self) -> None:
         """web_search=False does not add web_search tool."""
@@ -471,10 +475,10 @@ class TestWebSearchCapability:
 
         assert ModelCapability.WEB_SEARCH in PROVIDER_CAPS["google"]
 
-    def test_mistral_has_web_search(self) -> None:
+    def test_mistral_does_not_advertise_native_search(self) -> None:
         from duh.providers.catalog import PROVIDER_CAPS
 
-        assert ModelCapability.WEB_SEARCH in PROVIDER_CAPS["mistral"]
+        assert ModelCapability.WEB_SEARCH not in PROVIDER_CAPS["mistral"]
 
     def test_perplexity_has_web_search(self) -> None:
         from duh.providers.catalog import PROVIDER_CAPS
@@ -500,6 +504,9 @@ class TestAugmentedSendWebSearch:
 
         class _MockProvider:
             provider_id = "test"
+
+            def supports_native_search(self, model_id: str) -> bool:
+                return True
 
             async def send(
                 self, messages: Any, model_id: str, **kwargs: Any
@@ -590,3 +597,28 @@ class TestAugmentedSendWebSearch:
         assert len(tools) == 1
         assert tools[0]["name"] == "web_search"
         assert call_log[0]["web_search"] is False
+
+
+@pytest.mark.parametrize(
+    "provider_name,model_id",
+    [
+        ("openai", "gpt-5.5"),
+        ("mistral", "mistral-large-latest"),
+    ],
+)
+async def test_unsupported_native_search_keeps_fallback(provider_name, model_id):
+    from duh.providers.mistral import MistralProvider
+    from duh.providers.openai import OpenAIProvider
+    from duh.tools.augmented_send import tool_augmented_send
+    from duh.tools.registry import ToolRegistry
+    from duh.tools.web_search import WebSearchTool
+
+    adapter = {"openai": OpenAIProvider, "mistral": MistralProvider}[provider_name]
+    provider = adapter(client=MagicMock())
+    provider.send = AsyncMock(return_value=_text_response())
+    registry = ToolRegistry()
+    registry.register(WebSearchTool(WebSearchConfig()))
+    await tool_augmented_send(provider, model_id, _MESSAGES, registry, web_search=True)
+    kwargs = provider.send.call_args.kwargs
+    assert kwargs["web_search"] is False
+    assert any(tool["name"] == "web_search" for tool in kwargs["tools"])

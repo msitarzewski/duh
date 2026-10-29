@@ -6,6 +6,7 @@ import json
 from unittest.mock import AsyncMock, MagicMock
 
 from duh.consensus.refine import analyze_question, enrich_question
+from duh.core.errors import ProviderError
 
 
 def _mock_pm(response_content: str) -> MagicMock:
@@ -77,7 +78,7 @@ class TestAnalyzeQuestion:
     async def test_provider_error_returns_no_refinement(self) -> None:
         pm = _mock_pm("")
         provider, _ = pm.get_provider("mock:cheap")
-        provider.send.side_effect = RuntimeError("API down")
+        provider.send.side_effect = ProviderError("test", "API down")
         result = await analyze_question("anything", pm)
         assert result["needs_refinement"] is False
 
@@ -119,7 +120,7 @@ class TestEnrichQuestion:
     async def test_provider_error_returns_original(self) -> None:
         pm = _mock_pm("")
         provider, _ = pm.get_provider("mock:cheap")
-        provider.send.side_effect = RuntimeError("boom")
+        provider.send.side_effect = ProviderError("test", "boom")
         result = await enrich_question("original?", [], pm)
         assert result == "original?"
 
