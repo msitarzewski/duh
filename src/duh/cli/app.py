@@ -29,7 +29,6 @@ if TYPE_CHECKING:
     from duh.config.schema import DuhConfig
     from duh.consensus.machine import RoundResult
     from duh.memory.models import Thread, Vote
-    from duh.memory.persist import IncrementalPersister
     from duh.providers.base import ModelInfo
     from duh.providers.manager import ProviderManager
     from duh.tools.registry import ToolRegistry
@@ -298,209 +297,88 @@ async def _run_consensus(
     list[dict[str, str | None]],
     list[str],
 ]:
-    """Run the full consensus loop.
-
-    Returns (decision, confidence, rigor, dissent, total_cost, overview,
-    citations, followups).
-    """
-    from duh.consensus.convergence import check_convergence
-    from duh.consensus.handlers import (
-        generate_overview,
-        handle_challenge,
-        handle_commit,
-        handle_propose,
-        handle_revise,
-        select_challengers,
-        select_proposer,
+    """Compatibility adapter returning the existing eight-element result tuple."""
+    from duh.consensus.engine import (
+        Completed,
+        ConsensusEvent,
+        EngineOptions,
+        PhaseCompleted,
+        PhaseStarted,
+        RoundCommitted,
     )
-    from duh.consensus.machine import (
-        ConsensusContext,
-        ConsensusState,
-        ConsensusStateMachine,
-    )
+    from duh.memory.persist import run_persisted_consensus
 
-    ctx = ConsensusContext(
-        thread_id="",  # Placeholder, set after DB save
-        question=question,
-        max_rounds=config.general.max_rounds,
-    )
-    sm = ConsensusStateMachine(ctx)
+    active_status = None
 
-    # Resolve effective panel from config or explicit arg
-    effective_panel = panel or config.consensus.panel or None
-
-    # Persist incrementally so a mid-run crash leaves a real partial thread
-    # instead of nothing. The thread is created up front (status "active").
-    persister: IncrementalPersister | None = None
-    if db_factory is not None:
-        from duh.memory.persist import IncrementalPersister
-
-        persister = IncrementalPersister(db_factory, question)
-        try:
-            ctx.thread_id = await persister.start()
-            if on_thread_created is not None:
-                on_thread_created(ctx.thread_id)
-        except Exception:
-            import logging as _logging
-
-            _logging.getLogger(__name__).exception("Failed to create consensus thread")
-            persister = None
-
-    for _round in range(config.general.max_rounds):
-        # PROPOSE
-        sm.transition(ConsensusState.PROPOSE)
-        if display:
-            display.round_header(ctx.current_round, config.general.max_rounds)
-
-        proposer = proposer_override or select_proposer(pm, panel=effective_panel)
-        if display:
-            with display.phase_status("PROPOSE", proposer):
-                await handle_propose(
-                    ctx,
-                    pm,
-                    proposer,
-                    tool_registry=tool_registry,
-                    web_search=web_search,
-                )
-            display.show_propose(proposer, ctx.proposal or "")
-        else:
-            await handle_propose(
-                ctx,
-                pm,
-                proposer,
-                tool_registry=tool_registry,
-                web_search=web_search,
+    async def consume(event: ConsensusEvent) -> None:
+        nonlocal active_status
+        if isinstance(event, PhaseStarted) and display is not None:
+            if event.phase == "PROPOSE":
+                display.round_header(event.round_number, config.general.max_rounds)
+            detail = (
+                f"{len(event.models)} models"
+                if event.phase == "CHALLENGE"
+                else event.model or ""
             )
+            active_status = display.phase_status(event.phase, detail)
+            active_status.__enter__()
+        elif isinstance(event, PhaseCompleted) and display is not None:
+            if active_status is not None:
+                active_status.__exit__(None, None, None)
+                active_status = None
+            if event.phase == "PROPOSE":
+                display.show_propose(event.model or "", event.content or "")
+            elif event.phase == "CHALLENGE":
+                display.show_challenges(list(event.challenges))
+            elif event.phase == "REVISE":
+                display.show_revise(event.model or "", event.content or "")
+        elif isinstance(event, RoundCommitted):
+            if display is not None:
+                display.show_commit(
+                    event.round.confidence, event.round.rigor, event.round.dissent
+                )
+                display.round_footer(
+                    event.round.round_number,
+                    config.general.max_rounds,
+                    len(pm.list_all_models()),
+                    pm.total_cost,
+                )
+        elif isinstance(event, Completed):
+            result = event.result
+            if display is not None and result.tool_calls_log:
+                display.show_tool_use(list(result.tool_calls_log))
 
-        # CHALLENGE
-        sm.transition(ConsensusState.CHALLENGE)
-        challengers = challengers_override or select_challengers(
+    try:
+        result = await run_persisted_consensus(
+            question,
+            config,
             pm,
-            proposer,
-            panel=effective_panel,
-            **({"count": challenger_count} if challenger_count else {}),
-        )
-        if display:
-            detail = f"{len(challengers)} models"
-            with display.phase_status("CHALLENGE", detail):
-                await handle_challenge(
-                    ctx,
-                    pm,
-                    challengers,
-                    tool_registry=tool_registry,
-                    web_search=web_search,
-                )
-            display.show_challenges(ctx.challenges)
-        else:
-            await handle_challenge(
-                ctx,
-                pm,
-                challengers,
-                tool_registry=tool_registry,
+            options=EngineOptions(
+                panel=tuple(panel) if panel else None,
+                proposer=proposer_override,
+                challengers=tuple(challengers_override)
+                if challengers_override
+                else None,
+                challenger_count=challenger_count,
                 web_search=web_search,
-            )
-
-        # REVISE
-        sm.transition(ConsensusState.REVISE)
-        if display:
-            reviser = ctx.proposal_model or proposer
-            with display.phase_status("REVISE", reviser):
-                await handle_revise(
-                    ctx,
-                    pm,
-                    tool_registry=tool_registry,
-                    web_search=web_search,
-                )
-            display.show_revise(ctx.revision_model or reviser, ctx.revision or "")
-        else:
-            await handle_revise(
-                ctx, pm, tool_registry=tool_registry, web_search=web_search
-            )
-
-        # COMMIT
-        sm.transition(ConsensusState.COMMIT)
-        await handle_commit(ctx, pm)
-        if persister is not None:
-            try:
-                await persister.persist_round(ctx.snapshot_round())
-            except Exception:
-                import logging as _logging
-
-                _logging.getLogger(__name__).exception(
-                    "Failed to persist consensus round"
-                )
-        if display:
-            display.show_commit(ctx.confidence, ctx.rigor, ctx.dissent)
-            display.round_footer(
-                ctx.current_round,
-                config.general.max_rounds,
-                len(pm.list_all_models()),
-                pm.total_cost,
-            )
-
-        # Check convergence
-        if check_convergence(ctx):
-            break
-
-        # If not converged and more rounds available, continue
-        if ctx.current_round < config.general.max_rounds:
-            continue
-        break
-
-    sm.transition(ConsensusState.COMPLETE)
-
-    # Generate executive overview and follow-up questions (best-effort)
-    await generate_overview(ctx, pm)
-    from duh.consensus.handlers import generate_followups
-
-    await generate_followups(ctx, pm)
-
-    # Show tool usage if any
-    if display and ctx.tool_calls_log:
-        display.show_tool_use(ctx.tool_calls_log)
-
-    # Collect all citations across rounds
-    all_citations: list[dict[str, str | None]] = []
-    for rr in ctx.round_history:
-        all_citations.extend(rr.proposal_citations)
-        for ch in rr.challenges:
-            all_citations.extend(ch.citations)
-        all_citations.extend(rr.revision_citations)
-    # Include current round (may not be archived yet)
-    all_citations.extend(ctx.proposal_citations)
-    for ch in ctx.challenges:
-        all_citations.extend(ch.citations)
-    all_citations.extend(ctx.revision_citations)
-
-    # Finalize the incrementally-persisted thread: mark complete and attach
-    # the overview, follow-ups, and usage totals.
-    if persister is not None:
-        try:
-            await persister.finalize(
-                overview=ctx.overview,
-                followups=ctx.followups or None,
-                usage={
-                    "input_tokens": pm.total_input_tokens,
-                    "output_tokens": pm.total_output_tokens,
-                    "cost_usd": pm.total_cost,
-                },
-            )
-        except Exception:
-            import logging as _logging
-
-            _logging.getLogger(__name__).exception(
-                "Failed to finalize consensus thread"
-            )
-
+            ),
+            tool_registry=tool_registry,
+            emit=consume,
+            db_factory=db_factory,
+            on_thread_created=on_thread_created,
+        )
+    finally:
+        if active_status is not None:
+            active_status.__exit__(None, None, None)
     return (
-        ctx.decision or "",
-        ctx.confidence,
-        ctx.rigor,
-        ctx.dissent,
-        pm.total_cost,
-        ctx.overview,
-        all_citations,
-        ctx.followups,
+        result.decision,
+        result.confidence,
+        result.rigor,
+        result.dissent,
+        result.usage.cost_usd,
+        result.overview,
+        list(result.citations),
+        list(result.followups),
     )
 
 
@@ -629,13 +507,24 @@ def ask(
     panel_list = panel.split(",") if panel else None
     challengers_list, challenger_count = _parse_challengers(challengers)
 
-    # Question refinement (pre-consensus clarification)
+    # Refine and execute inside one event loop, manager, and hard budget.
     if refine:
         try:
-            question = asyncio.run(_refine_question(question, config))
+            asyncio.run(
+                _ask_refined_async(
+                    question,
+                    config,
+                    protocol=protocol or config.general.protocol,
+                    decompose=decompose or config.general.decompose,
+                    panel=panel_list,
+                    proposer_override=proposer,
+                    challengers_override=challengers_list,
+                    challenger_count=challenger_count,
+                )
+            )
         except DuhError as e:
             _error(str(e))
-            return
+        return
 
     # Determine effective protocol
     effective_protocol = protocol or config.general.protocol
@@ -676,6 +565,22 @@ def ask(
         _error(str(e))
         return  # unreachable
 
+    _display_consensus_result(result)
+
+
+def _display_consensus_result(
+    result: tuple[
+        str,
+        float,
+        float,
+        str | None,
+        float,
+        str | None,
+        list[dict[str, str | None]],
+        list[str],
+    ],
+) -> None:
+    """Render the unchanged compatibility result for normal and refined asks."""
     decision, confidence, rigor, dissent, cost, overview, citations, _followups = result
 
     from duh.cli.display import ConsensusDisplay
@@ -687,35 +592,80 @@ def ask(
     display.show_citations(citations)
 
 
-async def _refine_question(question: str, config: DuhConfig) -> str:
+async def _ask_refined_async(
+    question: str,
+    config: DuhConfig,
+    *,
+    protocol: str,
+    decompose: bool,
+    panel: list[str] | None = None,
+    proposer_override: str | None = None,
+    challengers_override: list[str] | None = None,
+    challenger_count: int | None = None,
+) -> None:
+    """Keep refinement and execution in one manager, ledger, and event loop."""
+    pm = await _setup_providers(config)
+    with pm.usage_scope():
+        enriched = await _refine_question(question, config, provider_manager=pm)
+        if decompose:
+            await _ask_decompose_async(enriched, config, provider_manager=pm)
+        elif protocol == "voting":
+            await _ask_voting_async(enriched, config, provider_manager=pm)
+        elif protocol == "auto":
+            await _ask_auto_async(enriched, config, provider_manager=pm)
+        else:
+            result = await _ask_async(
+                enriched,
+                config,
+                provider_manager=pm,
+                panel=panel,
+                proposer_override=proposer_override,
+                challengers_override=challengers_override,
+                challenger_count=challenger_count,
+            )
+            _display_consensus_result(result)
+
+
+async def _refine_question(
+    question: str,
+    config: DuhConfig,
+    *,
+    provider_manager: ProviderManager | None = None,
+) -> str:
     """Run question refinement interactively on the CLI."""
     from duh.consensus.refine import analyze_question, enrich_question
 
-    pm = await _setup_providers(config)
-    if not pm.list_all_models():
-        return question
+    pm = (
+        provider_manager
+        if provider_manager is not None
+        else await _setup_providers(config)
+    )
+    with pm.usage_scope():
+        if not pm.list_all_models():
+            return question
 
-    result = await analyze_question(question, pm)
-    if not result.get("needs_refinement"):
-        return question
+        result = await analyze_question(question, pm)
+        if not result.get("needs_refinement"):
+            return question
 
-    questions = result.get("questions", [])
-    click.echo("\nClarifying questions:")
-    clarifications = []
-    for q in questions:
-        hint = f" ({q['hint']})" if q.get("hint") else ""
-        answer = click.prompt(f"  {q['question']}{hint}")
-        clarifications.append({"question": q["question"], "answer": answer})
+        questions = result.get("questions", [])
+        click.echo("\nClarifying questions:")
+        clarifications = []
+        for q in questions:
+            hint = f" ({q['hint']})" if q.get("hint") else ""
+            answer = click.prompt(f"  {q['question']}{hint}")
+            clarifications.append({"question": q["question"], "answer": answer})
 
-    enriched = await enrich_question(question, clarifications, pm)
-    click.echo(f"\nRefined question: {enriched}\n")
-    return enriched
+        enriched = await enrich_question(question, clarifications, pm)
+        click.echo(f"\nRefined question: {enriched}\n")
+        return enriched
 
 
 async def _ask_async(
     question: str,
     config: DuhConfig,
     *,
+    provider_manager: ProviderManager | None = None,
     panel: list[str] | None = None,
     proposer_override: str | None = None,
     challengers_override: list[str] | None = None,
@@ -733,7 +683,11 @@ async def _ask_async(
     """Async implementation for the ask command."""
     from duh.cli.display import ConsensusDisplay
 
-    pm = await _setup_providers(config)
+    pm = (
+        provider_manager
+        if provider_manager is not None
+        else await _setup_providers(config)
+    )
 
     if not pm.list_all_models():
         _error(
@@ -767,56 +721,65 @@ async def _ask_async(
 async def _ask_voting_async(
     question: str,
     config: DuhConfig,
+    *,
+    provider_manager: ProviderManager | None = None,
 ) -> None:
     """Async implementation for the ask --protocol=voting command."""
     from duh.cli.display import ConsensusDisplay
     from duh.consensus.voting import run_voting
     from duh.memory.repository import MemoryRepository
 
-    pm = await _setup_providers(config)
+    pm = (
+        provider_manager
+        if provider_manager is not None
+        else await _setup_providers(config)
+    )
 
-    if not pm.list_all_models():
-        _error(
-            "No models available. Configure providers in "
-            "~/.config/duh/config.toml or set API key environment variables."
-        )
-
-    display = ConsensusDisplay()
-    display.start()
-
-    aggregation = config.voting.aggregation
-    result = await run_voting(question, pm, aggregation=aggregation)
-
-    if result.votes:
-        display.show_votes(list(result.votes))
-
-    display.show_voting_result(result, pm.total_cost)
-
-    # Persist votes
-    factory, engine = await _create_db(config)
-    async with factory() as session:
-        repo = MemoryRepository(session)
-        thread = await repo.create_thread(question)
-        thread.status = "complete"
-        for vote in result.votes:
-            await repo.save_vote(thread.id, vote.model_ref, vote.content)
-        # Save aggregated decision
-        if result.decision:
-            turn = await repo.create_turn(thread.id, 1, "COMMIT")
-            await repo.save_decision(
-                turn.id,
-                thread.id,
-                result.decision,
-                result.confidence,
-                rigor=result.rigor,
+    with pm.usage_scope():
+        if not pm.list_all_models():
+            _error(
+                "No models available. Configure providers in "
+                "~/.config/duh/config.toml or set API key environment variables."
             )
-        await session.commit()
-    await engine.dispose()
+
+        display = ConsensusDisplay()
+        display.start()
+
+        aggregation = config.voting.aggregation
+        result = await run_voting(question, pm, aggregation=aggregation)
+
+        if result.votes:
+            display.show_votes(list(result.votes))
+
+        display.show_voting_result(result, pm.total_cost)
+
+        # Persist votes
+        factory, engine = await _create_db(config)
+        async with factory() as session:
+            repo = MemoryRepository(session)
+            thread = await repo.create_thread(question)
+            thread.status = "complete"
+            for vote in result.votes:
+                await repo.save_vote(thread.id, vote.model_ref, vote.content)
+            # Save aggregated decision
+            if result.decision:
+                turn = await repo.create_turn(thread.id, 1, "COMMIT")
+                await repo.save_decision(
+                    turn.id,
+                    thread.id,
+                    result.decision,
+                    result.confidence,
+                    rigor=result.rigor,
+                )
+            await session.commit()
+        await engine.dispose()
 
 
 async def _ask_auto_async(
     question: str,
     config: DuhConfig,
+    *,
+    provider_manager: ProviderManager | None = None,
 ) -> None:
     """Async implementation for the ask --protocol=auto command.
 
@@ -825,44 +788,51 @@ async def _ask_auto_async(
     """
     from duh.consensus.classifier import TaskType, classify_task_type
 
-    pm = await _setup_providers(config)
+    pm = (
+        provider_manager
+        if provider_manager is not None
+        else await _setup_providers(config)
+    )
 
-    if not pm.list_all_models():
-        _error(
-            "No models available. Configure providers in "
-            "~/.config/duh/config.toml or set API key environment variables."
-        )
+    with pm.usage_scope():
+        if not pm.list_all_models():
+            _error(
+                "No models available. Configure providers in "
+                "~/.config/duh/config.toml or set API key environment variables."
+            )
 
-    task_type = await classify_task_type(question, pm)
-    click.echo(f"Classified as: {task_type.value}")
+        task_type = await classify_task_type(question, pm)
+        click.echo(f"Classified as: {task_type.value}")
 
-    if task_type == TaskType.JUDGMENT:
-        await _ask_voting_async(question, config)
-    else:
-        # Reasoning or unknown -> use consensus
-        from duh.cli.display import ConsensusDisplay
+        if task_type == TaskType.JUDGMENT:
+            await _ask_voting_async(question, config, provider_manager=pm)
+        else:
+            # Reasoning or unknown -> use consensus
+            from duh.cli.display import ConsensusDisplay
 
-        display = ConsensusDisplay()
-        display.start()
-        (
-            decision,
-            confidence,
-            rigor,
-            dissent,
-            cost,
-            overview,
-            citations,
-            _followups,
-        ) = await _run_consensus(question, config, pm, display=display)
-        display.show_final_decision(
-            decision, confidence, rigor, cost, dissent, overview=overview
-        )
-        display.show_citations(citations)
+            display = ConsensusDisplay()
+            display.start()
+            (
+                decision,
+                confidence,
+                rigor,
+                dissent,
+                cost,
+                overview,
+                citations,
+                _followups,
+            ) = await _run_consensus(question, config, pm, display=display)
+            display.show_final_decision(
+                decision, confidence, rigor, cost, dissent, overview=overview
+            )
+            display.show_citations(citations)
 
 
 async def _ask_decompose_async(
     question: str,
     config: DuhConfig,
+    *,
+    provider_manager: ProviderManager | None = None,
 ) -> None:
     """Async implementation for the ask --decompose command.
 
@@ -882,93 +852,98 @@ async def _ask_decompose_async(
     from duh.consensus.scheduler import schedule_subtasks
     from duh.consensus.synthesis import synthesize
 
-    pm = await _setup_providers(config)
-
-    if not pm.list_all_models():
-        _error(
-            "No models available. Configure providers in "
-            "~/.config/duh/config.toml or set API key environment variables."
-        )
-
-    display = ConsensusDisplay()
-    display.start()
-
-    # DECOMPOSE
-    ctx = ConsensusContext(
-        thread_id="",
-        question=question,
-        max_rounds=config.general.max_rounds,
+    pm = (
+        provider_manager
+        if provider_manager is not None
+        else await _setup_providers(config)
     )
-    sm = ConsensusStateMachine(ctx)
-    sm.transition(ConsensusState.DECOMPOSE)
 
-    with display.phase_status("DECOMPOSE", "analyzing"):
-        subtask_specs = await handle_decompose(
-            ctx, pm, max_subtasks=config.decompose.max_subtasks
-        )
-
-    display.show_decompose(subtask_specs)
-
-    # Persist subtasks to DB
-    factory, engine = await _create_db(config)
-    async with factory() as session:
-        from duh.memory.repository import MemoryRepository
-
-        repo = MemoryRepository(session)
-        thread = await repo.create_thread(question)
-
-        for i, spec in enumerate(subtask_specs):
-            await repo.save_subtask(
-                parent_thread_id=thread.id,
-                label=spec.label,
-                description=spec.description,
-                dependencies=json_mod.dumps(spec.dependencies),
-                sequence_order=i,
+    with pm.usage_scope():
+        if not pm.list_all_models():
+            _error(
+                "No models available. Configure providers in "
+                "~/.config/duh/config.toml or set API key environment variables."
             )
-        await session.commit()
 
-    # Single-subtask optimization: skip synthesis
-    if len(subtask_specs) == 1:
-        result = await _run_consensus(question, config, pm, display=display)
-        (
-            decision,
-            confidence,
-            rigor,
-            dissent,
-            cost,
-            overview,
-            citations,
-            _followups,
-        ) = result
-        display.show_final_decision(
-            decision, confidence, rigor, cost, dissent, overview=overview
+        display = ConsensusDisplay()
+        display.start()
+
+        # DECOMPOSE
+        ctx = ConsensusContext(
+            thread_id="",
+            question=question,
+            max_rounds=config.general.max_rounds,
         )
-        display.show_citations(citations)
+        sm = ConsensusStateMachine(ctx)
+        sm.transition(ConsensusState.DECOMPOSE)
+
+        with display.phase_status("DECOMPOSE", "analyzing"):
+            subtask_specs = await handle_decompose(
+                ctx, pm, max_subtasks=config.decompose.max_subtasks
+            )
+
+        display.show_decompose(subtask_specs)
+
+        # Persist subtasks to DB
+        factory, engine = await _create_db(config)
+        async with factory() as session:
+            from duh.memory.repository import MemoryRepository
+
+            repo = MemoryRepository(session)
+            thread = await repo.create_thread(question)
+
+            for i, spec in enumerate(subtask_specs):
+                await repo.save_subtask(
+                    parent_thread_id=thread.id,
+                    label=spec.label,
+                    description=spec.description,
+                    dependencies=json_mod.dumps(spec.dependencies),
+                    sequence_order=i,
+                )
+            await session.commit()
+
+        # Single-subtask optimization: skip synthesis
+        if len(subtask_specs) == 1:
+            result = await _run_consensus(question, config, pm, display=display)
+            (
+                decision,
+                confidence,
+                rigor,
+                dissent,
+                cost,
+                overview,
+                citations,
+                _followups,
+            ) = result
+            display.show_final_decision(
+                decision, confidence, rigor, cost, dissent, overview=overview
+            )
+            display.show_citations(citations)
+            await engine.dispose()
+            return
+
+        # Schedule subtasks
+        subtask_results = await schedule_subtasks(
+            subtask_specs, question, config, pm, display=display
+        )
+
+        for sr in subtask_results:
+            display.show_subtask_progress(sr)
+
+        # Synthesize
+        with display.phase_status("SYNTHESIS", "merging"):
+            synthesis_result = await synthesize(question, subtask_results, pm)
+
+        display.show_synthesis(synthesis_result)
+        display.show_final_decision(
+            synthesis_result.content,
+            synthesis_result.confidence,
+            synthesis_result.rigor,
+            pm.total_cost,
+            None,
+        )
+
         await engine.dispose()
-        return
-
-    # Schedule subtasks
-    subtask_results = await schedule_subtasks(
-        subtask_specs, question, config, pm, display=display
-    )
-
-    for sr in subtask_results:
-        display.show_subtask_progress(sr)
-
-    # Synthesize
-    with display.phase_status("SYNTHESIS", "merging"):
-        synthesis_result = await synthesize(question, subtask_results, pm)
-
-    display.show_synthesis(synthesis_result)
-    display.show_final_decision(
-        synthesis_result.content,
-        synthesis_result.confidence,
-        synthesis_result.rigor,
-        pm.total_cost,
-        None,
-    )
-
-    await engine.dispose()
 
 
 # ── recall ───────────────────────────────────────────────────────
@@ -2751,61 +2726,62 @@ async def _batch_async(
             click.echo(f"\n{header:─<60}")
             click.echo(f"Q: {truncated}")
 
-        cost_before = pm.total_cost
+        with pm.usage_scope():
+            cost_before = pm.total_cost
 
-        try:
-            if q_protocol == "voting":
-                from duh.consensus.voting import run_voting
+            try:
+                if q_protocol == "voting":
+                    from duh.consensus.voting import run_voting
 
-                aggregation = config.voting.aggregation
-                vr = await run_voting(question, pm, aggregation=aggregation)
-                decision = vr.decision or ""
-                confidence = vr.confidence
-                rigor = vr.rigor
-            else:
-                (
-                    decision,
-                    confidence,
-                    rigor,
-                    _dissent,
-                    _cost,
-                    _overview,
-                    _citations,
-                    _fups,
-                ) = await _run_consensus(question, config, pm)
+                    aggregation = config.voting.aggregation
+                    vr = await run_voting(question, pm, aggregation=aggregation)
+                    decision = vr.decision or ""
+                    confidence = vr.confidence
+                    rigor = vr.rigor
+                else:
+                    (
+                        decision,
+                        confidence,
+                        rigor,
+                        _dissent,
+                        _cost,
+                        _overview,
+                        _citations,
+                        _fups,
+                    ) = await _run_consensus(question, config, pm)
 
-            q_cost = pm.total_cost - cost_before
-            total_cost += q_cost
+                q_cost = pm.total_cost - cost_before
+                total_cost += q_cost
 
-            results.append(
-                {
-                    "question": question,
-                    "decision": decision,
-                    "confidence": confidence,
-                    "rigor": rigor,
-                    "cost": round(q_cost, 4),
-                }
-            )
+                results.append(
+                    {
+                        "question": question,
+                        "decision": decision,
+                        "confidence": confidence,
+                        "rigor": rigor,
+                        "cost": round(q_cost, 4),
+                    }
+                )
 
-            if output_fmt == "text":
-                click.echo(f"Decision: {decision[:200]}")
-                click.echo(f"Confidence: {confidence:.0%}  Rigor: {rigor:.0%}")
-                click.echo(f"Cost: ${q_cost:.4f}")
+                if output_fmt == "text":
+                    click.echo(f"Decision: {decision[:200]}")
+                    click.echo(f"Confidence: {confidence:.0%}  Rigor: {rigor:.0%}")
+                    click.echo(f"Cost: ${q_cost:.4f}")
 
-        except Exception as e:
-            q_cost = pm.total_cost - cost_before
-            total_cost += q_cost
-            results.append(
-                {
-                    "question": question,
-                    "error": str(e),
-                    "confidence": 0.0,
-                    "rigor": 0.0,
-                    "cost": round(q_cost, 4),
-                }
-            )
-            if output_fmt == "text":
-                click.echo(f"Error: {e}")
+            except Exception as e:
+                q_cost = pm.total_cost - cost_before
+                total_cost += q_cost
+                results.append(
+                    {
+                        "question": question,
+                        "error": str(e),
+                        "confidence": 0.0,
+                        "rigor": 0.0,
+                        "cost": round(q_cost, 4),
+                    }
+                )
+                if output_fmt == "text":
+                    click.echo(f"Error: {e}")
 
     elapsed = time.monotonic() - start_time
 

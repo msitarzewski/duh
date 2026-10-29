@@ -2,7 +2,15 @@
 
 from __future__ import annotations
 
+from typing import Literal, TypeAlias
+
 from pydantic import BaseModel, Field
+
+ChallengeFraming: TypeAlias = Literal["flaw", "alternative", "risk", "devils_advocate"]
+
+
+def _default_challenge_types() -> list[ChallengeFraming]:
+    return ["flaw", "alternative", "risk", "devils_advocate"]
 
 
 class ProviderConfig(BaseModel):
@@ -24,8 +32,8 @@ class ConsensusConfig(BaseModel):
 
     panel: list[str] = Field(default_factory=list)
     proposer_strategy: str = "round_robin"
-    challenge_types: list[str] = Field(
-        default_factory=lambda: ["flaw", "alternative", "risk", "devils_advocate"]
+    challenge_types: list[ChallengeFraming] = Field(
+        default_factory=_default_challenge_types
     )
     min_challengers: int = 2
 

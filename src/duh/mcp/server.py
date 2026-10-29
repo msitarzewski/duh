@@ -104,8 +104,9 @@ async def _handle_ask(args: dict) -> list[TextContent]:  # type: ignore[type-arg
     """Run consensus and return decision."""
     import json
 
-    from duh.cli.app import _run_consensus, _setup_providers
+    from duh.cli.app import _setup_providers
     from duh.config.loader import load_config
+    from duh.consensus.engine import run_consensus
 
     question = args["question"]
     protocol = args.get("protocol", "consensus")
@@ -115,50 +116,42 @@ async def _handle_ask(args: dict) -> list[TextContent]:  # type: ignore[type-arg
     config.general.max_rounds = rounds
     pm = await _setup_providers(config)
 
-    if protocol == "voting":
-        from duh.consensus.voting import run_voting
+    with pm.usage_scope():
+        if protocol == "voting":
+            from duh.consensus.voting import run_voting
 
-        aggregation = config.voting.aggregation
-        result = await run_voting(question, pm, aggregation=aggregation)
-        return [
-            TextContent(
-                type="text",
-                text=json.dumps(
-                    {
-                        "decision": result.decision,
-                        "confidence": result.confidence,
-                        "rigor": result.rigor,
-                        "votes": len(result.votes),
-                        "cost": pm.total_cost,
-                    }
-                ),
-            )
-        ]
-    else:
-        (
-            decision,
-            confidence,
-            rigor,
-            dissent,
-            cost,
-            _overview,
-            _citations,
-            _followups,
-        ) = await _run_consensus(question, config, pm)
-        return [
-            TextContent(
-                type="text",
-                text=json.dumps(
-                    {
-                        "decision": decision,
-                        "confidence": confidence,
-                        "rigor": rigor,
-                        "dissent": dissent,
-                        "cost": cost,
-                    }
-                ),
-            )
-        ]
+            aggregation = config.voting.aggregation
+            result = await run_voting(question, pm, aggregation=aggregation)
+            return [
+                TextContent(
+                    type="text",
+                    text=json.dumps(
+                        {
+                            "decision": result.decision,
+                            "confidence": result.confidence,
+                            "rigor": result.rigor,
+                            "votes": len(result.votes),
+                            "cost": pm.total_cost,
+                        }
+                    ),
+                )
+            ]
+        else:
+            consensus_result = await run_consensus(question, config, pm)
+            return [
+                TextContent(
+                    type="text",
+                    text=json.dumps(
+                        {
+                            "decision": consensus_result.decision,
+                            "confidence": consensus_result.confidence,
+                            "rigor": consensus_result.rigor,
+                            "dissent": consensus_result.dissent,
+                            "cost": consensus_result.usage.cost_usd,
+                        }
+                    ),
+                )
+            ]
 
 
 async def _handle_recall(args: dict) -> list[TextContent]:  # type: ignore[type-arg]

@@ -10,8 +10,9 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from duh.api.app import create_app
 from duh.config.schema import DuhConfig
+from duh.consensus.engine import ConsensusResult
 from duh.memory.models import Base
-from duh.providers.manager import ProviderManager
+from duh.providers.manager import ProviderManager, UsageSnapshot
 from tests.fixtures.providers import MockProvider
 
 # ── Helpers ────────────────────────────────────────────────────
@@ -255,19 +256,26 @@ class TestUnifiedPersistence:
     """REST persists via the shared incremental path (not a lite path)."""
 
     async def test_forwards_db_factory_and_returns_thread_id(self) -> None:
-        """REST hands its db_factory to _run_consensus and returns the
+        """REST hands its db_factory to the shared engine adapter and returns the
         thread ID the incremental persister creates up front."""
         client, _ = await _make_app()
         seen: dict[str, object] = {}
 
         async def fake_run_consensus(question, config, pm, *args, **kwargs):  # type: ignore[no-untyped-def]
             seen["db_factory"] = kwargs.get("db_factory")
-            cb = kwargs.get("on_thread_created")
-            if cb is not None:
-                cb("thread-xyz")
-            return ("Decision", 0.9, 1.0, None, 0.01, None, [], [])
+            return ConsensusResult(
+                question,
+                "Decision",
+                0.9,
+                1.0,
+                None,
+                UsageSnapshot(10, 5, 0.01),
+                thread_id="thread-xyz",
+            )
 
-        with patch("duh.cli.app._run_consensus", side_effect=fake_run_consensus):
+        with patch(
+            "duh.memory.persist.run_persisted_consensus", side_effect=fake_run_consensus
+        ):
             resp = client.post("/api/ask", json={"question": "Which DB?"})
 
         assert resp.status_code == 200
@@ -283,9 +291,13 @@ class TestUnifiedPersistence:
 
         async def fake_run_consensus(question, config, pm, *args, **kwargs):  # type: ignore[no-untyped-def]
             # Simulate persistence not producing a thread: callback not called.
-            return ("Decision", 0.9, 1.0, None, 0.01, None, [], [])
+            return ConsensusResult(
+                question, "Decision", 0.9, 1.0, None, UsageSnapshot(10, 5, 0.01)
+            )
 
-        with patch("duh.cli.app._run_consensus", side_effect=fake_run_consensus):
+        with patch(
+            "duh.memory.persist.run_persisted_consensus", side_effect=fake_run_consensus
+        ):
             resp = client.post("/api/ask", json={"question": "Which DB?"})
 
         assert resp.status_code == 200

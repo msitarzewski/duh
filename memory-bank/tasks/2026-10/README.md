@@ -13,6 +13,13 @@
 ## Remaining Modernization
 Unified engine and per-run usage, migration convergence, provider/platform upgrades, package boundaries, frontend accessibility, and release delivery remain outside this completed batch.
 
+## Work in Progress
+
+### 2026-10-29: Shared engine and run-scoped usage [IN-PROGRESS]
+- Consolidating orchestration behind one typed public API with compatibility adapters.
+- Isolating concurrent request budgets while retaining aggregate telemetry and child-task accounting.
+- State: QA on the isolated review branch; 1,733 tests passed (12 load tests excluded), mypy/Ruff/formatting passed. Source is frozen for the review revision; integration remains pending.
+
 ## Memory Bank Refresh (2026-10-29)
 
 Refreshed quick-start/current-context references and documented the privacy policy. Public entries retain source-level improvements and verified checks without downstream implementation or operational access details. No additional implementation, release, or deployment occurred.

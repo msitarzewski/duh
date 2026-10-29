@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 from typing import Any
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from click.testing import CliRunner
@@ -13,7 +13,9 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.pool import StaticPool
 
 from duh.cli.app import cli
+from duh.consensus.engine import ConsensusResult
 from duh.memory.models import Base
+from duh.providers.manager import UsageSnapshot
 
 # ── Helpers ──────────────────────────────────────────────────────
 
@@ -164,7 +166,7 @@ class TestHandleAsk:
     async def test_consensus_protocol(self) -> None:
         from duh.mcp.server import _handle_ask
 
-        mock_pm = AsyncMock()
+        mock_pm = MagicMock()
         mock_pm.total_cost = 0.05
 
         with (
@@ -175,17 +177,15 @@ class TestHandleAsk:
                 return_value=mock_pm,
             ),
             patch(
-                "duh.cli.app._run_consensus",
+                "duh.consensus.engine.run_consensus",
                 new_callable=AsyncMock,
-                return_value=(
+                return_value=ConsensusResult(
+                    "Question",
                     "Use SQLite.",
                     0.9,
                     1.0,
                     "minor dissent",
-                    0.05,
-                    None,
-                    [],
-                    [],
+                    UsageSnapshot(cost_usd=0.05),
                 ),
             ),
         ):
@@ -223,7 +223,7 @@ class TestHandleAsk:
             strategy="majority",
             confidence=0.85,
         )
-        mock_pm = AsyncMock()
+        mock_pm = MagicMock()
         mock_pm.total_cost = 0.03
 
         with (

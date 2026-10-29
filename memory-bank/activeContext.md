@@ -1,11 +1,19 @@
 # Active Context
 
 **Last Updated**: 2026-10-29
-**Current Phase**: Approved security foundation applied; batch complete
-**State**: END for this batch (APPLY and DOCS complete)
+**Current Phase**: Shared engine and run-scoped usage consolidation
+**State**: QA in an isolated review branch; public source checks passed
 **Documentation policy**: Record public source behavior and validation only; omit credentials, personal information, machine access details, and restricted downstream implementation.
-**Branch**: `codex/security-foundation` in the working repository; `main` unchanged
-**Next Action**: Continue remaining modernization; push/PR/release only when requested.
+**Branch**: `codex/recovery-engine` review branch based on the committed security foundation; original working branch and `main` unchanged
+**Next Action**: Consolidate orchestration behind typed public events/results, preserve compatibility adapters, isolate concurrent run budgets, and validate offline. No publication or deployment is authorized.
+
+## Shared Engine Work in Progress
+- User authorized implementing the recommended remaining engine/usage work.
+- Extend existing CLI, REST, WebSocket, MCP, scheduler, provider manager, and persistence consumers around one public orchestration module.
+- Preserve legacy tuple compatibility, selected models, optional flows, deadlines, fatal-error cancellation, and incremental persistence.
+- Use run-scoped usage and budgets inherited by child tasks; aggregate telemetry must not mix request budgets.
+- Keep consumer-specific behavior outside public engine source and entries; omit credentials and operational access details.
+- Working QA: shared engine/compatibility adapters and scoped ledgers passed 1,733 tests (12 load tests excluded), mypy for 65 files, Ruff, and formatting. Refinement budgets, callback aborts, framing validation, and repeated-model usage passed audit regressions. Source is frozen for an immutable review revision; full integration remains pending.
 
 ## Approved Security Foundation
 - Scope: reusable engine, API, provider, tool, and validation improvements in this repository.

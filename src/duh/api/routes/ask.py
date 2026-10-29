@@ -64,7 +64,13 @@ class AskResponse(BaseModel):
 
 @router.post("/ask", response_model=AskResponse)
 async def ask(body: AskRequest, request: Request) -> AskResponse | JSONResponse:
-    """Run a consensus query."""
+    """Run a query with an isolated ledger shared by all of its child calls."""
+    with request.app.state.provider_manager.usage_scope():
+        return await _ask_scoped(body, request)
+
+
+async def _ask_scoped(body: AskRequest, request: Request) -> AskResponse | JSONResponse:
+    """Dispatch within the request's existing usage scope."""
     config = request.app.state.config.model_copy(deep=True)
     pm = request.app.state.provider_manager
 
@@ -107,50 +113,35 @@ async def ask(body: AskRequest, request: Request) -> AskResponse | JSONResponse:
 async def _handle_consensus(  # type: ignore[no-untyped-def]
     body: AskRequest, config, pm, db_factory=None, tool_registry=None
 ) -> AskResponse:
-    """Run the consensus protocol."""
-    from duh.cli.app import _run_consensus
+    """Run the public engine through its incremental storage adapter."""
+    from duh.consensus.engine import EngineOptions
+    from duh.memory.persist import run_persisted_consensus
 
-    use_native_search = config.tools.enabled and config.tools.web_search.native
-
-    # Persist the full debate via the shared incremental path (same as CLI/WS),
-    # capturing the thread ID it creates up front. Replaces the old lite path
-    # that only saved the final decision.
-    created: dict[str, str] = {}
-    (
-        decision,
-        confidence,
-        rigor,
-        dissent,
-        cost,
-        _overview,
-        _citations,
-        _followups,
-    ) = await _run_consensus(
+    result = await run_persisted_consensus(
         body.question,
         config,
         pm,
-        tool_registry=tool_registry,
-        panel=body.panel,
-        proposer_override=body.proposer,
-        challengers_override=body.challengers,
-        web_search=use_native_search,
-        db_factory=db_factory,
-        on_thread_created=lambda tid: created.__setitem__("id", tid),
-    )
-    thread_id: str | None = created.get("id")
-
-    return AskResponse(
-        decision=decision,
-        confidence=confidence,
-        rigor=rigor,
-        dissent=dissent,
-        cost=cost,
-        usage=UsageResponse(
-            input_tokens=pm.total_input_tokens,
-            output_tokens=pm.total_output_tokens,
-            cost_usd=cost,
+        options=EngineOptions(
+            panel=tuple(body.panel) if body.panel else None,
+            proposer=body.proposer,
+            challengers=tuple(body.challengers) if body.challengers else None,
+            web_search=config.tools.enabled and config.tools.web_search.native,
         ),
-        thread_id=thread_id,
+        tool_registry=tool_registry,
+        db_factory=db_factory,
+    )
+    return AskResponse(
+        decision=result.decision,
+        confidence=result.confidence,
+        rigor=result.rigor,
+        dissent=result.dissent,
+        cost=result.usage.cost_usd,
+        usage=UsageResponse(
+            input_tokens=result.usage.input_tokens,
+            output_tokens=result.usage.output_tokens,
+            cost_usd=result.usage.cost_usd,
+        ),
+        thread_id=result.thread_id or None,
         protocol_used="consensus",
     )
 
@@ -199,24 +190,20 @@ async def _handle_decompose(body: AskRequest, config, pm) -> AskResponse:  # typ
 
     # Single-subtask optimization: run normal consensus
     if len(subtask_specs) == 1:
-        from duh.cli.app import _run_consensus
+        from duh.consensus.engine import run_consensus
 
-        (
-            decision,
-            confidence,
-            rigor,
-            dissent,
-            cost,
-            _overview,
-            _citations,
-            _followups,
-        ) = await _run_consensus(body.question, config, pm)
+        result = await run_consensus(body.question, config, pm)
         return AskResponse(
-            decision=decision,
-            confidence=confidence,
-            rigor=rigor,
-            dissent=dissent,
-            cost=cost,
+            decision=result.decision,
+            confidence=result.confidence,
+            rigor=result.rigor,
+            dissent=result.dissent,
+            cost=result.usage.cost_usd,
+            usage=UsageResponse(
+                input_tokens=result.usage.input_tokens,
+                output_tokens=result.usage.output_tokens,
+                cost_usd=result.usage.cost_usd,
+            ),
             protocol_used="decompose",
         )
 
@@ -229,6 +216,11 @@ async def _handle_decompose(body: AskRequest, config, pm) -> AskResponse:  # typ
         confidence=synthesis_result.confidence,
         rigor=synthesis_result.rigor,
         cost=pm.total_cost,
+        usage=UsageResponse(
+            input_tokens=pm.total_input_tokens,
+            output_tokens=pm.total_output_tokens,
+            cost_usd=pm.total_cost,
+        ),
         protocol_used="decompose",
     )
 
@@ -239,7 +231,10 @@ async def refine(body: RefineRequest, request: Request) -> RefineResponse:
     from duh.consensus.refine import analyze_question
 
     pm = request.app.state.provider_manager
-    result = await analyze_question(body.question, pm, max_questions=body.max_questions)
+    with pm.usage_scope():
+        result = await analyze_question(
+            body.question, pm, max_questions=body.max_questions
+        )
     return RefineResponse(
         needs_refinement=result.get("needs_refinement", False),
         questions=result.get("questions", []),
@@ -252,5 +247,8 @@ async def enrich(body: EnrichRequest, request: Request) -> EnrichResponse:
     from duh.consensus.refine import enrich_question
 
     pm = request.app.state.provider_manager
-    enriched = await enrich_question(body.original_question, body.clarifications, pm)
+    with pm.usage_scope():
+        enriched = await enrich_question(
+            body.original_question, body.clarifications, pm
+        )
     return EnrichResponse(enriched_question=enriched)

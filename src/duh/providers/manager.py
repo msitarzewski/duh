@@ -3,12 +3,40 @@
 from __future__ import annotations
 
 import time
+from contextlib import contextmanager
+from contextvars import ContextVar
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 from duh.core.errors import CostLimitExceededError, ModelNotFoundError, ProviderError
 
 if TYPE_CHECKING:
+    from collections.abc import Iterator
+
     from duh.providers.base import ModelInfo, ModelProvider, TokenUsage
+
+
+@dataclass(frozen=True, slots=True)
+class UsageSnapshot:
+    """Immutable totals for one execution, independent of global telemetry."""
+
+    input_tokens: int = 0
+    output_tokens: int = 0
+    cost_usd: float = 0.0
+
+
+@dataclass(slots=True)
+class UsageLedger:
+    """A run's mutable ledger, inherited by its asynchronous child tasks."""
+
+    input_tokens: int = 0
+    output_tokens: int = 0
+    cost_usd: float = 0.0
+    cost_by_provider: dict[str, float] = field(default_factory=dict)
+    parent: UsageLedger | None = field(default=None, repr=False)
+
+    def snapshot(self) -> UsageSnapshot:
+        return UsageSnapshot(self.input_tokens, self.output_tokens, self.cost_usd)
 
 
 class ProviderQuotaExceededError(ProviderError):
@@ -39,7 +67,8 @@ class ProviderManager:
         """Create a new provider manager.
 
         Args:
-            cost_hard_limit: Maximum cumulative cost in USD. 0 = no limit.
+            cost_hard_limit: Maximum run cost in USD. Unscoped callers retain
+                cumulative enforcement for compatibility. 0 = no limit.
         """
         self._providers: dict[str, ModelProvider] = {}
         self._model_index: dict[str, ModelInfo] = {}  # model_ref -> ModelInfo
@@ -50,6 +79,9 @@ class ProviderManager:
         self._cost_by_provider: dict[str, float] = {}
         self._provider_rate_limits: dict[str, int] = {}  # provider_id -> rpm
         self._provider_requests: dict[str, list[float]] = {}  # pid -> ts
+        self._run_usage: ContextVar[UsageLedger | None] = ContextVar(
+            f"provider_manager_usage_{id(self)}", default=None
+        )
 
     # ── Registration ─────────────────────────────────────────────
 
@@ -129,25 +161,59 @@ class ProviderManager:
 
     # ── Cost tracking ────────────────────────────────────────────
 
+    @contextmanager
+    def usage_scope(self, *, child: bool = False) -> Iterator[UsageLedger]:
+        """Isolate a run while retaining its budget across nested operations.
+
+        Child tasks inherit the same ledger. Independent request tasks create
+        different ledgers even when they share this provider manager. Nested
+        engines/subtasks reuse the current ledger instead of resetting budget.
+        ``child=True`` measures a subtask separately while also charging its
+        parent ledger and enforcing the outermost run's hard limit.
+        """
+        existing = self._run_usage.get()
+        if existing is not None and not child:
+            yield existing
+            return
+        ledger = UsageLedger(parent=existing)
+        token = self._run_usage.set(ledger)
+        try:
+            yield ledger
+        finally:
+            self._run_usage.reset(token)
+
+    @property
+    def aggregate_usage(self) -> UsageSnapshot:
+        """All-time telemetry, which is never used as another run's budget."""
+        return UsageSnapshot(
+            self._total_input_tokens, self._total_output_tokens, self._total_cost
+        )
+
     @property
     def total_cost(self) -> float:
-        """Cumulative cost in USD across all providers."""
-        return self._total_cost
+        """Active scope cost, or cumulative telemetry outside an execution."""
+        ledger = self._run_usage.get()
+        return ledger.cost_usd if ledger is not None else self._total_cost
 
     @property
     def total_input_tokens(self) -> int:
-        """Cumulative input tokens across all providers."""
-        return self._total_input_tokens
+        """Active scope input tokens, or cumulative telemetry when unscoped."""
+        ledger = self._run_usage.get()
+        return ledger.input_tokens if ledger is not None else self._total_input_tokens
 
     @property
     def total_output_tokens(self) -> int:
-        """Cumulative output tokens across all providers."""
-        return self._total_output_tokens
+        """Active scope output tokens, or cumulative telemetry when unscoped."""
+        ledger = self._run_usage.get()
+        return ledger.output_tokens if ledger is not None else self._total_output_tokens
 
     @property
     def cost_by_provider(self) -> dict[str, float]:
-        """Cost breakdown by provider_id."""
-        return dict(self._cost_by_provider)
+        """Active scope cost by provider, or cumulative telemetry when unscoped."""
+        ledger = self._run_usage.get()
+        return dict(
+            ledger.cost_by_provider if ledger is not None else self._cost_by_provider
+        )
 
     def record_usage(self, model_info: ModelInfo, usage: TokenUsage) -> float:
         """Record token usage and accumulate cost.
@@ -160,8 +226,8 @@ class ProviderManager:
             The cost of this individual call in USD.
 
         Raises:
-            CostLimitExceededError: If the cumulative cost exceeds
-                the hard limit (when limit > 0).
+            CostLimitExceededError: If the outer run's cost exceeds its hard
+                limit (or cumulative cost for legacy unscoped callers).
         """
         input_cost = (usage.input_tokens / 1_000_000) * model_info.input_cost_per_mtok
         output_cost = (
@@ -175,16 +241,30 @@ class ProviderManager:
         pid = model_info.provider_id
         self._cost_by_provider[pid] = self._cost_by_provider.get(pid, 0.0) + call_cost
 
-        if self._cost_hard_limit > 0 and self._total_cost > self._cost_hard_limit:
+        ledger = self._run_usage.get()
+        budget_cost = self._total_cost
+        while ledger is not None:
+            ledger.cost_usd += call_cost
+            ledger.input_tokens += usage.input_tokens
+            ledger.output_tokens += usage.output_tokens
+            ledger.cost_by_provider[pid] = (
+                ledger.cost_by_provider.get(pid, 0.0) + call_cost
+            )
+            budget_cost = ledger.cost_usd
+            ledger = ledger.parent
+
+        if self._cost_hard_limit > 0 and budget_cost > self._cost_hard_limit:
             raise CostLimitExceededError(
                 limit=self._cost_hard_limit,
-                current=self._total_cost,
+                current=budget_cost,
             )
 
         return call_cost
 
     def reset_cost(self) -> None:
         """Reset the cost and token accumulators to zero."""
+        if self._run_usage.get() is not None:
+            raise RuntimeError("Cannot reset usage during an active run")
         self._total_cost = 0.0
         self._total_input_tokens = 0
         self._total_output_tokens = 0

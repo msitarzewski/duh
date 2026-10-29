@@ -5,17 +5,17 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel, Field, ValidationError
 
 from duh.api.auth import authenticate_connection
-from duh.core.errors import ProviderError
 
 if TYPE_CHECKING:
     from duh.config.schema import DuhConfig
-    from duh.memory.persist import IncrementalPersister
+    from duh.consensus.machine import ChallengeResult, ConsensusContext
+    from duh.providers.base import ModelResponse
     from duh.providers.manager import ProviderManager
     from duh.tools.registry import ToolRegistry
 
@@ -128,284 +128,66 @@ async def _stream_consensus(
     challengers_override: list[str] | None = None,
     tool_registry: ToolRegistry | None = None,
 ) -> None:
-    """Run consensus loop and stream events to WebSocket."""
-    from duh.consensus.convergence import check_convergence
-    from duh.consensus.handlers import (
-        generate_overview,
-        handle_commit,
-        handle_propose,
-        handle_revise,
-        select_challengers,
-        select_proposer,
-    )
-    from duh.consensus.machine import (
-        ConsensusContext,
-        ConsensusState,
-        ConsensusStateMachine,
-    )
+    """Adapt shared engine events and incremental persistence to WebSocket IO."""
+    from duh.consensus.engine import ConsensusEvent, EngineOptions
+    from duh.memory.persist import run_persisted_consensus
 
-    ctx = ConsensusContext(
-        thread_id="",
-        question=question,
-        max_rounds=config.general.max_rounds,
-    )
-    sm = ConsensusStateMachine(ctx)
+    async def consume(event: ConsensusEvent) -> None:
+        await ws.send_json(event.to_wire())
 
-    effective_panel = panel or config.consensus.panel or None
-    use_native_search = config.tools.enabled and config.tools.web_search.native
+    async def thread_created(thread_id: str) -> None:
+        await ws.send_json({"type": "thread_started", "thread_id": thread_id})
 
-    # Persist incrementally so a mid-run disconnect/crash leaves a real
-    # partial thread. Create it up front and tell the client its ID early.
-    persister: IncrementalPersister | None = None
-    db_factory = getattr(ws.app.state, "db_factory", None)
-    if db_factory is not None:
-        from duh.memory.persist import IncrementalPersister
-
-        persister = IncrementalPersister(db_factory, question)
-        try:
-            thread_id_early = await persister.start()
-            ctx.thread_id = thread_id_early
-            await ws.send_json({"type": "thread_started", "thread_id": thread_id_early})
-        except Exception:
-            logger.exception("Failed to create consensus thread")
-            persister = None
-
-    for _round in range(config.general.max_rounds):
-        # PROPOSE
-        sm.transition(ConsensusState.PROPOSE)
-        proposer = proposer_override or select_proposer(pm, panel=effective_panel)
-        await ws.send_json(
-            {
-                "type": "phase_start",
-                "phase": "PROPOSE",
-                "model": proposer,
-                "round": ctx.current_round,
-            }
-        )
-        propose_resp = await handle_propose(
-            ctx,
-            pm,
-            proposer,
-            tool_registry=tool_registry,
-            web_search=use_native_search,
-        )
-        await ws.send_json(
-            {
-                "type": "phase_complete",
-                "phase": "PROPOSE",
-                "content": ctx.proposal or "",
-                "truncated": propose_resp.finish_reason != "stop",
-                "citations": ctx.proposal_citations or None,
-            }
-        )
-
-        # CHALLENGE — fan out in parallel, stream each result as it arrives
-        sm.transition(ConsensusState.CHALLENGE)
-        challengers = challengers_override or select_challengers(
-            pm, proposer, panel=effective_panel
-        )
-        await ws.send_json(
-            {
-                "type": "phase_start",
-                "phase": "CHALLENGE",
-                "models": challengers,
-                "round": ctx.current_round,
-            }
-        )
-        await _stream_challenges(
-            ws,
-            ctx,
-            pm,
-            challengers,
-            tool_registry=tool_registry,
-            web_search=use_native_search,
-        )
-        await ws.send_json({"type": "phase_complete", "phase": "CHALLENGE"})
-
-        # REVISE
-        sm.transition(ConsensusState.REVISE)
-        reviser = ctx.proposal_model or proposer
-        await ws.send_json(
-            {
-                "type": "phase_start",
-                "phase": "REVISE",
-                "model": reviser,
-                "round": ctx.current_round,
-            }
-        )
-        revise_resp = await handle_revise(
-            ctx, pm, tool_registry=tool_registry, web_search=use_native_search
-        )
-        await ws.send_json(
-            {
-                "type": "phase_complete",
-                "phase": "REVISE",
-                "content": ctx.revision or "",
-                "truncated": revise_resp.finish_reason != "stop",
-                "citations": ctx.revision_citations or None,
-            }
-        )
-
-        # COMMIT
-        sm.transition(ConsensusState.COMMIT)
-        await handle_commit(ctx, pm)
-        if persister is not None:
-            try:
-                await persister.persist_round(ctx.snapshot_round())
-            except Exception:
-                logger.exception("Failed to persist consensus round")
-        await ws.send_json(
-            {
-                "type": "commit",
-                "confidence": ctx.confidence,
-                "rigor": ctx.rigor,
-                "dissent": ctx.dissent,
-                "round": ctx.current_round,
-            }
-        )
-
-        if check_convergence(ctx):
-            break
-
-    sm.transition(ConsensusState.COMPLETE)
-
-    # Generate executive overview and follow-up questions (best-effort)
-    await generate_overview(ctx, pm)
-    from duh.consensus.handlers import generate_followups
-
-    await generate_followups(ctx, pm)
-
-    # Finalize the incrementally-persisted thread (mark complete, attach
-    # overview / follow-ups / usage). The thread + all rounds are already saved.
-    thread_id: str | None = ctx.thread_id or None
-    if persister is not None:
-        try:
-            await persister.finalize(
-                overview=ctx.overview,
-                followups=ctx.followups or None,
-                usage={
-                    "input_tokens": pm.total_input_tokens,
-                    "output_tokens": pm.total_output_tokens,
-                    "cost_usd": pm.total_cost,
-                },
-            )
-        except Exception:
-            logger.exception("Failed to finalize consensus thread")
-
-    await ws.send_json(
-        {
-            "type": "complete",
-            "decision": ctx.decision or "",
-            "confidence": ctx.confidence,
-            "rigor": ctx.rigor,
-            "dissent": ctx.dissent,
-            "cost": pm.total_cost,
-            "usage": {
-                "input_tokens": pm.total_input_tokens,
-                "output_tokens": pm.total_output_tokens,
-                "cost_usd": pm.total_cost,
-            },
-            "thread_id": thread_id,
-            "overview": ctx.overview,
-            "followups": ctx.followups if ctx.followups else None,
-        }
+    await run_persisted_consensus(
+        question,
+        config,
+        pm,
+        options=EngineOptions(
+            panel=tuple(panel) if panel else None,
+            proposer=proposer_override,
+            challengers=tuple(challengers_override) if challengers_override else None,
+            web_search=config.tools.enabled and config.tools.web_search.native,
+        ),
+        tool_registry=tool_registry,
+        emit=consume,
+        db_factory=getattr(ws.app.state, "db_factory", None),
+        on_thread_created=thread_created,
     )
     await ws.close()
 
 
 async def _stream_challenges(
     ws: WebSocket,
-    ctx: object,
-    pm: object,
+    ctx: ConsensusContext,
+    pm: ProviderManager,
     challengers: list[str],
     *,
-    tool_registry: object | None = None,
+    tool_registry: ToolRegistry | None = None,
     web_search: bool = False,
 ) -> None:
-    """Run challengers in parallel, streaming each result to WS as it arrives.
+    """Compatibility adapter for the shared challenge handler."""
+    from duh.consensus.handlers import handle_challenge
 
-    Updates ``ctx.challenges`` with results.
-    """
-    import asyncio
-
-    from duh.consensus.handlers import (
-        _FRAMING_ORDER,
-        _call_challenger,
-        detect_sycophancy,
-    )
-    from duh.consensus.machine import ChallengeResult
-
-    async def _run(idx: int, ref: str) -> tuple[int, tuple[str, str, Any]]:
-        result = await _call_challenger(
-            ctx,  # type: ignore[arg-type]
-            pm,  # type: ignore[arg-type]
-            ref,
-            _FRAMING_ORDER[idx % len(_FRAMING_ORDER)],
-            temperature=0.7,
-            max_tokens=32768,
-            tool_registry=tool_registry,  # type: ignore[arg-type]
-            web_search=web_search,
+    async def on_result(challenge: ChallengeResult, response: ModelResponse) -> None:
+        await ws.send_json(
+            {
+                "type": "challenge",
+                "model": challenge.model_ref,
+                "content": challenge.content,
+                "truncated": response.finish_reason != "stop",
+                "citations": list(challenge.citations) or None,
+            }
         )
-        return idx, result
 
-    tasks = [asyncio.create_task(_run(i, ref)) for i, ref in enumerate(challengers)]
+    async def on_error(model: str) -> None:
+        await ws.send_json({"type": "challenge_error", "model": model})
 
-    challenges: list[ChallengeResult] = []
-
-    try:
-        for coro in asyncio.as_completed(tasks):
-            try:
-                _idx, (model_ref, framing, response) = await coro
-                citation_dicts = tuple(
-                    {
-                        "url": c.url,
-                        "title": c.title,
-                        "snippet": c.snippet,
-                    }
-                    for c in (response.citations or [])
-                )
-                ch = ChallengeResult(
-                    model_ref=model_ref,
-                    content=response.content,
-                    sycophantic=detect_sycophancy(response.content),
-                    framing=framing,
-                    citations=citation_dicts,
-                )
-                challenges.append(ch)
-
-                # Stream to client immediately
-                ch_citations = (
-                    [{"url": c["url"], "title": c.get("title")} for c in ch.citations]
-                    if ch.citations
-                    else None
-                )
-                await ws.send_json(
-                    {
-                        "type": "challenge",
-                        "model": ch.model_ref,
-                        "content": ch.content,
-                        "truncated": response.finish_reason != "stop",
-                        "citations": ch_citations,
-                    }
-                )
-            except ProviderError:
-                logger.warning("Challenger failed", exc_info=True)
-    finally:
-        for task in tasks:
-            if not task.done():
-                task.cancel()
-        await asyncio.gather(*tasks, return_exceptions=True)
-
-    # Report failures
-    succeeded = {ch.model_ref for ch in challenges}
-    for ref in challengers:
-        if ref not in succeeded:
-            await ws.send_json({"type": "challenge_error", "model": ref})
-
-    if not challenges:
-        from duh.core.errors import ConsensusError
-
-        msg = "All challengers failed"
-        raise ConsensusError(msg)
-
-    ctx.challenges = challenges  # type: ignore[attr-defined]
+    await handle_challenge(
+        ctx,
+        pm,
+        challengers,
+        tool_registry=tool_registry,
+        web_search=web_search,
+        on_result=on_result,
+        on_error=on_error,
+    )

@@ -42,6 +42,7 @@ class ChallengeResult:
     sycophantic: bool = False
     framing: str = ""
     citations: tuple[dict[str, str | None], ...] = ()
+    occurrence: int = 0
 
 
 @dataclass(frozen=True, slots=True)
@@ -131,6 +132,7 @@ class ConsensusContext:
         self.rigor = 0.0
         self.dissent = None
         self.converged = False
+        self.taxonomy = None
 
     def snapshot_round(self) -> RoundResult:
         """Build a RoundResult from the current (in-progress) round data.

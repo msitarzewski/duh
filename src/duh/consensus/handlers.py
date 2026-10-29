@@ -7,17 +7,25 @@ Handlers read from and write to :class:`ConsensusContext` and use
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 from duh.consensus.machine import ChallengeResult, ConsensusState
-from duh.core.errors import ConsensusError, InsufficientModelsError, ProviderError
-from duh.providers.base import PromptMessage, gather_provider_calls
+from duh.core.errors import (
+    ConfigError,
+    ConsensusError,
+    InsufficientModelsError,
+    ProviderError,
+)
+from duh.providers.base import PromptMessage
 
 logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
+    from collections.abc import Awaitable, Callable, Sequence
+
     from duh.consensus.machine import ConsensusContext
     from duh.providers.base import ModelResponse
     from duh.providers.manager import ProviderManager
@@ -504,6 +512,14 @@ async def _call_challenger(
     return model_ref, framing, response
 
 
+def validate_challenge_framings(framings: Sequence[str] | None) -> tuple[str, ...]:
+    """Resolve supported framing keys before executing any provider calls."""
+    order = tuple(framings or _FRAMING_ORDER)
+    if any(framing not in _CHALLENGE_FRAMINGS for framing in order):
+        raise ConfigError("Unsupported challenge framing in configuration")
+    return order
+
+
 async def handle_challenge(
     ctx: ConsensusContext,
     provider_manager: ProviderManager,
@@ -513,6 +529,10 @@ async def handle_challenge(
     max_tokens: int = 32768,
     tool_registry: ToolRegistry | None = None,
     web_search: bool = False,
+    framings: Sequence[str] | None = None,
+    on_result: Callable[[ChallengeResult, ModelResponse], Awaitable[None]]
+    | None = None,
+    on_error: Callable[[str], Awaitable[None]] | None = None,
 ) -> list[ModelResponse]:
     """Execute the CHALLENGE phase of consensus.
 
@@ -549,52 +569,69 @@ async def handle_challenge(
         msg = "handle_challenge requires a proposal in context"
         raise ConsensusError(msg)
 
-    # Assign framings round-robin
+    framing_order = validate_challenge_framings(framings)
+
+    async def call(
+        index: int, ref: str
+    ) -> tuple[int, tuple[str, str, ModelResponse] | ProviderError]:
+        try:
+            result = await _call_challenger(
+                ctx,
+                provider_manager,
+                ref,
+                framing_order[index % len(framing_order)],
+                temperature=temperature,
+                max_tokens=max_tokens,
+                tool_registry=tool_registry,
+                web_search=web_search,
+            )
+            return index, result
+        except ProviderError as exc:
+            return index, exc
+
     tasks = [
-        _call_challenger(
-            ctx,
-            provider_manager,
-            ref,
-            _FRAMING_ORDER[i % len(_FRAMING_ORDER)],
-            temperature=temperature,
-            max_tokens=max_tokens,
-            tool_registry=tool_registry,
-            web_search=web_search,
-        )
-        for i, ref in enumerate(challenger_models)
+        asyncio.create_task(call(i, ref)) for i, ref in enumerate(challenger_models)
     ]
-    raw_results = await gather_provider_calls(tasks)
+    successful: dict[int, tuple[ChallengeResult, ModelResponse]] = {}
 
-    challenges: list[ChallengeResult] = []
-    responses: list[ModelResponse] = []
-
-    for i, result in enumerate(raw_results):
-        if isinstance(result, ProviderError):
-            failed_ref = challenger_models[i]
-            logger.warning("Challenger %s failed: %s", failed_ref, result)
-            continue
-        model_ref, framing, response = result
-        citation_dicts = tuple(
-            {"url": c.url, "title": c.title, "snippet": c.snippet}
-            for c in (response.citations or [])
-        )
-        challenges.append(
-            ChallengeResult(
+    try:
+        for completed in asyncio.as_completed(tasks):
+            i, result = await completed
+            if isinstance(result, ProviderError):
+                failed_ref = challenger_models[i]
+                logger.warning("Challenger %s failed: %s", failed_ref, result)
+                if on_error is not None:
+                    await on_error(failed_ref)
+                continue
+            model_ref, framing, response = result
+            citation_dicts = tuple(
+                {"url": c.url, "title": c.title, "snippet": c.snippet}
+                for c in (response.citations or [])
+            )
+            challenge = ChallengeResult(
                 model_ref=model_ref,
                 content=response.content,
                 sycophantic=detect_sycophancy(response.content),
                 framing=framing,
                 citations=citation_dicts,
+                occurrence=i,
             )
-        )
-        responses.append(response)
+            successful[i] = (challenge, response)
+            if on_result is not None:
+                await on_result(challenge, response)
+    finally:
+        for task in tasks:
+            if not task.done():
+                task.cancel()
+        await asyncio.gather(*tasks, return_exceptions=True)
 
-    if not challenges:
+    if not successful:
         msg = "All challengers failed"
         raise ConsensusError(msg)
 
-    ctx.challenges = challenges
-    return responses
+    ordered = [successful[i] for i in sorted(successful)]
+    ctx.challenges = [challenge for challenge, _response in ordered]
+    return [response for _challenge, response in ordered]
 
 
 # ── REVISE prompt + handler ───────────────────────────────────

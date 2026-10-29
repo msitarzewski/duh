@@ -13,7 +13,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from duh.api.routes.ws import router
 from duh.config.schema import DuhConfig
-from duh.consensus.machine import ChallengeResult
+from duh.consensus.machine import ChallengeResult, ConsensusState
 from duh.memory.models import Base, User
 from duh.providers.base import ModelCapability, ModelInfo, ModelResponse, TokenUsage
 
@@ -108,18 +108,6 @@ def _apply_handler_patches(
         ctx.proposal_model = model_ref
         return _make_response(proposal)
 
-    async def mock_challenge(ctx, pm, challengers, **kwargs):
-        ctx.challenges = [
-            ChallengeResult(
-                model_ref=ref,
-                content=challenge_content,
-                sycophantic=False,
-                framing="flaw",
-            )
-            for ref in challengers
-        ]
-        return [_make_response(challenge_content)]
-
     async def mock_revise(ctx, pm, **kwargs):
         ctx.revision = revision
         ctx.revision_model = ctx.proposal_model
@@ -142,8 +130,7 @@ def _apply_handler_patches(
 
     stack.enter_context(patch(f"{_HANDLERS}.handle_propose", propose_mock))
 
-    # _stream_challenges in ws.py replaces the old handle_challenge call
-    async def mock_stream_challenges(ws, ctx, pm, challengers, **kwargs):
+    async def mock_challenge(ctx, pm, challengers, **kwargs):
         ctx.challenges = [
             ChallengeResult(
                 model_ref=ref,
@@ -154,21 +141,12 @@ def _apply_handler_patches(
             for ref in challengers
         ]
         for ch in ctx.challenges:
-            await ws.send_json(
-                {
-                    "type": "challenge",
-                    "model": ch.model_ref,
-                    "content": ch.content,
-                    "truncated": False,
-                    "citations": None,
-                }
-            )
+            if kwargs.get("on_result") is not None:
+                await kwargs["on_result"](ch, _make_response(ch.content))
+        return [_make_response(ch.content) for ch in ctx.challenges]
 
     stack.enter_context(
-        patch(
-            "duh.api.routes.ws._stream_challenges",
-            AsyncMock(side_effect=mock_stream_challenges),
-        )
+        patch(f"{_HANDLERS}.handle_challenge", AsyncMock(side_effect=mock_challenge))
     )
     stack.enter_context(
         patch(f"{_HANDLERS}.handle_revise", AsyncMock(side_effect=mock_revise))
@@ -504,7 +482,12 @@ class TestWebSocketCostCancellation:
         ):
             await _stream_challenges(
                 ws,
-                ConsensusContext("t", "question"),
+                ConsensusContext(
+                    "t",
+                    "question",
+                    state=ConsensusState.CHALLENGE,
+                    proposal="proposal",
+                ),
                 MagicMock(),
                 ["test:cost", "test:slow"],
             )
