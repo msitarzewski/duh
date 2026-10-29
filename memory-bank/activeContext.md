@@ -1,10 +1,33 @@
 # Active Context
 
-**Last Updated**: 2026-06-22
-**Current Phase**: Catalog refresh + tooling, incremental persistence, Cloudflare/GLM provider, unified report — all merged to main (PRs #16–#21)
-**Next Action**: Continue feature work or address open questions
+**Last Updated**: 2026-10-29
+**Current Phase**: Shared engine and run-scoped usage consolidation
+**State**: APPLY for the approved shared engine and run-scoped usage batch; rollout IN PROGRESS
+**Documentation policy**: Record public source behavior and validation only; omit credentials, personal information, machine access details, and restricted downstream implementation.
+**Review Branch**: `codex/recovery-engine`; approved source revision `0a4dc9f`
+**Next Action**: Complete the user-authorized rollout, verify the installed revision and application behavior, then record the observed result. Deployment is not yet recorded as complete.
 
-## Latest Work (2026-06-22) — PRs #16–#21
+## Approved Shared Engine and Run-Scoped Usage
+- User approved completion and rollout on 2026-10-29. Implementation is complete; APPLY rollout remains in progress and live verification is pending.
+- Existing CLI, REST, WebSocket, MCP, scheduler, provider manager, and persistence consumers now share the typed public orchestration API.
+- Legacy eight-tuple compatibility, selected models, optional flows, deadlines, fatal-error cancellation, and incremental persistence are preserved.
+- Run-scoped usage and budgets are inherited by child tasks; aggregate telemetry remains separate from request budgets.
+- Keep consumer-specific behavior outside public engine source and entries; omit credentials and operational access details.
+- Final public QA: shared engine/compatibility adapters and scoped ledgers passed 1,733 tests (12 load tests excluded), mypy for 65 files, Ruff, and formatting. Refinement budgets, callback aborts, framing validation, and repeated-model usage passed audit regressions. Source is frozen at the immutable review revision below.
+- Approved source revision: `0a4dc9ffd070897f5cc68e4b23730e5480ddbd79`. Integration and container checks passed, including the advertised Python 3.11 runtime. Completion record: `tasks/2026-10/261029_shared-engine.md`.
+- Remaining modernization: migration convergence, provider/platform upgrades, package boundaries, frontend accessibility, and later delivery work. Shared engine and per-run accounting are complete in this batch.
+
+## Approved Security Foundation
+- Scope: reusable engine, API, provider, tool, and validation improvements in this repository.
+- Validation: 1,714 Python + 204 frontend tests passed; public mypy/Ruff, frontend build, and container build/smoke passed. Twelve load tests were excluded; coverage was not remeasured.
+- Post-application smoke: 90 focused tests passed; reviewed source matches the working branch.
+- Completion approved by the user on 2026-10-29; task documentation: `tasks/2026-10/261029_security-foundation.md`.
+- Source and documentation are included in the authorized feature-branch commit; no merge, package publication, or deployment performed.
+- Engine consolidation and request-scoped usage were completed in the shared-engine follow-up. Remaining work is listed above; the security task remains the historical record of the earlier batch.
+
+---
+
+## Prior Work (2026-06-22) — PRs #16–#21
 
 ### Model Catalog Refresh + Refresh Tool (PR #16 catalog, #19)
 - Added frontier models (Opus 4.8/4.7, GPT-5.5, GPT-5.4 mini, Gemini 3.5 Flash); dropped deprecated o3
@@ -176,10 +199,13 @@
 
 ## Open Questions (Still Unresolved)
 
-- Licensing (MIT vs Apache 2.0)
+- Repository license is AGPL-3.0 (`LICENSE:1`); output licensing remains a separate open question.
 - Output licensing for multi-provider synthesized content
 - Vector search solution for SQLite (sqlite-vss vs ChromaDB vs FAISS) -- v1.0 decision
 - Client library packaging: monorepo `client/` dir vs separate repo?
 - MCP server transport: stdio vs SSE vs streamable HTTP?
 - Hosted demo economics (try.duh.dev) -- deferred to post-1.0
 - A2A protocol -- deferred to post-1.0
+
+## Rollout Precheck
+- The previously excluded 12 load tests also passed offline; Ruff formatting checked 162 files. Remote CI and live rollout verification remain pending.

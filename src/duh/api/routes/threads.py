@@ -137,15 +137,15 @@ async def get_thread(thread_id: str, request: Request) -> ThreadDetailResponse:
 
 @router.get("/share/{share_token}", response_model=ThreadDetailResponse)
 async def get_shared_thread(share_token: str, request: Request) -> ThreadDetailResponse:
-    """Get a shared thread (no auth required). Token is the thread ID."""
+    """Get an explicitly published thread by its separate public slug."""
     from duh.memory.repository import MemoryRepository
 
     db_factory = request.app.state.db_factory
     async with db_factory() as session:
         repo = MemoryRepository(session)
-        thread = await repo.get_thread(share_token)
+        thread = await repo.get_thread_by_slug(share_token)
 
-    if thread is None:
+    if thread is None or not thread.is_public:
         raise HTTPException(
             status_code=404,
             detail=f"Shared thread not found: {share_token}",

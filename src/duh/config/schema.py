@@ -2,7 +2,15 @@
 
 from __future__ import annotations
 
+from typing import Literal, TypeAlias
+
 from pydantic import BaseModel, Field
+
+ChallengeFraming: TypeAlias = Literal["flaw", "alternative", "risk", "devils_advocate"]
+
+
+def _default_challenge_types() -> list[ChallengeFraming]:
+    return ["flaw", "alternative", "risk", "devils_advocate"]
 
 
 class ProviderConfig(BaseModel):
@@ -16,6 +24,7 @@ class ProviderConfig(BaseModel):
     models: list[str] = Field(default_factory=list)
     display_name: str | None = None
     rate_limit: int = 0  # 0 = unlimited, >0 = requests per minute
+    timeout_seconds: float = Field(default=120.0, gt=0)
 
 
 class ConsensusConfig(BaseModel):
@@ -23,8 +32,8 @@ class ConsensusConfig(BaseModel):
 
     panel: list[str] = Field(default_factory=list)
     proposer_strategy: str = "round_robin"
-    challenge_types: list[str] = Field(
-        default_factory=lambda: ["flaw", "alternative", "risk", "devils_advocate"]
+    challenge_types: list[ChallengeFraming] = Field(
+        default_factory=_default_challenge_types
     )
     min_challengers: int = 2
 
@@ -77,6 +86,7 @@ class ToolsConfig(BaseModel):
 
     enabled: bool = True
     max_rounds: int = 5
+    file_read_allowed_dir: str | None = None
     web_search: WebSearchConfig = Field(default_factory=WebSearchConfig)
     code_execution: CodeExecutionConfig = Field(default_factory=CodeExecutionConfig)
 
@@ -121,6 +131,7 @@ class AuthConfig(BaseModel):
     token_expiry_hours: int = 24
     registration_enabled: bool = True
     reset_token_expiry_minutes: int = 15
+    public_base_url: str = "http://localhost:8484"
 
 
 class APIConfig(BaseModel):

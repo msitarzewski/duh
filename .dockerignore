@@ -11,7 +11,8 @@ tests/
 results/
 phase0/
 memory-bank/
-docker/
+docker/*
+!docker/config.toml
 
 web/node_modules
 web/dist

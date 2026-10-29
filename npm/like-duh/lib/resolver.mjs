@@ -55,7 +55,7 @@ function checkVersion(command, prefix) {
       const vStr = version.join(".");
       console.error(
         `Warning: duh ${vStr} found, but ${DUH_MIN_VERSION}+ recommended. ` +
-          `Run: pip install --upgrade duh`
+          `Update from https://github.com/msitarzewski/duh`
       );
     }
   } catch {
@@ -69,8 +69,6 @@ function checkVersion(command, prefix) {
  * Resolution order:
  * 1. DUH_PATH env var
  * 2. duh on PATH
- * 3. uvx duh
- * 4. pipx run duh
  */
 export function resolve() {
   // 1. Explicit override
@@ -87,18 +85,6 @@ export function resolve() {
   if (canRun("duh", ["--version"])) {
     checkVersion("duh", []);
     return { command: "duh", prefix: [] };
-  }
-
-  // 3. uvx duh
-  if (canRun("uvx", ["duh", "--version"])) {
-    checkVersion("uvx", ["duh"]);
-    return { command: "uvx", prefix: ["duh"] };
-  }
-
-  // 4. pipx run duh
-  if (canRun("pipx", ["run", "duh", "--version"])) {
-    checkVersion("pipx", ["run", "duh"]);
-    return { command: "pipx", prefix: ["run", "duh"] };
   }
 
   return null;

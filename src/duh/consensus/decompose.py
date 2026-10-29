@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, Any
 
 from duh.consensus.json_extract import JSONExtractionError, extract_json
 from duh.consensus.machine import ConsensusState, SubtaskSpec
-from duh.core.errors import ConsensusError
+from duh.core.errors import ConsensusError, ProviderError
 from duh.providers.base import PromptMessage
 
 if TYPE_CHECKING:
@@ -250,9 +250,31 @@ async def handle_decompose(
             model_id,
             max_tokens=2048,
             temperature=0.3,
-            response_format="json",
+            response_format={
+                "additionalProperties": False,
+                "properties": {
+                    "subtasks": {
+                        "items": {
+                            "additionalProperties": False,
+                            "properties": {
+                                "dependencies": {
+                                    "items": {"type": "string"},
+                                    "type": "array",
+                                },
+                                "description": {"type": "string"},
+                                "label": {"type": "string"},
+                            },
+                            "required": ["label", "description", "dependencies"],
+                            "type": "object",
+                        },
+                        "type": "array",
+                    }
+                },
+                "required": ["subtasks"],
+                "type": "object",
+            },
         )
-    except Exception as exc:
+    except ProviderError as exc:
         msg = f"Decomposition model call failed: {exc}"
         raise ConsensusError(msg) from exc
 

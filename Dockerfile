@@ -10,14 +10,14 @@ RUN npm run build
 # --- python build ---
 FROM python:3.11-slim AS builder
 
-WORKDIR /build
+WORKDIR /app
 
-COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
+COPY --from=ghcr.io/astral-sh/uv:0.10.9 /uv /usr/local/bin/uv
 
 COPY pyproject.toml uv.lock ./
 COPY src/ src/
 
-RUN uv sync --no-dev --frozen
+RUN uv sync --no-dev --frozen --no-editable
 
 # --- runtime ---
 FROM python:3.11-slim AS runtime
@@ -32,8 +32,8 @@ RUN groupadd --gid 1000 duh && \
 
 WORKDIR /app
 
-COPY --from=builder /build/.venv /app/.venv
-COPY --from=builder /build/src /app/src
+COPY --from=builder /app/.venv /app/.venv
+COPY --from=builder /app/src /app/src
 COPY --from=frontend /web/dist /app/web/dist
 COPY alembic.ini ./
 COPY alembic/ alembic/

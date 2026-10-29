@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from sqlalchemy import event
@@ -10,6 +11,17 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from duh.api.routes.threads import router
 from duh.memory.models import Base
 from duh.memory.repository import MemoryRepository
+
+_TEST_APPS: list[FastAPI] = []
+
+
+@pytest.fixture(autouse=True)
+async def dispose_test_databases():
+    yield
+    for app in _TEST_APPS:
+        await app.state.engine.dispose()
+    _TEST_APPS.clear()
+
 
 # ── Helpers ────────────────────────────────────────────────────
 
@@ -32,6 +44,7 @@ async def _make_app() -> FastAPI:
     app = FastAPI(title="test")
     app.state.db_factory = factory
     app.state.engine = engine
+    _TEST_APPS.append(app)
     app.include_router(router)
     return app
 
@@ -350,3 +363,36 @@ class TestGetThread:
         assert "created_at" in data
         assert "turns" in data
         assert isinstance(data["turns"], list)
+
+
+class TestPublishedThreadAccess:
+    async def test_private_thread_uuid_and_slug_are_not_share_credentials(self):
+        from duh.memory.models import Thread
+
+        app = await _make_app()
+        thread_id = await _seed_thread(app, "Private question")
+        async with app.state.db_factory() as session:
+            thread = await session.get(Thread, thread_id)
+            thread.slug = "private-slug"
+            await session.commit()
+        with TestClient(app) as client:
+            assert client.get(f"/api/share/{thread_id}").status_code == 404
+            assert client.get("/api/share/private-slug").status_code == 404
+        await app.state.engine.dispose()
+
+    async def test_only_explicit_public_slug_is_shared(self):
+        from duh.memory.models import Thread
+
+        app = await _make_app()
+        thread_id = await _seed_thread(app, "Published question")
+        async with app.state.db_factory() as session:
+            thread = await session.get(Thread, thread_id)
+            thread.slug = "published-slug"
+            thread.is_public = True
+            await session.commit()
+        with TestClient(app) as client:
+            assert client.get(f"/api/share/{thread_id}").status_code == 404
+            response = client.get("/api/share/published-slug")
+            assert response.status_code == 200
+            assert response.json()["question"] == "Published question"
+        await app.state.engine.dispose()

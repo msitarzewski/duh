@@ -27,6 +27,16 @@ def _make_ctx(**kwargs: object) -> ConsensusContext:
     return ConsensusContext(**defaults)  # type: ignore[arg-type]
 
 
+def test_new_round_clears_previous_taxonomy():
+    ctx = _make_ctx()
+    sm = ConsensusStateMachine(ctx)
+    _advance_to_commit(sm)
+    ctx.decision = "First decision"
+    ctx.taxonomy = {"intent": "research"}
+    sm.transition(ConsensusState.PROPOSE)
+    assert ctx.taxonomy is None
+
+
 def _advance_to_propose(sm: ConsensusStateMachine) -> None:
     """Move from IDLE to PROPOSE."""
     sm.transition(ConsensusState.PROPOSE)

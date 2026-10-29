@@ -12,6 +12,7 @@ import logging
 from typing import TYPE_CHECKING, Any
 
 from duh.consensus.json_extract import JSONExtractionError, extract_json
+from duh.core.errors import ProviderError
 from duh.providers.base import PromptMessage
 
 if TYPE_CHECKING:
@@ -76,10 +77,29 @@ async def analyze_question(
             model_id,
             max_tokens=500,
             temperature=0.3,
-            response_format="json",
+            response_format={
+                "additionalProperties": False,
+                "properties": {
+                    "needs_refinement": {"type": "boolean"},
+                    "questions": {
+                        "items": {
+                            "additionalProperties": False,
+                            "properties": {
+                                "hint": {"type": ["string", "null"]},
+                                "question": {"type": "string"},
+                            },
+                            "required": ["question", "hint"],
+                            "type": "object",
+                        },
+                        "type": "array",
+                    },
+                },
+                "required": ["needs_refinement", "questions"],
+                "type": "object",
+            },
         )
-        data = extract_json(response.content)
         provider_manager.record_usage(best, response.usage)
+        data = extract_json(response.content)
 
         if not data.get("needs_refinement"):
             return {"needs_refinement": False}
@@ -104,7 +124,7 @@ async def analyze_question(
 
         return {"needs_refinement": True, "questions": clean}
 
-    except (JSONExtractionError, Exception):
+    except (JSONExtractionError, ProviderError):
         logger.debug("Question refinement analysis failed, skipping", exc_info=True)
         return {"needs_refinement": False}
 
@@ -151,6 +171,6 @@ async def enrich_question(
         provider_manager.record_usage(best, response.usage)
         enriched = response.content.strip()
         return enriched if enriched else original
-    except Exception:
+    except ProviderError:
         logger.debug("Question enrichment failed, using original", exc_info=True)
         return original

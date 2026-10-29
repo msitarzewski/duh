@@ -12,18 +12,91 @@ so every caller (CLI loop, WebSocket loop, and the batch
 
 from __future__ import annotations
 
+import inspect
 import json
 import logging
+from dataclasses import replace
 from typing import TYPE_CHECKING
 
 from duh.memory.repository import MemoryRepository
 
 if TYPE_CHECKING:
+    from collections.abc import Awaitable, Callable
+
     from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+    from duh.config.schema import DuhConfig
+    from duh.consensus.engine import ConsensusResult, EngineOptions, EventSink
     from duh.consensus.machine import RoundResult
+    from duh.providers.manager import ProviderManager
+    from duh.tools.registry import ToolRegistry
 
 logger = logging.getLogger(__name__)
+
+
+async def run_persisted_consensus(
+    question: str,
+    config: DuhConfig,
+    pm: ProviderManager,
+    *,
+    options: EngineOptions | None = None,
+    db_factory: async_sessionmaker[AsyncSession] | None = None,
+    tool_registry: ToolRegistry | None = None,
+    emit: EventSink | None = None,
+    on_thread_created: Callable[[str], Awaitable[None] | None] | None = None,
+) -> ConsensusResult:
+    """Adapt the public engine to incremental thread storage for all clients."""
+    from duh.consensus.engine import (
+        Completed,
+        ConsensusEvent,
+        EngineOptions,
+        RoundCommitted,
+        run_consensus,
+    )
+
+    opts = options or EngineOptions()
+    persister = (
+        IncrementalPersister(db_factory, question) if db_factory is not None else None
+    )
+    if persister is not None:
+        try:
+            thread_id = await persister.start()
+            opts = replace(opts, thread_id=thread_id)
+        except Exception:
+            logger.exception("Failed to create consensus thread")
+            persister = None
+        else:
+            if on_thread_created is not None:
+                created = on_thread_created(thread_id)
+                if inspect.isawaitable(created):
+                    await created
+
+    async def consume(event: ConsensusEvent) -> None:
+        if isinstance(event, RoundCommitted) and persister is not None:
+            try:
+                await persister.persist_round(event.round)
+            except Exception:
+                logger.exception("Failed to persist consensus round")
+        if isinstance(event, Completed) and persister is not None:
+            result = event.result
+            try:
+                await persister.finalize(
+                    overview=result.overview,
+                    followups=list(result.followups) or None,
+                    usage={
+                        "input_tokens": result.usage.input_tokens,
+                        "output_tokens": result.usage.output_tokens,
+                        "cost_usd": result.usage.cost_usd,
+                    },
+                )
+            except Exception:
+                logger.exception("Failed to finalize consensus thread")
+        if emit is not None:
+            await emit(event)
+
+    return await run_consensus(
+        question, config, pm, options=opts, tool_registry=tool_registry, emit=consume
+    )
 
 
 def _citations_json(citations: object) -> str | None:

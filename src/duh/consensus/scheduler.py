@@ -8,26 +8,12 @@ REVISE -> COMMIT) using the existing handlers.
 
 from __future__ import annotations
 
-import asyncio
 import graphlib
-import uuid
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from duh.consensus.handlers import (
-    handle_challenge,
-    handle_commit,
-    handle_propose,
-    handle_revise,
-    select_challengers,
-    select_proposer,
-)
-from duh.consensus.machine import (
-    ConsensusContext,
-    ConsensusState,
-    ConsensusStateMachine,
-)
-from duh.core.errors import ConsensusError
+from duh.core.errors import ConsensusError, ProviderError
+from duh.providers.base import gather_provider_calls
 
 if TYPE_CHECKING:
     from duh.cli.display import ConsensusDisplay
@@ -54,68 +40,39 @@ async def _run_mini_consensus(
     max_rounds: int = 1,
     display: ConsensusDisplay | None = None,
 ) -> tuple[str, float, float]:
-    """Run a simplified single-round consensus for one subtask.
-
-    Executes PROPOSE -> CHALLENGE -> REVISE -> COMMIT with the
-    existing handlers.
-
-    Args:
-        question: The subtask question/description.
-        provider_manager: For model calls and cost tracking.
-        max_rounds: Maximum consensus rounds (default 1 for subtasks).
-        display: Optional display for real-time progress output.
-
-    Returns:
-        (decision, confidence, rigor) tuple.
-
-    Raises:
-        ConsensusError: If any handler phase fails.
-    """
-    ctx = ConsensusContext(
-        thread_id=f"subtask-{uuid.uuid4().hex[:8]}",
-        question=question,
-        max_rounds=max_rounds,
+    """Execute a subtask using the same engine as interactive consumers."""
+    from duh.config.schema import DuhConfig
+    from duh.consensus.engine import (
+        ConsensusEvent,
+        EngineOptions,
+        PhaseCompleted,
+        RoundCommitted,
+        run_consensus,
     )
-    sm = ConsensusStateMachine(ctx)
 
-    # PROPOSE
-    sm.transition(ConsensusState.PROPOSE)
-    proposer_ref = select_proposer(provider_manager)
-    if display:
-        with display.phase_status("PROPOSE", proposer_ref):
-            await handle_propose(ctx, provider_manager, proposer_ref)
-        display.show_propose(proposer_ref, ctx.proposal or "")
-    else:
-        await handle_propose(ctx, provider_manager, proposer_ref)
+    async def consume(event: ConsensusEvent) -> None:
+        if display is None:
+            return
+        if isinstance(event, PhaseCompleted):
+            if event.phase == "PROPOSE":
+                display.show_propose(event.model or "", event.content or "")
+            elif event.phase == "CHALLENGE":
+                display.show_challenges(list(event.challenges))
+            elif event.phase == "REVISE":
+                display.show_revise(event.model or "", event.content or "")
+        elif isinstance(event, RoundCommitted):
+            display.show_commit(
+                event.round.confidence, event.round.rigor, event.round.dissent
+            )
 
-    # CHALLENGE
-    sm.transition(ConsensusState.CHALLENGE)
-    challenger_refs = select_challengers(provider_manager, proposer_ref, count=2)
-    if display:
-        detail = f"{len(challenger_refs)} models"
-        with display.phase_status("CHALLENGE", detail):
-            await handle_challenge(ctx, provider_manager, challenger_refs)
-        display.show_challenges(ctx.challenges)
-    else:
-        await handle_challenge(ctx, provider_manager, challenger_refs)
-
-    # REVISE
-    sm.transition(ConsensusState.REVISE)
-    reviser = ctx.proposal_model or proposer_ref
-    if display:
-        with display.phase_status("REVISE", reviser):
-            await handle_revise(ctx, provider_manager)
-        display.show_revise(ctx.revision_model or reviser, ctx.revision or "")
-    else:
-        await handle_revise(ctx, provider_manager)
-
-    # COMMIT
-    sm.transition(ConsensusState.COMMIT)
-    await handle_commit(ctx, provider_manager)
-    if display:
-        display.show_commit(ctx.confidence, ctx.rigor, ctx.dissent)
-
-    return ctx.decision or "", ctx.confidence, ctx.rigor
+    result = await run_consensus(
+        question,
+        DuhConfig(),
+        provider_manager,
+        options=EngineOptions(max_rounds=max_rounds, overview=False, followups=False),
+        emit=consume,
+    )
+    return result.decision, result.confidence, result.rigor
 
 
 async def _execute_subtask(
@@ -155,11 +112,12 @@ async def _execute_subtask(
         dep_text = "\n".join(dep_context_parts)
         augmented_question += f"\n\nContext from prior subtasks:\n{dep_text}"
 
-    cost_before = provider_manager.total_cost
-    decision, confidence, rigor = await _run_mini_consensus(
-        augmented_question, provider_manager, display=display
-    )
-    subtask_cost = provider_manager.total_cost - cost_before
+    with provider_manager.usage_scope(child=True):
+        cost_before = provider_manager.total_cost
+        decision, confidence, rigor = await _run_mini_consensus(
+            augmented_question, provider_manager, display=display
+        )
+        subtask_cost = provider_manager.total_cost - cost_before
 
     return SubtaskResult(
         label=subtask.label,
@@ -197,6 +155,21 @@ async def schedule_subtasks(
     Raises:
         ConsensusError: If any subtask consensus fails.
     """
+    with provider_manager.usage_scope():
+        return await _schedule_subtasks_scoped(
+            subtasks, question, config, provider_manager, display=display
+        )
+
+
+async def _schedule_subtasks_scoped(
+    subtasks: list[SubtaskSpec],
+    question: str,
+    config: DuhConfig,
+    provider_manager: ProviderManager,
+    *,
+    display: ConsensusDisplay | None = None,
+) -> list[SubtaskResult]:
+
     if not subtasks:
         msg = "No subtasks to schedule"
         raise ConsensusError(msg)
@@ -236,8 +209,12 @@ async def schedule_subtasks(
                 )
                 for label in ready
             ]
-            batch_results = await asyncio.gather(*coros)
+            batch_results = await gather_provider_calls(
+                coros, recover_provider_errors=False
+            )
             for result in batch_results:
+                if isinstance(result, ProviderError):
+                    raise result
                 completed += 1
                 if display:
                     display.subtask_footer(result.label, completed, total, result.cost)

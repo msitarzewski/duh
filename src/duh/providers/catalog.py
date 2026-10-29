@@ -38,7 +38,6 @@ PROVIDER_CAPS: dict[str, ModelCapability] = {
         | ModelCapability.STREAMING
         | ModelCapability.SYSTEM_PROMPT
         | ModelCapability.JSON_MODE
-        | ModelCapability.WEB_SEARCH
     ),
     "perplexity": (
         ModelCapability.TEXT

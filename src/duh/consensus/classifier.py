@@ -10,7 +10,8 @@ import enum
 import logging
 from typing import TYPE_CHECKING
 
-from duh.consensus.json_extract import extract_json
+from duh.consensus.json_extract import JSONExtractionError, extract_json
+from duh.core.errors import ProviderError
 from duh.providers.base import PromptMessage
 
 if TYPE_CHECKING:
@@ -70,12 +71,21 @@ async def classify_task_type(
             messages,
             model_id,
             temperature=0.0,
-            response_format="json",
+            response_format={
+                "additionalProperties": False,
+                "properties": {
+                    "task_type": {"enum": ["reasoning", "judgment"], "type": "string"}
+                },
+                "required": ["task_type"],
+                "type": "object",
+            },
         )
         provider_manager.record_usage(cheapest, response.usage)
         data = extract_json(response.content)
-        raw_type = data.get("task_type", "").lower().strip()
-        return TaskType(raw_type)
-    except Exception as exc:
+        raw_type = data.get("task_type", "")
+        if not isinstance(raw_type, str):
+            return TaskType.UNKNOWN
+        return TaskType(raw_type.lower().strip())
+    except (ProviderError, JSONExtractionError, ValueError) as exc:
         logger.debug("Classification failed: %s", exc)
         return TaskType.UNKNOWN

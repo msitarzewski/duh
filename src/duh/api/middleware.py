@@ -7,6 +7,7 @@ import time
 from collections import defaultdict
 from typing import TYPE_CHECKING, ClassVar
 
+from fastapi import HTTPException
 from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 
@@ -32,6 +33,8 @@ class APIKeyMiddleware(BaseHTTPMiddleware):
         "/api/auth/login",
         "/api/auth/guest",
         "/api/auth/status",
+        "/api/auth/forgot-password",
+        "/api/auth/reset-password",
         "/docs",
         "/openapi.json",
         "/redoc",
@@ -57,57 +60,14 @@ class APIKeyMiddleware(BaseHTTPMiddleware):
         if not path.startswith("/api/") and not path.startswith("/ws/"):
             return await call_next(request)
 
-        # Accept JWT Bearer token as alternative to API key
-        auth_header = request.headers.get("Authorization")
-        if auth_header and auth_header.startswith("Bearer "):
-            # Decode JWT and set user_id on request.state for rate limiting
-            token = auth_header.split(" ", 1)[1]
-            try:
-                config = request.app.state.config
-                from duh.api.auth import decode_token
+        from duh.api.auth import authenticate_connection
 
-                payload = decode_token(token, config.auth.jwt_secret)
-                request.state.user_id = payload.get("sub")
-            except Exception:
-                # Let the auth dependency handle full validation;
-                # middleware just extracts user_id if possible.
-                pass
-            return await call_next(request)
-
-        # Skip auth if no API keys are configured (dev mode)
-        db_factory = request.app.state.db_factory
-
-        raw_key = request.headers.get("X-API-Key")
-        if raw_key is None:
-            # If no keys exist in DB, allow unauthenticated access
-            from duh.memory.repository import MemoryRepository
-
-            async with db_factory() as session:
-                repo = MemoryRepository(session)
-                keys = await repo.list_api_keys()
-            if not keys:
-                return await call_next(request)
+        try:
+            await authenticate_connection(request)
+        except HTTPException as exc:
             return JSONResponse(
-                status_code=401,
-                content={"detail": "Missing API key. Provide X-API-Key header."},
+                status_code=exc.status_code, content={"detail": exc.detail}
             )
-
-        # Validate the key
-        key_hash = hash_api_key(raw_key)
-        from duh.memory.repository import MemoryRepository
-
-        async with db_factory() as session:
-            repo = MemoryRepository(session)
-            api_key = await repo.validate_api_key(key_hash)
-
-        if api_key is None:
-            return JSONResponse(
-                status_code=401,
-                content={"detail": "Invalid or revoked API key."},
-            )
-
-        # Store key info on request state for rate limiting
-        request.state.api_key_id = api_key.id
         return await call_next(request)
 
 

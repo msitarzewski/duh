@@ -304,3 +304,122 @@ class TestModelProviderProtocol:
 
         provider = FakeProvider()
         assert isinstance(provider, ModelProvider)
+
+
+class TestProviderFailureIsolation:
+    async def test_cost_limit_cancels_and_drains_sibling(self):
+        import asyncio
+
+        import pytest
+
+        from duh.core.errors import CostLimitExceededError
+        from duh.providers.base import gather_provider_calls
+
+        started = asyncio.Event()
+        cancelled = asyncio.Event()
+
+        async def slow():
+            started.set()
+            try:
+                await asyncio.Event().wait()
+            finally:
+                cancelled.set()
+
+        async def over_budget():
+            await started.wait()
+            raise CostLimitExceededError(limit=0.01, current=1.0)
+
+        with pytest.raises(CostLimitExceededError):
+            await gather_provider_calls([slow(), over_budget()])
+        assert cancelled.is_set()
+
+    async def test_child_cancellation_cancels_siblings(self):
+        import asyncio
+
+        import pytest
+
+        from duh.providers.base import gather_provider_calls
+
+        started = asyncio.Event()
+        cancelled = asyncio.Event()
+
+        async def slow():
+            started.set()
+            try:
+                await asyncio.Event().wait()
+            finally:
+                cancelled.set()
+
+        async def cancelled_child():
+            await started.wait()
+            raise asyncio.CancelledError
+
+        with pytest.raises(asyncio.CancelledError):
+            await gather_provider_calls([slow(), cancelled_child()])
+        assert cancelled.is_set()
+
+    async def test_programming_errors_propagate(self):
+        import pytest
+
+        from duh.providers.base import gather_provider_calls
+
+        async def broken():
+            raise TypeError("invalid adapter result")
+
+        with pytest.raises(TypeError, match="invalid adapter result"):
+            await gather_provider_calls([broken()])
+
+    async def test_provider_outage_allows_other_results(self):
+        from duh.core.errors import ProviderTimeoutError
+        from duh.providers.base import gather_provider_calls
+
+        async def unavailable():
+            raise ProviderTimeoutError("test", "timeout")
+
+        async def healthy():
+            return "answer"
+
+        results = await gather_provider_calls([unavailable(), healthy()])
+        assert isinstance(results[0], ProviderTimeoutError)
+        assert results[1] == "answer"
+
+
+class TestProviderDeadlines:
+    async def test_all_adapters_cancel_hung_calls(self):
+        import asyncio
+        from unittest.mock import AsyncMock, MagicMock
+
+        import pytest
+
+        from duh.core.errors import ProviderTimeoutError
+        from duh.providers.anthropic import AnthropicProvider
+        from duh.providers.google import GoogleProvider
+        from duh.providers.mistral import MistralProvider
+        from duh.providers.openai import OpenAIProvider
+        from duh.providers.perplexity import PerplexityProvider
+
+        for adapter in (
+            AnthropicProvider,
+            GoogleProvider,
+            MistralProvider,
+            OpenAIProvider,
+            PerplexityProvider,
+        ):
+            cancelled = asyncio.Event()
+
+            async def hung(*args, _cancelled=cancelled, **kwargs):
+                try:
+                    await asyncio.Event().wait()
+                finally:
+                    _cancelled.set()
+
+            client = MagicMock()
+            client.chat.completions.create = AsyncMock(side_effect=hung)
+            client.chat.complete_async = AsyncMock(side_effect=hung)
+            client.aio.models.generate_content = AsyncMock(side_effect=hung)
+            provider = adapter(client=client, timeout_seconds=0.01)
+            if isinstance(provider, AnthropicProvider):
+                provider._collect_stream = AsyncMock(side_effect=hung)
+            with pytest.raises(ProviderTimeoutError, match="deadline"):
+                await provider.send([PromptMessage(role="user", content="Q")], "test")
+            assert cancelled.is_set(), adapter.__name__

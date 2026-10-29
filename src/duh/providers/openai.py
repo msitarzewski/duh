@@ -16,11 +16,13 @@ from duh.core.errors import (
     ProviderTimeoutError,
 )
 from duh.providers.base import (
+    Citation,
     ModelInfo,
     ModelResponse,
     StreamChunk,
     TokenUsage,
     ToolCallData,
+    with_deadline,
 )
 from duh.providers.catalog import (
     MODEL_CATALOG,
@@ -107,7 +109,9 @@ class OpenAIProvider:
         base_url: str | None = None,
         client: openai.AsyncOpenAI | None = None,
         provider_id: str = PROVIDER_ID,
+        timeout_seconds: float = 120.0,
     ) -> None:
+        self.timeout_seconds = timeout_seconds
         # provider_id lets one adapter serve any OpenAI-compatible host under a
         # distinct id (e.g. "cloudflare" for Workers AI) so it can run alongside
         # real OpenAI without colliding. Models/caps come from that id's catalog.
@@ -125,11 +129,15 @@ class OpenAIProvider:
                 # Local endpoints don't need a real API key
                 if "api_key" not in kwargs:
                     kwargs["api_key"] = "not-required"
-            self._client = openai.AsyncOpenAI(**kwargs)
+            self._client = openai.AsyncOpenAI(timeout=timeout_seconds, **kwargs)
 
     @property
     def provider_id(self) -> str:
         return self._provider_id
+
+    def supports_native_search(self, model_id: str) -> bool:
+        """Whether this adapter can search natively for this model."""
+        return self._provider_id == PROVIDER_ID and model_id in _SEARCH_MODELS
 
     async def list_models(self) -> list[ModelInfo]:
         return [
@@ -146,6 +154,7 @@ class OpenAIProvider:
             for m in self._known_models
         ]
 
+    @with_deadline
     async def send(
         self,
         messages: list[PromptMessage],
@@ -154,7 +163,7 @@ class OpenAIProvider:
         max_tokens: int = 4096,
         temperature: float = 0.7,
         stop_sequences: list[str] | None = None,
-        response_format: str | None = None,
+        response_format: str | dict[str, object] | None = None,
         tools: list[dict[str, object]] | None = None,
         web_search: bool = False,
     ) -> ModelResponse:
@@ -171,6 +180,15 @@ class OpenAIProvider:
             kwargs["stop"] = stop_sequences
         if response_format == "json":
             kwargs["response_format"] = {"type": "json_object"}
+        elif isinstance(response_format, dict):
+            kwargs["response_format"] = {
+                "type": "json_schema",
+                "json_schema": {
+                    "name": "response",
+                    "schema": response_format,
+                    "strict": True,
+                },
+            }
         if tools:
             kwargs["tools"] = [
                 {
@@ -214,9 +232,18 @@ class OpenAIProvider:
         latency_ms = (time.monotonic() - start) * 1000
 
         tool_calls_data: list[ToolCallData] | None = None
+        citations_data: list[Citation] = []
         if response.choices:
             content = response.choices[0].message.content or ""
             finish_reason = response.choices[0].finish_reason or "stop"
+            for annotation in response.choices[0].message.annotations or []:
+                if annotation.type == "url_citation":
+                    citations_data.append(
+                        Citation(
+                            url=annotation.url_citation.url,
+                            title=annotation.url_citation.title,
+                        )
+                    )
             # Parse tool calls from response
             msg_tool_calls = response.choices[0].message.tool_calls
             if msg_tool_calls:
@@ -250,6 +277,7 @@ class OpenAIProvider:
             latency_ms=latency_ms,
             raw_response=response,
             tool_calls=tool_calls_data,
+            citations=citations_data or None,
         )
 
     async def stream(

@@ -9,6 +9,83 @@ from duh.providers.base import ModelInfo, TokenUsage
 from duh.providers.manager import ProviderManager
 from tests.fixtures.providers import MockProvider
 
+
+class TestRunUsageScopes:
+    async def test_concurrent_runs_have_independent_budgets_and_child_totals(self):
+        import asyncio
+
+        manager = ProviderManager(cost_hard_limit=1.0)
+        info = _make_model_info(input_cost=1.0, output_cost=0.0)
+        barrier = asyncio.Barrier(2)
+
+        async def run(tokens):
+            with manager.usage_scope() as ledger:
+                manager.record_usage(info, TokenUsage(tokens, 0))
+                await barrier.wait()
+
+                async def child():
+                    manager.record_usage(info, TokenUsage(tokens, 0))
+
+                await asyncio.create_task(child())
+                assert manager.total_input_tokens == tokens * 2
+                return ledger.snapshot()
+
+        first, second = await asyncio.gather(run(100_000), run(300_000))
+        assert first.input_tokens == 200_000
+        assert second.input_tokens == 600_000
+        assert first.cost_usd == pytest.approx(0.2)
+        assert second.cost_usd == pytest.approx(0.6)
+        assert manager.aggregate_usage.input_tokens == 800_000
+
+    async def test_nested_child_ledgers_keep_parent_budget_and_separate_costs(self):
+        import asyncio
+
+        manager = ProviderManager(cost_hard_limit=0.5)
+        info = _make_model_info(input_cost=1.0, output_cost=0.0)
+        with manager.usage_scope() as parent:
+            manager.record_usage(info, TokenUsage(100_000, 0))
+
+            async def child():
+                with manager.usage_scope(child=True) as ledger:
+                    manager.record_usage(info, TokenUsage(200_000, 0))
+                    return ledger.snapshot()
+
+            snapshots = await asyncio.gather(child(), child())
+            assert [s.cost_usd for s in snapshots] == pytest.approx([0.2, 0.2])
+            assert parent.cost_usd == pytest.approx(0.5)
+            with manager.usage_scope(), pytest.raises(CostLimitExceededError):
+                manager.record_usage(info, TokenUsage(1, 0))
+            with pytest.raises(RuntimeError, match="active run"):
+                manager.reset_cost()
+
+        with manager.usage_scope() as next_run:
+            assert next_run.cost_usd == 0.0
+            manager.record_usage(info, TokenUsage(100_000, 0))
+        assert next_run.cost_usd == pytest.approx(0.1)
+
+    async def test_cancelled_scope_restores_context(self):
+        import asyncio
+
+        manager = ProviderManager()
+        info = _make_model_info(input_cost=1.0)
+        started = asyncio.Event()
+
+        async def run():
+            with manager.usage_scope():
+                manager.record_usage(info, TokenUsage(10, 0))
+                started.set()
+                await asyncio.Event().wait()
+
+        task = asyncio.create_task(run())
+        await started.wait()
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+        with manager.usage_scope() as ledger:
+            assert ledger.input_tokens == 0
+        assert manager.aggregate_usage.input_tokens == 10
+
+
 # ── Helpers ──────────────────────────────────────────────────────
 
 

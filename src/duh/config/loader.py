@@ -170,6 +170,10 @@ def load_config(
     # Configure Cloudflare Workers AI provider from env vars (if present)
     _resolve_cloudflare(config)
 
+    public_base_url = os.environ.get("DUH_PUBLIC_BASE_URL")
+    if public_base_url:
+        config.auth.public_base_url = public_base_url
+
     # Auto-generate a dev JWT secret if none is configured
     if not config.auth.jwt_secret:
         env_secret = os.environ.get("DUH_JWT_SECRET")

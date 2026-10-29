@@ -22,6 +22,7 @@ from duh.providers.base import (
     StreamChunk,
     TokenUsage,
     ToolCallData,
+    with_deadline,
 )
 from duh.providers.catalog import MODEL_CATALOG, PROVIDER_CAPS
 
@@ -77,12 +78,20 @@ class GoogleProvider:
         api_key: str | None = None,
         *,
         client: genai.Client | None = None,
+        timeout_seconds: float = 120.0,
     ) -> None:
-        self._client = client or genai.Client(api_key=api_key)
+        self.timeout_seconds = timeout_seconds
+        self._client = client or genai.Client(
+            api_key=api_key, http_options={"timeout": int(timeout_seconds * 1000)}
+        )
 
     @property
     def provider_id(self) -> str:
         return PROVIDER_ID
+
+    def supports_native_search(self, model_id: str) -> bool:
+        """Whether this adapter can search natively for this model."""
+        return True
 
     async def list_models(self) -> list[ModelInfo]:
         return [
@@ -99,6 +108,7 @@ class GoogleProvider:
             for m in _KNOWN_MODELS
         ]
 
+    @with_deadline
     async def send(
         self,
         messages: list[PromptMessage],
@@ -107,7 +117,7 @@ class GoogleProvider:
         max_tokens: int = 4096,
         temperature: float = 0.7,
         stop_sequences: list[str] | None = None,
-        response_format: str | None = None,
+        response_format: str | dict[str, object] | None = None,
         tools: list[dict[str, object]] | None = None,
         web_search: bool = False,
     ) -> ModelResponse:
@@ -121,6 +131,9 @@ class GoogleProvider:
         }
         if response_format == "json":
             config_kwargs["response_mime_type"] = "application/json"
+        elif isinstance(response_format, dict):
+            config_kwargs["response_mime_type"] = "application/json"
+            config_kwargs["response_json_schema"] = response_format
         if tools:
             func_decls = [
                 genai.types.FunctionDeclaration(

@@ -2,14 +2,18 @@
 
 from __future__ import annotations
 
+import hashlib
+import hmac
 import logging
 from datetime import UTC, datetime, timedelta
+from html import escape
 from typing import Any
 
 import bcrypt
 import jwt
 from fastapi import APIRouter, Depends, HTTPException, Request
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
+from starlette.requests import HTTPConnection  # noqa: TC002 -- FastAPI annotations
 
 logger = logging.getLogger(__name__)
 
@@ -20,12 +24,21 @@ router = APIRouter(prefix="/api/auth", tags=["auth"])
 
 def hash_password(password: str) -> str:
     """Hash password with bcrypt."""
+    _validate_new_password(password)
     return bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
 
 
 def verify_password(password: str, password_hash: str) -> bool:
     """Verify password against hash."""
-    return bcrypt.checkpw(password.encode(), password_hash.encode())
+    # bcrypt before v5 truncated at 72 bytes. Keep those accounts usable.
+    return bcrypt.checkpw(password.encode()[:72], password_hash.encode())
+
+
+def _validate_new_password(password: str) -> str:
+    """Validate bcrypt's byte limit without truncating new credentials."""
+    if len(password.encode("utf-8")) > 72:
+        raise ValueError("Password must be at most 72 UTF-8 bytes")
+    return password
 
 
 # --- JWT ---
@@ -35,6 +48,7 @@ def create_token(user_id: str, secret: str, expiry_hours: int = 24) -> str:
     """Create a JWT token."""
     payload = {
         "sub": user_id,
+        "purpose": "access",
         "exp": datetime.now(UTC) + timedelta(hours=expiry_hours),
         "iat": datetime.now(UTC),
     }
@@ -44,7 +58,16 @@ def create_token(user_id: str, secret: str, expiry_hours: int = 24) -> str:
 def decode_token(token: str, secret: str) -> dict[str, Any]:
     """Decode and validate a JWT token."""
     try:
-        return jwt.decode(token, secret, algorithms=["HS256"])
+        payload = jwt.decode(
+            token,
+            secret,
+            algorithms=["HS256"],
+            options={"require": ["sub", "exp", "iat"]},
+        )
+        # Existing access tokens had no purpose claim; reset tokens always do.
+        if payload.get("purpose", "access") != "access" or not payload["sub"]:
+            raise jwt.InvalidTokenError("Invalid access token")
+        return payload
     except jwt.ExpiredSignatureError as err:
         raise HTTPException(status_code=401, detail="Token expired") from err
     except jwt.InvalidTokenError as err:
@@ -58,6 +81,8 @@ class RegisterRequest(BaseModel):
     email: str
     password: str
     display_name: str
+
+    _validate_password = field_validator("password")(_validate_new_password)
 
 
 class LoginRequest(BaseModel):
@@ -83,15 +108,14 @@ class UserResponse(BaseModel):
 # --- Dependency: get current user from JWT ---
 
 
-async def get_current_user(request: Request) -> Any:
+async def get_current_user(request: HTTPConnection) -> Any:
     """FastAPI dependency: extract user from JWT Bearer token."""
     auth_header = request.headers.get("Authorization")
-    if not auth_header or not auth_header.startswith("Bearer "):
+    scheme, _, token = (auth_header or "").partition(" ")
+    if scheme.lower() != "bearer" or not token:
         raise HTTPException(
             status_code=401, detail="Missing or invalid Authorization header"
         )
-
-    token = auth_header.split(" ", 1)[1]
     config = request.app.state.config
     payload = decode_token(token, config.auth.jwt_secret)
     user_id = payload.get("sub")
@@ -110,6 +134,50 @@ async def get_current_user(request: Request) -> Any:
         raise HTTPException(status_code=401, detail="User not found or inactive")
 
     return user
+
+
+async def authenticate_connection(
+    connection: HTTPConnection, *, token: str | None = None, api_key: str | None = None
+) -> None:
+    """Authenticate HTTP and WebSocket requests with the same local-dev policy."""
+    from sqlalchemy import func, select
+
+    from duh.api.middleware import hash_api_key
+    from duh.memory.models import User
+    from duh.memory.repository import MemoryRepository
+
+    header = connection.headers.get("Authorization")
+    if header is not None:
+        scheme, _, credential = header.partition(" ")
+        if scheme.lower() != "bearer" or not credential:
+            raise HTTPException(status_code=401, detail="Invalid Authorization header")
+        token = credential
+    if token is not None:
+        payload = decode_token(token, connection.app.state.config.auth.jwt_secret)
+        async with connection.app.state.db_factory() as session:
+            user = await session.scalar(
+                select(User).where(User.id == payload["sub"], User.is_active.is_(True))
+            )
+        if user is None:
+            raise HTTPException(status_code=401, detail="User not found or inactive")
+        connection.state.user_id = user.id
+        return
+
+    raw_key = api_key if api_key is not None else connection.headers.get("X-API-Key")
+    async with connection.app.state.db_factory() as session:
+        repo = MemoryRepository(session)
+        if raw_key is not None:
+            key = await repo.validate_api_key(hash_api_key(raw_key))
+            if key is None:
+                raise HTTPException(
+                    status_code=401, detail="Invalid or revoked API key."
+                )
+            connection.state.api_key_id = key.id
+            return
+        keys = await repo.list_api_keys()
+        users = await session.scalar(select(func.count(User.id)))
+    if keys or users:
+        raise HTTPException(status_code=401, detail="Missing API key or Bearer token.")
 
 
 # --- Endpoints ---
@@ -287,38 +355,56 @@ class ResetPasswordRequest(BaseModel):
     token: str
     new_password: str
 
+    _validate_password = field_validator("new_password")(_validate_new_password)
+
 
 class ResetPasswordResponse(BaseModel):
     message: str
 
 
-def _create_reset_token(user_id: str, secret: str, expiry_minutes: int) -> str:
+def _create_reset_token(
+    user_id: str, secret: str, expiry_minutes: int, *, password_hash: str | None
+) -> str:
     """Create a short-lived JWT for password reset."""
     payload = {
         "sub": user_id,
         "purpose": "password_reset",
+        "password_version": _password_version(password_hash, secret),
         "exp": datetime.now(UTC) + timedelta(minutes=expiry_minutes),
         "iat": datetime.now(UTC),
     }
     return jwt.encode(payload, secret, algorithm="HS256")
 
 
-def _decode_reset_token(token: str, secret: str) -> str:
-    """Decode a reset token and return user_id. Raises HTTPException."""
+def _decode_reset_token(token: str, secret: str) -> dict[str, Any]:
+    """Decode a password-bound reset token. Raises HTTPException."""
     try:
-        payload = jwt.decode(token, secret, algorithms=["HS256"])
+        payload = jwt.decode(
+            token,
+            secret,
+            algorithms=["HS256"],
+            options={"require": ["sub", "exp", "iat", "password_version"]},
+        )
     except jwt.ExpiredSignatureError as err:
         raise HTTPException(status_code=400, detail="Reset link has expired") from err
     except jwt.InvalidTokenError as err:
         raise HTTPException(status_code=400, detail="Invalid reset link") from err
 
-    if payload.get("purpose") != "password_reset":
+    if payload.get("purpose") != "password_reset" or not isinstance(
+        payload.get("password_version"), str
+    ):
         raise HTTPException(status_code=400, detail="Invalid reset link")
 
     user_id: str | None = payload.get("sub")
     if not user_id:
         raise HTTPException(status_code=400, detail="Invalid reset link")
-    return user_id
+    return payload
+
+
+def _password_version(password_hash: str | None, secret: str) -> str:
+    return hmac.new(
+        secret.encode(), (password_hash or "").encode(), hashlib.sha256
+    ).hexdigest()
 
 
 @router.post("/forgot-password", response_model=ForgotPasswordResponse)
@@ -350,14 +436,11 @@ async def forgot_password(
         user.id,
         config.auth.jwt_secret,
         config.auth.reset_token_expiry_minutes,
+        password_hash=user.password_hash,
     )
 
     # Build reset URL
-    origin = (
-        request.headers.get("origin")
-        or request.headers.get("referer", "").rstrip("/")
-        or f"http://{config.api.host}:{config.api.port}"
-    )
+    origin = config.auth.public_base_url.rstrip("/")
     reset_url = f"{origin}/reset-password?token={token}"
 
     # Send email
@@ -369,11 +452,12 @@ async def forgot_password(
             to=user.email,
             subject="Reset your duh password",
             body_html=(
-                f"<p>Hi {user.display_name},</p>"
+                f"<p>Hi {escape(user.display_name)},</p>"
                 f"<p>Click the link below to reset your password. "
                 f"This link expires in "
                 f"{config.auth.reset_token_expiry_minutes} minutes.</p>"
-                f'<p><a href="{reset_url}">{reset_url}</a></p>'
+                f'<p><a href="{escape(reset_url, quote=True)}">'
+                f"{escape(reset_url)}</a></p>"
                 f"<p>If you didn't request this, ignore this email.</p>"
             ),
             body_text=(
@@ -400,9 +484,10 @@ async def reset_password(
 ) -> ResetPasswordResponse:
     """Reset password using a token from the reset email."""
     config = request.app.state.config
-    user_id = _decode_reset_token(body.token, config.auth.jwt_secret)
+    payload = _decode_reset_token(body.token, config.auth.jwt_secret)
+    user_id = payload["sub"]
 
-    from sqlalchemy import select
+    from sqlalchemy import select, update
 
     from duh.memory.models import User
 
@@ -418,7 +503,23 @@ async def reset_password(
         if user is None:
             raise HTTPException(status_code=400, detail="Invalid reset link")
 
-        user.password_hash = hash_password(body.new_password)
+        if not hmac.compare_digest(
+            payload["password_version"],
+            _password_version(user.password_hash, config.auth.jwt_secret),
+        ):
+            raise HTTPException(status_code=400, detail="Invalid reset link")
+        previous_hash = user.password_hash
+        result = await session.execute(
+            update(User)
+            .where(
+                User.id == user_id,
+                User.is_active.is_(True),
+                User.password_hash == previous_hash,
+            )
+            .values(password_hash=hash_password(body.new_password))
+        )
+        if result.rowcount != 1:
+            raise HTTPException(status_code=400, detail="Invalid reset link")
         await session.commit()
 
     return ResetPasswordResponse(
