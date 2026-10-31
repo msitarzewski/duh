@@ -4,6 +4,9 @@ from __future__ import annotations
 
 import os
 import socket
+import sys
+import tempfile
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import pytest
@@ -100,13 +103,10 @@ def isolated_runtime(monkeypatch, tmp_path):
     """Never discover developer secrets or contact external services in tests."""
     from duh.config import loader
 
-    for key in tuple(os.environ):
-        if (
-            key.endswith(("_API_KEY", "_TOKEN", "_SECRET"))
-            or key.startswith(("DUH_MAIL_", "STRIPE_", "SENTRY_", "CLOUDFLARE_"))
-            or key in {"DUH_CONFIG", "DUH_DATABASE_URL"}
-        ):
-            monkeypatch.delenv(key, raising=False)
+    for key in _service_environment_keys():
+        monkeypatch.delenv(key, raising=False)
+    monkeypatch.setenv("PYTHON_DOTENV_DISABLED", "1")
+    monkeypatch.setenv("DUH_DATABASE_URL", "sqlite+aiosqlite:///:memory:")
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "config"))
     monkeypatch.setattr(loader, "load_dotenv", lambda *args, **kwargs: False)
     monkeypatch.setattr("dotenv.load_dotenv", lambda *args, **kwargs: False)
@@ -125,3 +125,120 @@ def isolated_runtime(monkeypatch, tmp_path):
 
     monkeypatch.setattr(socket.socket, "connect", connect)
     monkeypatch.setattr(socket.socket, "connect_ex", connect_ex)
+
+
+@pytest.fixture(autouse=True)
+async def dispose_created_engines(monkeypatch, request):
+    """Own real test engines until they are closed, rather than relying on GC."""
+    import sqlalchemy.ext.asyncio as sqlalchemy_async
+
+    engines = []
+
+    def tracked_engine(*args, **kwargs):
+        engine = create_async_engine(*args, **kwargs)
+        engines.append(engine)
+        return engine
+
+    modules = [request.module, sqlalchemy_async]
+    modules.extend(
+        module
+        for name in ("duh.api.app", "duh.cli.app")
+        if (module := sys.modules.get(name)) is not None
+    )
+    for module in modules:
+        if getattr(module, "create_async_engine", None) is create_async_engine:
+            monkeypatch.setattr(module, "create_async_engine", tracked_engine)
+    try:
+        yield
+    finally:
+        while engines:
+            await engines.pop().dispose()
+
+
+_SESSION_PATCH = pytest.MonkeyPatch()
+_SESSION_CONFIG_HOME = None
+
+
+def _service_environment_keys():
+    prefixes = (
+        "DUH_",
+        "OPENAI_",
+        "ANTHROPIC_",
+        "GOOGLE_",
+        "MISTRAL_",
+        "PERPLEXITY_",
+        "CLOUDFLARE_",
+        "STRIPE_",
+        "SENTRY_",
+        "AWS_",
+        "AZURE_",
+    )
+    return tuple(
+        key
+        for key in os.environ
+        if key.endswith(("_API_KEY", "_TOKEN", "_SECRET"))
+        or key.startswith(prefixes)
+        or key in {"DATABASE_URL", "HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY"}
+    )
+
+
+def _unix_only(method):
+    def guarded(sock, *args, **kwargs):
+        if sock.family != socket.AF_UNIX:
+            pytest.fail("Network connections are disabled throughout the test session")
+        return method(sock, *args, **kwargs)
+
+    return guarded
+
+
+def _blocked_dns(*args, **kwargs):
+    pytest.fail("DNS resolution is disabled throughout the test session")
+
+
+def pytest_sessionstart(session):
+    """Isolate collection and higher-scoped fixtures before importing test modules."""
+    from duh.config import loader
+
+    global _SESSION_CONFIG_HOME
+    blocked_paths = {
+        loader._user_config_path().resolve(),
+        loader._project_config_path().resolve(),
+    }
+    override = os.environ.get("DUH_CONFIG")
+    if override:
+        blocked_paths.add(Path(override).resolve())
+    for key in _service_environment_keys():
+        os.environ.pop(key, None)
+    _SESSION_CONFIG_HOME = tempfile.TemporaryDirectory(prefix="duh-test-config-")
+    _SESSION_PATCH.setenv("HOME", _SESSION_CONFIG_HOME.name)
+    _SESSION_PATCH.setenv("PYTHON_DOTENV_DISABLED", "1")
+    _SESSION_PATCH.setenv("XDG_CONFIG_HOME", _SESSION_CONFIG_HOME.name)
+    _SESSION_PATCH.setenv("DUH_DATABASE_URL", "sqlite+aiosqlite:///:memory:")
+    _SESSION_PATCH.setattr(loader, "load_dotenv", lambda *args, **kwargs: False)
+    _SESSION_PATCH.setattr("dotenv.load_dotenv", lambda *args, **kwargs: False)
+    discover = loader._discover_config_files
+
+    def isolated_discovery():
+        return [path for path in discover() if path.resolve() not in blocked_paths]
+
+    _SESSION_PATCH.setattr(loader, "_discover_config_files", isolated_discovery)
+    for name in ("connect", "connect_ex", "send", "sendall", "sendto", "sendmsg"):
+        if hasattr(socket.socket, name):
+            _SESSION_PATCH.setattr(
+                socket.socket, name, _unix_only(getattr(socket.socket, name))
+            )
+    for name in (
+        "getaddrinfo",
+        "gethostbyname",
+        "gethostbyname_ex",
+        "gethostbyaddr",
+        "getnameinfo",
+    ):
+        _SESSION_PATCH.setattr(socket, name, _blocked_dns)
+
+
+@pytest.hookimpl(trylast=True)
+def pytest_unconfigure(config):
+    _SESSION_PATCH.undo()
+    if _SESSION_CONFIG_HOME is not None:
+        _SESSION_CONFIG_HOME.cleanup()
