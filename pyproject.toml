@@ -59,9 +59,14 @@ addopts = [
     "--strict-markers",
     "--strict-config",
     "-ra",
+    "-m",
+    "not load",
+]
+filterwarnings = [
+    "error::pytest.PytestUnhandledThreadExceptionWarning",
 ]
 markers = [
-    "load: load/stress tests (deselect with '-m \"not load\"')",
+    "load: opt-in load/stress tests (select with '-m load')",
 ]
 
 [tool.coverage.run]

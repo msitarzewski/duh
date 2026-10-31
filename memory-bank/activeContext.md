@@ -1,11 +1,11 @@
 # Active Context
 
-**Last Updated**: 2026-10-29
-**Current Phase**: Shared engine and run-scoped usage consolidation
-**State**: DOCS complete; approved public source published and installed revision verified
+**Last Updated**: 2026-10-31
+**Current Phase**: Test isolation and CI validation
+**State**: APPROVAL — implementation and required local/remote checks passed; completion review pending
 **Documentation policy**: Record public source behavior and validation only; omit credentials, personal information, machine access details, and restricted downstream implementation.
-**Review Branch**: `codex/recovery-engine`; approved source revision `0a4dc9f`
-**Next Action**: Continue the remaining modernization priorities. This approved source batch is merged and its installed engine revision is verified.
+**Review Branch**: `codex/test-safety-net`; approved source revision `0a4dc9f`
+**Next Action**: Completion review of the test/CI batch before merge and completion documentation. The previously deployed runtime and permission restoration remain the verified operational baseline.
 
 ## Approved Shared Engine and Run-Scoped Usage
 - User approved completion and rollout on 2026-10-29. Implementation and source rollout are complete. Public CI passed, and the installed engine source hash and public exports match the approved immutable revision.
@@ -209,3 +209,8 @@
 
 ## Rollout Precheck
 - The previously excluded 12 load tests also passed offline; Ruff formatting checked 162 files. Public CI passed; PR #25 is merged. Installed engine source hash and public exports were verified against `0a4dc9ffd070897f5cc68e4b23730e5480ddbd79`.
+
+## Current Build (2026-10-31)
+State: APPROVAL — collection-time test isolation and CI validation are complete. Reuses existing fixtures, regression modules, and workflow configuration. Completion review is pending; production remains unchanged by this batch.
+
+Local safety-net validation: 1,735 core Python tests plus 12 opt-in load tests; 204 frontend tests; frontend typecheck/build; mypy (65 files); Ruff and lock checks passed. New subprocess probes cover collection, session setup, test execution, and teardown with seeded decoy credentials/configuration; the Python test process blocks TCP/UDP/DNS while retaining Unix-domain IPC. Remote CI passed on Python 3.11, 3.12, 3.13, and 3.14, plus lint, mypy, frontend typecheck, all 204 frontend tests, and build. Python 3.11 CI coverage is 85%. Load tests remain opt-in and passed locally. Review: PR #27.

@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 // ── Mock the websocket module before importing consensus store ──
 vi.mock('@/api/websocket', () => {
@@ -93,7 +93,7 @@ describe('useConsensusStore', () => {
     useConsensusStore.getState().startConsensus('What is 2+2?')
 
     // The store holds a single ws singleton; grab the onEvent passed to connect.
-    const wsInstance = vi.mocked(ConsensusWebSocket).mock.results[0].value
+    const wsInstance = vi.mocked(ConsensusWebSocket).mock.results[0]!.value
     const connectConfig = wsInstance.connect.mock.calls.at(-1)![0]
 
     connectConfig.onEvent({
@@ -121,7 +121,7 @@ describe('useConsensusStore', () => {
 
   it('falls back to null usage when complete event omits it', () => {
     useConsensusStore.getState().startConsensus('What is 2+2?')
-    const wsInstance = vi.mocked(ConsensusWebSocket).mock.results[0].value
+    const wsInstance = vi.mocked(ConsensusWebSocket).mock.results[0]!.value
     const connectConfig = wsInstance.connect.mock.calls.at(-1)![0]
 
     connectConfig.onEvent({
