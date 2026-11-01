@@ -1,11 +1,11 @@
 # Active Context
 
 **Last Updated**: 2026-10-31
-**Current Phase**: Test isolation and CI validation
-**State**: APPROVAL — implementation and required local/remote checks passed; completion review pending
+**Current Phase**: Operational correctness review
+**State**: APPROVAL — operational corrections and regression coverage complete; required local and source CI checks passed
 **Documentation policy**: Record public source behavior and validation only; omit credentials, personal information, machine access details, and restricted downstream implementation.
-**Review Branch**: `codex/test-safety-net`; approved source revision `0a4dc9f`
-**Next Action**: Completion review of the test/CI batch before merge and completion documentation. The previously deployed runtime and permission restoration remain the verified operational baseline.
+**Review Branch**: `codex/operational-review`; prior approved engine revision `0a4dc9f`
+**Next Action**: Completion review of PR #28 before merge and rollout. Production remains unchanged; deployment must retain the permission closing step.
 
 ## Approved Shared Engine and Run-Scoped Usage
 - User approved completion and rollout on 2026-10-29. Implementation and source rollout are complete. Public CI passed, and the installed engine source hash and public exports match the approved immutable revision.
@@ -211,6 +211,22 @@
 - The previously excluded 12 load tests also passed offline; Ruff formatting checked 162 files. Public CI passed; PR #25 is merged. Installed engine source hash and public exports were verified against `0a4dc9ffd070897f5cc68e4b23730e5480ddbd79`.
 
 ## Current Build (2026-10-31)
-State: APPROVAL — collection-time test isolation and CI validation are complete. Reuses existing fixtures, regression modules, and workflow configuration. Completion review is pending; production remains unchanged by this batch.
+State: COMPLETE — user approved the test/CI batch and PR #27 is merged at `83a661c67428a8b7598ffa58566ed506874ebe8d`. Required checks passed on the final review head. This batch changed tests and CI; production was not deployed.
 
 Local safety-net validation: 1,735 core Python tests plus 12 opt-in load tests; 204 frontend tests; frontend typecheck/build; mypy (65 files); Ruff and lock checks passed. New subprocess probes cover collection, session setup, test execution, and teardown with seeded decoy credentials/configuration; the Python test process blocks TCP/UDP/DNS while retaining Unix-domain IPC. Remote CI passed on Python 3.11, 3.12, 3.13, and 3.14, plus lint, mypy, frontend typecheck, all 204 frontend tests, and build. Python 3.11 CI coverage is 85%. Load tests remain opt-in and passed locally. Review: PR #27.
+
+
+## Operational Review (2026-10-31)
+Read-only probes against temporary databases reproduced two remaining defects; no operational source was changed.
+- `src/duh/memory/backup.py:43`: copying a live SQLite database omitted a committed row still in its WAL (source: one row; backup: zero). Extend the existing backup helper with a database-consistent snapshot and atomic destination publication; cover live-WAL backup/restore.
+- `alembic/versions/005_v05_users.py:19` and `src/duh/memory/migrations.py:29`: a fresh Alembic upgrade lacks seven ORM columns (guest state, thread publication/follow-ups/usage, contribution citations, decision rigor). SQLite startup patches conceal this drift; the PostgreSQL startup path has no equivalent repair. Converge schema history with additive migrations and fresh/upgrade schema-parity checks; preserve applied revisions and data.
+Findings are based on executed local probes, not assumptions about the original code author. No live database or provider was contacted.
+
+
+## Operational Build Validation (2026-10-31)
+State: APPROVAL. User-requested corrections are implemented and required local/source CI checks passed. Completion review is pending; production has not been deployed.
+Consistent SQLite snapshots/restore extend the existing backup module. Additive revision 006 aligns columns, nullability, indexes, and uniqueness with the ORM; startup-patched legacy data is preserved. PostgreSQL ORM writes exposed aware datetimes bound to timezone-free columns. The existing model module now normalizes UTC inputs at the SQLAlchemy binding boundary, keeping stored values and SQL types unchanged. Portable JSON restore recognizes the timestamp type. CI adds PostgreSQL legacy/fresh migration and real ORM write/update checks.
+
+Local operational QA passed: 1,747 core Python tests, mypy for 65 files, Ruff/formatting, SQLite migration/restore regressions, and PostgreSQL migration/ORM write checks. Source CI passed all required jobs. Final review-commit checks are being verified. Existing warning categories remain visible. The only new repository file is additive migration 006.
+
+Remote validation passed on Python 3.11–3.14, PostgreSQL populated/fresh migration parity and ORM writes/updates, frontend typecheck/204 tests/build, lint, and mypy. Packaged Python 3.11 WAL snapshot/restore and timestamp binding passed with networking disabled. Review: PR #28.

@@ -48,3 +48,13 @@ Follow-up: shared orchestration and run-scoped accounting were implemented and a
 ## Documentation Refresh (2026-10-29)
 
 Updated the session entry point, current validation summaries, technical context, and privacy policy. Entries describe this repository's public behavior only. Source code, validation results, release status, and remaining implementation scope are unchanged.
+
+
+## Test and CI Follow-up (2026-10-31)
+User approved completion; [PR #27](https://github.com/msitarzewski/duh/pull/27) merged at `83a661c67428a8b7598ffa58566ed506874ebe8d`.
+
+`tests/conftest.py:131` and `tests/conftest.py:198` own real engine disposal and isolate collection/session execution; `.github/workflows/ci.yml:54` and `.github/workflows/ci.yml:73` enforce the Python matrix and frontend checks. Existing regression modules, migration fixtures, `web/tsconfig.json`, and typed frontend fixtures were extended.
+
+Validation: 1,735 core tests across Python 3.11–3.14 CI; 12 opt-in load tests locally; 204 frontend tests, frontend source/test typecheck and build, mypy (65 files), Ruff/formatting, and lock checks passed. Python 3.11 CI coverage is 85%.
+
+Existing test infrastructure was extended; no new repository files or dependencies were required. Runtime version floors remain unchanged. No production deployment accompanied this follow-up.

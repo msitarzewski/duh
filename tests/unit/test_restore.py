@@ -18,6 +18,39 @@ if TYPE_CHECKING:
     from pathlib import Path
 
 
+def test_restore_updates_open_wal_database(tmp_path: Path) -> None:
+    source = tmp_path / "backup.db"
+    target = tmp_path / "active.db"
+    with sqlite3.connect(source) as backup:
+        backup.execute("CREATE TABLE sample (value TEXT)")
+        backup.execute("INSERT INTO sample VALUES ('restored')")
+    backup.close()
+    with sqlite3.connect(target) as active:
+        active.execute("PRAGMA journal_mode=WAL")
+        active.execute("PRAGMA wal_autocheckpoint=0")
+        active.execute("CREATE TABLE sample (value TEXT)")
+        active.execute("INSERT INTO sample VALUES ('old')")
+        active.commit()
+        asyncio.run(restore_sqlite(source, f"sqlite:///{target}"))
+        assert active.execute("SELECT value FROM sample").fetchall() == [("restored",)]
+    active.close()
+
+
+def test_corrupt_restore_preserves_destination(tmp_path: Path) -> None:
+    source = tmp_path / "invalid.db"
+    source.write_bytes(b"not a database")
+    target = tmp_path / "existing.db"
+    with sqlite3.connect(target) as active:
+        active.execute("CREATE TABLE sample (value TEXT)")
+        active.execute("INSERT INTO sample VALUES ('preserved')")
+    active.close()
+    with pytest.raises(sqlite3.DatabaseError):
+        asyncio.run(restore_sqlite(source, f"sqlite:///{target}"))
+    with sqlite3.connect(target) as reader:
+        assert reader.execute("SELECT value FROM sample").fetchall() == [("preserved",)]
+    reader.close()
+
+
 # ── helpers ────────────────────────────────────────────────────
 
 

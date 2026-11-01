@@ -8,9 +8,32 @@ from __future__ import annotations
 
 import uuid
 from datetime import UTC, datetime
+from typing import TYPE_CHECKING
 
 from sqlalchemy import DateTime, Float, ForeignKey, Index, Integer, String, Text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+from sqlalchemy.types import TypeDecorator
+
+if TYPE_CHECKING:
+    from sqlalchemy.engine import Dialect
+
+
+class UTCDateTime(TypeDecorator[datetime]):
+    """Bind UTC timestamps to the existing timezone-free storage schema."""
+
+    impl = DateTime
+    cache_ok = True
+
+    @property
+    def python_type(self) -> type[datetime]:
+        return datetime
+
+    def process_bind_param(
+        self, value: datetime | None, dialect: Dialect
+    ) -> datetime | None:
+        if value is not None and value.tzinfo is not None:
+            return value.astimezone(UTC).replace(tzinfo=None)
+        return value
 
 
 def _uuid() -> str:
@@ -45,9 +68,9 @@ class User(Base):
     role: Mapped[str] = mapped_column(String(20), default="contributor")
     is_active: Mapped[bool] = mapped_column(default=True)
     is_guest: Mapped[bool] = mapped_column(default=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=_utcnow)
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime, default=_utcnow, onupdate=_utcnow
+        UTCDateTime, default=_utcnow, onupdate=_utcnow
     )
 
     threads: Mapped[list[Thread]] = relationship(back_populates="user")
@@ -79,9 +102,9 @@ class Thread(Base):
         Text, nullable=True, default=None
     )
     usage_json: Mapped[str | None] = mapped_column(Text, nullable=True, default=None)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=_utcnow)
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime, default=_utcnow, onupdate=_utcnow
+        UTCDateTime, default=_utcnow, onupdate=_utcnow
     )
 
     user: Mapped[User | None] = relationship(back_populates="threads")
@@ -110,9 +133,9 @@ class Turn(Base):
     thread_id: Mapped[str] = mapped_column(ForeignKey("threads.id"), index=True)
     round_number: Mapped[int] = mapped_column(Integer)
     state: Mapped[str] = mapped_column(String(20))
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=_utcnow)
     completed_at: Mapped[datetime | None] = mapped_column(
-        DateTime, nullable=True, default=None
+        UTCDateTime, nullable=True, default=None
     )
 
     thread: Mapped[Thread] = relationship(back_populates="turns")
@@ -150,7 +173,7 @@ class Contribution(Base):
     citations_json: Mapped[str | None] = mapped_column(
         Text, nullable=True, default=None
     )
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=_utcnow)
 
     turn: Mapped[Turn] = relationship(back_populates="contributions")
 
@@ -164,7 +187,7 @@ class TurnSummary(Base):
     turn_id: Mapped[str] = mapped_column(ForeignKey("turns.id"), unique=True)
     summary: Mapped[str] = mapped_column(Text)
     model_ref: Mapped[str] = mapped_column(String(100))
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=_utcnow)
 
     turn: Mapped[Turn] = relationship(back_populates="summary")
 
@@ -178,7 +201,7 @@ class ThreadSummary(Base):
     thread_id: Mapped[str] = mapped_column(ForeignKey("threads.id"), unique=True)
     summary: Mapped[str] = mapped_column(Text)
     model_ref: Mapped[str] = mapped_column(String(100))
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=_utcnow)
 
     thread: Mapped[Thread] = relationship(back_populates="summary")
 
@@ -210,7 +233,7 @@ class Decision(Base):
         String(50), nullable=True, default=None
     )
     genus: Mapped[str | None] = mapped_column(String(50), nullable=True, default=None)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=_utcnow)
 
     turn: Mapped[Turn] = relationship(back_populates="decision")
     thread: Mapped[Thread] = relationship()
@@ -230,9 +253,9 @@ class Outcome(Base):
     thread_id: Mapped[str] = mapped_column(ForeignKey("threads.id"), index=True)
     result: Mapped[str] = mapped_column(String(20))
     notes: Mapped[str | None] = mapped_column(Text, nullable=True, default=None)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=_utcnow)
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime, default=_utcnow, onupdate=_utcnow
+        UTCDateTime, default=_utcnow, onupdate=_utcnow
     )
 
     decision: Mapped[Decision] = relationship(back_populates="outcome")
@@ -254,9 +277,9 @@ class Subtask(Base):
     dependencies: Mapped[str] = mapped_column(Text, default="[]")
     status: Mapped[str] = mapped_column(String(20), default="pending")
     sequence_order: Mapped[int] = mapped_column(Integer, default=0)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=_utcnow)
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime, default=_utcnow, onupdate=_utcnow
+        UTCDateTime, default=_utcnow, onupdate=_utcnow
     )
 
     parent_thread: Mapped[Thread] = relationship(foreign_keys=[parent_thread_id])
@@ -272,7 +295,7 @@ class Vote(Base):
     thread_id: Mapped[str] = mapped_column(ForeignKey("threads.id"), index=True)
     model_ref: Mapped[str] = mapped_column(String(100))
     content: Mapped[str] = mapped_column(Text)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=_utcnow)
 
     thread: Mapped[Thread] = relationship()
 
@@ -288,7 +311,7 @@ class APIKey(Base):
     user_id: Mapped[str | None] = mapped_column(
         ForeignKey("users.id"), nullable=True, index=True, default=None
     )
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=_utcnow)
     revoked_at: Mapped[datetime | None] = mapped_column(
-        DateTime, nullable=True, default=None
+        UTCDateTime, nullable=True, default=None
     )

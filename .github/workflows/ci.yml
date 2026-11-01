@@ -70,6 +70,79 @@ jobs:
       - run: uv sync --locked
       - run: uv run pytest --cov --cov-report=term-missing
 
+  postgres:
+    runs-on: ubuntu-latest
+    env:
+      DUH_DATABASE_URL: postgresql+asyncpg://test:test@localhost:5432/duh_test
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: duh_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - uses: astral-sh/setup-uv@v4
+        with:
+          enable-cache: true
+      - run: uv sync --locked
+      - name: Upgrade populated legacy schema
+        run: |
+          uv run alembic upgrade 005
+          docker exec -i ${{ job.services.postgres.id }} psql -U test -d duh_test -v ON_ERROR_STOP=1 <<'SQL'
+          INSERT INTO threads (id,question,status,created_at,updated_at)
+          VALUES ('migration-fixture','preserved','active',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP);
+          SQL
+          uv run alembic upgrade head
+          uv run alembic check
+          docker exec -i ${{ job.services.postgres.id }} psql -U test -d duh_test -v ON_ERROR_STOP=1 <<'SQL'
+          DO $$ BEGIN
+            IF NOT EXISTS (SELECT 1 FROM threads WHERE id='migration-fixture'
+                           AND question='preserved' AND is_public=false) THEN
+              RAISE EXCEPTION 'Migration lost fixture data';
+            END IF;
+          END $$;
+          SQL
+      - name: Check fresh schema and reversible legacy upgrade
+        run: |
+          uv run alembic downgrade base
+          uv run alembic upgrade head
+          uv run alembic check
+
+      - name: PostgreSQL ORM write and update roundtrip
+        run: |
+          uv run python - <<'PY'
+          import asyncio, os
+          from datetime import UTC, datetime
+          from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
+          from duh.memory.models import User, Thread
+          async def check():
+              engine = create_async_engine(os.environ["DUH_DATABASE_URL"])
+              try:
+                  async with async_sessionmaker(engine)() as session:
+                      user = User(email="orm@example.test", display_name="Test", is_guest=True)
+                      session.add(user)
+                      await session.flush()
+                      session.add(Thread(question="ORM persistence fixture", user_id=user.id))
+                      user.updated_at = datetime.now(UTC)
+                      await session.flush()
+                      await session.rollback()
+              finally:
+                  await engine.dispose()
+          asyncio.run(check())
+          PY
+
   web:
     runs-on: ubuntu-latest
     defaults:

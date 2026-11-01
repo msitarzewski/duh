@@ -47,6 +47,67 @@ class TestDetectDbType:
 
 
 class TestBackupSqlite:
+    def test_live_wal_is_included_and_restorable(self, tmp_path: Path) -> None:
+        from duh.memory.backup import restore_sqlite
+
+        source = tmp_path / "live.db"
+        with sqlite3.connect(source) as writer:
+            writer.execute("CREATE TABLE sample (value TEXT)")
+            writer.commit()
+            writer.execute("PRAGMA journal_mode=WAL")
+            writer.execute("PRAGMA wal_autocheckpoint=0")
+            writer.execute("INSERT INTO sample VALUES ('committed WAL value')")
+            writer.commit()
+            backup = tmp_path / "snapshot.db"
+            asyncio.run(backup_sqlite(f"sqlite+aiosqlite:///{source}", backup))
+            restored = tmp_path / "restored.db"
+            asyncio.run(restore_sqlite(backup, f"sqlite:///{restored}"))
+            with sqlite3.connect(restored) as reader:
+                assert reader.execute("SELECT value FROM sample").fetchall() == [
+                    ("committed WAL value",)
+                ]
+                assert reader.execute("PRAGMA integrity_check").fetchone() == ("ok",)
+            assert backup.stat().st_mode & 0o777 == 0o600
+        writer.close()
+
+    def test_failed_publication_preserves_previous_backup(
+        self, tmp_path: Path, monkeypatch
+    ) -> None:
+        source = tmp_path / "live.db"
+        with sqlite3.connect(source) as connection:
+            connection.execute("CREATE TABLE sample (value TEXT)")
+        connection.close()
+        dest = tmp_path / "backup.db"
+        dest.write_bytes(b"previous backup")
+
+        def disk_failure(*args):
+            raise OSError("publication failed")
+
+        monkeypatch.setattr("duh.memory.backup.os.replace", disk_failure)
+        with pytest.raises(OSError, match="publication failed"):
+            asyncio.run(backup_sqlite(f"sqlite:///{source}", dest))
+        assert dest.read_bytes() == b"previous backup"
+        assert not list(tmp_path.glob(".backup.db.*"))
+
+    def test_rejects_source_as_destination(self, tmp_path: Path) -> None:
+        source = tmp_path / "live.db"
+        with sqlite3.connect(source) as connection:
+            connection.execute("CREATE TABLE sample (value TEXT)")
+        connection.close()
+        with pytest.raises(ValueError, match="different databases"):
+            asyncio.run(backup_sqlite(f"sqlite:///{source}", source))
+
+    def test_sqlalchemy_url_query_does_not_become_filename(
+        self, tmp_path: Path
+    ) -> None:
+        source = tmp_path / "file with spaces.db"
+        with sqlite3.connect(source) as connection:
+            connection.execute("CREATE TABLE sample (value TEXT)")
+        connection.close()
+        dest = tmp_path / "snapshot.db"
+        asyncio.run(backup_sqlite(f"sqlite:///{source}?timeout=5", dest))
+        assert dest.is_file()
+
     def test_copies_file(self, tmp_path: Path) -> None:
         """Create a temp SQLite DB, backup, verify copy exists and is valid."""
         src_db = tmp_path / "source.db"
