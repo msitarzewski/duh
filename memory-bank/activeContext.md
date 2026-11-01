@@ -2,10 +2,10 @@
 
 **Last Updated**: 2026-10-31
 **Current Phase**: Operational correctness review
-**State**: QA — operational corrections implemented; full suites, containers, and remote checks in progress
+**State**: APPROVAL — operational corrections and regression coverage complete; required local and source CI checks passed
 **Documentation policy**: Record public source behavior and validation only; omit credentials, personal information, machine access details, and restricted downstream implementation.
-**Review Branch**: `codex/operational-review`; approved source revision `0a4dc9f`
-**Next Action**: Complete full-suite, container, migration, and remote CI validation, then present the completed operational batch for review. Preserve the deployment permission closing step; production remains unchanged.
+**Review Branch**: `codex/operational-review`; prior approved engine revision `0a4dc9f`
+**Next Action**: Completion review of PR #28 before merge and rollout. Production remains unchanged; deployment must retain the permission closing step.
 
 ## Approved Shared Engine and Run-Scoped Usage
 - User approved completion and rollout on 2026-10-29. Implementation and source rollout are complete. Public CI passed, and the installed engine source hash and public exports match the approved immutable revision.
@@ -224,7 +224,9 @@ Findings are based on executed local probes, not assumptions about the original 
 
 
 ## Operational Build Validation (2026-10-31)
-State: QA. User requested all reproduced fixes. Full-suite and remote checks are in progress; no production deployment has occurred.
+State: APPROVAL. User-requested corrections are implemented and required local/source CI checks passed. Completion review is pending; production has not been deployed.
 Consistent SQLite snapshots/restore extend the existing backup module. Additive revision 006 aligns columns, nullability, indexes, and uniqueness with the ORM; startup-patched legacy data is preserved. PostgreSQL ORM writes exposed aware datetimes bound to timezone-free columns. The existing model module now normalizes UTC inputs at the SQLAlchemy binding boundary, keeping stored values and SQL types unchanged. Portable JSON restore recognizes the timestamp type. CI adds PostgreSQL legacy/fresh migration and real ORM write/update checks.
 
-Local operational QA passed: 1,747 core Python tests, mypy for 65 files, Ruff/formatting, SQLite migration/restore regressions, and PostgreSQL migration/ORM write checks. Remote CI remains pending. Existing warning categories remain visible. The only new repository file is additive migration 006.
+Local operational QA passed: 1,747 core Python tests, mypy for 65 files, Ruff/formatting, SQLite migration/restore regressions, and PostgreSQL migration/ORM write checks. Source CI passed all required jobs. Final review-commit checks are being verified. Existing warning categories remain visible. The only new repository file is additive migration 006.
+
+Remote validation passed on Python 3.11–3.14, PostgreSQL populated/fresh migration parity and ORM writes/updates, frontend typecheck/204 tests/build, lint, and mypy. Packaged Python 3.11 WAL snapshot/restore and timestamp binding passed with networking disabled. Review: PR #28.
