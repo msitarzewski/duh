@@ -2,8 +2,13 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
-import shutil
+import os
+import sqlite3
+import tempfile
+import time
+from contextlib import closing
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -21,26 +26,62 @@ def detect_db_type(db_url: str) -> str:
     return "unknown"
 
 
-async def backup_sqlite(db_url: str, dest: Path) -> Path:
-    """Copy SQLite file to destination."""
-    # Extract file path from sqlite:///path or sqlite+aiosqlite:///path
+def _sqlite_path(db_url: str) -> Path:
+    from sqlalchemy.engine import make_url
+
     if ":///" not in db_url:
-        msg = f"Cannot extract file path from URL: {db_url}"
-        raise ValueError(msg)
+        raise ValueError("Cannot extract a SQLite file path from this URL")
+    url = make_url(db_url)
+    if url.get_backend_name() != "sqlite":
+        raise ValueError("Expected a SQLite database URL")
+    if not url.database or url.database == ":memory:":
+        raise ValueError("Cannot snapshot or restore an in-memory SQLite database")
+    return Path(url.database).expanduser().resolve()
 
-    raw_path = db_url.split("///", 1)[1]
-    if not raw_path or raw_path == ":memory:":
-        msg = "Cannot backup an in-memory SQLite database via file copy"
-        raise ValueError(msg)
 
-    # Expand ~ in paths
-    src = Path(raw_path).expanduser()
-    if not src.exists():
-        msg = f"SQLite database file not found: {src}"
-        raise FileNotFoundError(msg)
-
+def _sqlite_snapshot(source: Path, dest: Path, *, publish: bool) -> None:
+    """Use SQLite's transactional backup API, including committed WAL pages."""
+    source = source.resolve(strict=True)
+    if source == dest.resolve() or (dest.exists() and source.samefile(dest)):
+        raise ValueError("Source and destination must be different databases")
     dest.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copy2(src, dest)
+    staged: Path | None = None
+    try:
+        with closing(sqlite3.connect(source.as_uri() + "?mode=ro", uri=True)) as reader:
+            if reader.execute("PRAGMA quick_check").fetchall() != [("ok",)]:
+                raise ValueError("SQLite source failed integrity verification")
+            target = dest
+            if publish:
+                fd, name = tempfile.mkstemp(prefix=f".{dest.name}.", dir=dest.parent)
+                os.close(fd)
+                staged = target = Path(name)
+            elif not target.exists():
+                target.touch(mode=0o600, exist_ok=False)
+            deadline = time.monotonic() + 30
+
+            def progress(status: int, remaining: int, total: int) -> None:
+                if time.monotonic() >= deadline:
+                    raise TimeoutError(
+                        "SQLite snapshot timed out waiting for the database"
+                    )
+
+            writer = sqlite3.connect(target)
+            try:
+                reader.backup(writer, pages=256, progress=progress, sleep=0.05)
+            finally:
+                writer.close()
+        if staged is not None:
+            with staged.open("rb") as file:
+                os.fsync(file.fileno())
+            os.replace(staged, dest)
+    finally:
+        if staged is not None:
+            staged.unlink(missing_ok=True)
+
+
+async def backup_sqlite(db_url: str, dest: Path) -> Path:
+    """Publish a consistent snapshot without exposing an incomplete backup."""
+    await asyncio.to_thread(_sqlite_snapshot, _sqlite_path(db_url), dest, publish=True)
     return dest
 
 
@@ -143,21 +184,13 @@ def detect_backup_format(source: Path) -> str:
 async def restore_sqlite(source: Path, db_url: str) -> None:
     """Restore SQLite database from a backup file.
 
-    Copies the source file to the database path extracted from the URL,
-    overwriting the existing database.
+    SQLite replaces the destination contents transactionally, including when
+    existing connections use WAL. Renaming a file over that database would
+    leave those connections using the old inode and its WAL.
     """
-    if ":///" not in db_url:
-        msg = f"Cannot extract file path from URL: {db_url}"
-        raise ValueError(msg)
-
-    raw_path = db_url.split("///", 1)[1]
-    if not raw_path or raw_path == ":memory:":
-        msg = "Cannot restore to an in-memory SQLite database"
-        raise ValueError(msg)
-
-    db_path = Path(raw_path).expanduser()
-    db_path.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copy2(source, db_path)
+    await asyncio.to_thread(
+        _sqlite_snapshot, source, _sqlite_path(db_url), publish=False
+    )
 
 
 async def restore_json(
@@ -186,6 +219,7 @@ async def restore_json(
         ThreadSummary,
         Turn,
         TurnSummary,
+        UTCDateTime,
         Vote,
     )
 
@@ -240,7 +274,9 @@ async def restore_json(
         col_names = {col.key for col in mapper.columns}
         # Identify datetime columns for ISO string parsing
         dt_cols = {
-            col.key for col in mapper.columns if isinstance(col.type, SADateTime)
+            col.key
+            for col in mapper.columns
+            if isinstance(col.type, (SADateTime, UTCDateTime))
         }
 
         count = 0

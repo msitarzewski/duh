@@ -2,10 +2,10 @@
 
 **Last Updated**: 2026-10-31
 **Current Phase**: Operational correctness review
-**State**: PLAN — approved test/CI batch merged; operational review complete; implementation scope proposed
+**State**: QA — operational corrections implemented; full suites, containers, and remote checks in progress
 **Documentation policy**: Record public source behavior and validation only; omit credentials, personal information, machine access details, and restricted downstream implementation.
 **Review Branch**: `codex/operational-review`; approved source revision `0a4dc9f`
-**Next Action**: Scope targeted operational corrections from the reproduced findings below. The approved test/CI batch is merged; no operational source changes or production deployment were made during this review.
+**Next Action**: Complete full-suite, container, migration, and remote CI validation, then present the completed operational batch for review. Preserve the deployment permission closing step; production remains unchanged.
 
 ## Approved Shared Engine and Run-Scoped Usage
 - User approved completion and rollout on 2026-10-29. Implementation and source rollout are complete. Public CI passed, and the installed engine source hash and public exports match the approved immutable revision.
@@ -221,3 +221,10 @@ Read-only probes against temporary databases reproduced two remaining defects; n
 - `src/duh/memory/backup.py:43`: copying a live SQLite database omitted a committed row still in its WAL (source: one row; backup: zero). Extend the existing backup helper with a database-consistent snapshot and atomic destination publication; cover live-WAL backup/restore.
 - `alembic/versions/005_v05_users.py:19` and `src/duh/memory/migrations.py:29`: a fresh Alembic upgrade lacks seven ORM columns (guest state, thread publication/follow-ups/usage, contribution citations, decision rigor). SQLite startup patches conceal this drift; the PostgreSQL startup path has no equivalent repair. Converge schema history with additive migrations and fresh/upgrade schema-parity checks; preserve applied revisions and data.
 Findings are based on executed local probes, not assumptions about the original code author. No live database or provider was contacted.
+
+
+## Operational Build Validation (2026-10-31)
+State: QA. User requested all reproduced fixes. Full-suite and remote checks are in progress; no production deployment has occurred.
+Consistent SQLite snapshots/restore extend the existing backup module. Additive revision 006 aligns columns, nullability, indexes, and uniqueness with the ORM; startup-patched legacy data is preserved. PostgreSQL ORM writes exposed aware datetimes bound to timezone-free columns. The existing model module now normalizes UTC inputs at the SQLAlchemy binding boundary, keeping stored values and SQL types unchanged. Portable JSON restore recognizes the timestamp type. CI adds PostgreSQL legacy/fresh migration and real ORM write/update checks.
+
+Local operational QA passed: 1,747 core Python tests, mypy for 65 files, Ruff/formatting, SQLite migration/restore regressions, and PostgreSQL migration/ORM write checks. Remote CI remains pending. Existing warning categories remain visible. The only new repository file is additive migration 006.

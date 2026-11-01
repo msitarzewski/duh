@@ -32,4 +32,4 @@ User approved completion; PR #27 is merged. Test isolation covers collection and
 Validation: 1,735 core tests on Python 3.11–3.14 CI; 12 opt-in load tests locally; 204 frontend tests, source/test typecheck, frontend build, mypy, Ruff, and lock checks passed. See PR #27.
 
 ## Operational Review (2026-10-31)
-[IN-PROGRESS] PLAN — temporary probes reproduced remaining operational correctness defects. The current context records the scoped findings and integration points; implementation has not started. See `memory-bank/activeContext.md#operational-review-2026-10-31`.
+[IN-PROGRESS] QA — user-requested operational corrections are implemented. Targeted regressions pass. Full suites, container validation, and remote CI are in progress; the additive migration preserves applied history. See `memory-bank/activeContext.md#operational-review-2026-10-31`.
