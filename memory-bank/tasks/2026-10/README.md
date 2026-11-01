@@ -26,7 +26,10 @@ Migration convergence, provider/platform upgrades, package boundaries, frontend 
 
 Refreshed quick-start/current-context references and documented the privacy policy. Public entries retain source-level improvements and verified checks without downstream implementation or operational access details. No additional implementation, release, or deployment occurred.
 
-## Work in Progress (2026-10-31)
-[IN-PROGRESS] APPROVAL — implementation and required local/remote checks passed. Test isolation covers collection and the complete session. Completion review is pending; this batch has not changed production.
+## CI and Test Safeguards Complete (2026-10-31)
+User approved completion; PR #27 is merged. Test isolation covers collection and the complete session. Required local/remote checks passed; this batch did not deploy production.
 
 Validation: 1,735 core tests on Python 3.11–3.14 CI; 12 opt-in load tests locally; 204 frontend tests, source/test typecheck, frontend build, mypy, Ruff, and lock checks passed. See PR #27.
+
+## Operational Review (2026-10-31)
+[IN-PROGRESS] PLAN — temporary probes reproduced remaining operational correctness defects. The current context records the scoped findings and integration points; implementation has not started. See `memory-bank/activeContext.md#operational-review-2026-10-31`.

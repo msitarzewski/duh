@@ -1,11 +1,11 @@
 # Active Context
 
 **Last Updated**: 2026-10-31
-**Current Phase**: Test isolation and CI validation
-**State**: APPROVAL — implementation and required local/remote checks passed; completion review pending
+**Current Phase**: Operational correctness review
+**State**: PLAN — approved test/CI batch merged; operational review complete; implementation scope proposed
 **Documentation policy**: Record public source behavior and validation only; omit credentials, personal information, machine access details, and restricted downstream implementation.
-**Review Branch**: `codex/test-safety-net`; approved source revision `0a4dc9f`
-**Next Action**: Completion review of the test/CI batch before merge and completion documentation. The previously deployed runtime and permission restoration remain the verified operational baseline.
+**Review Branch**: `codex/operational-review`; approved source revision `0a4dc9f`
+**Next Action**: Scope targeted operational corrections from the reproduced findings below. The approved test/CI batch is merged; no operational source changes or production deployment were made during this review.
 
 ## Approved Shared Engine and Run-Scoped Usage
 - User approved completion and rollout on 2026-10-29. Implementation and source rollout are complete. Public CI passed, and the installed engine source hash and public exports match the approved immutable revision.
@@ -211,6 +211,13 @@
 - The previously excluded 12 load tests also passed offline; Ruff formatting checked 162 files. Public CI passed; PR #25 is merged. Installed engine source hash and public exports were verified against `0a4dc9ffd070897f5cc68e4b23730e5480ddbd79`.
 
 ## Current Build (2026-10-31)
-State: APPROVAL — collection-time test isolation and CI validation are complete. Reuses existing fixtures, regression modules, and workflow configuration. Completion review is pending; production remains unchanged by this batch.
+State: COMPLETE — user approved the test/CI batch and PR #27 is merged at `83a661c67428a8b7598ffa58566ed506874ebe8d`. Required checks passed on the final review head. This batch changed tests and CI; production was not deployed.
 
 Local safety-net validation: 1,735 core Python tests plus 12 opt-in load tests; 204 frontend tests; frontend typecheck/build; mypy (65 files); Ruff and lock checks passed. New subprocess probes cover collection, session setup, test execution, and teardown with seeded decoy credentials/configuration; the Python test process blocks TCP/UDP/DNS while retaining Unix-domain IPC. Remote CI passed on Python 3.11, 3.12, 3.13, and 3.14, plus lint, mypy, frontend typecheck, all 204 frontend tests, and build. Python 3.11 CI coverage is 85%. Load tests remain opt-in and passed locally. Review: PR #27.
+
+
+## Operational Review (2026-10-31)
+Read-only probes against temporary databases reproduced two remaining defects; no operational source was changed.
+- `src/duh/memory/backup.py:43`: copying a live SQLite database omitted a committed row still in its WAL (source: one row; backup: zero). Extend the existing backup helper with a database-consistent snapshot and atomic destination publication; cover live-WAL backup/restore.
+- `alembic/versions/005_v05_users.py:19` and `src/duh/memory/migrations.py:29`: a fresh Alembic upgrade lacks seven ORM columns (guest state, thread publication/follow-ups/usage, contribution citations, decision rigor). SQLite startup patches conceal this drift; the PostgreSQL startup path has no equivalent repair. Converge schema history with additive migrations and fresh/upgrade schema-parity checks; preserve applied revisions and data.
+Findings are based on executed local probes, not assumptions about the original code author. No live database or provider was contacted.
