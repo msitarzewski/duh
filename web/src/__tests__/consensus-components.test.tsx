@@ -4,6 +4,7 @@ import { ModelBadge } from '@/components/consensus/ModelBadge'
 import { ConfidenceMeter } from '@/components/consensus/ConfidenceMeter'
 import { CostTicker } from '@/components/consensus/CostTicker'
 import { StreamingText } from '@/components/consensus/StreamingText'
+import type { RoundData } from '@/stores/consensus'
 
 // ── ModelBadge ────────────────────────────────────────────
 
@@ -255,7 +256,7 @@ describe('generateExportMarkdown', () => {
     generateExportMarkdown = mod.generateExportMarkdown
   })
 
-  const rounds = [
+  const rounds: RoundData[] = [
     {
       round: 1,
       proposer: 'anthropic:claude-3',
@@ -267,6 +268,7 @@ describe('generateExportMarkdown', () => {
       confidence: 0.85,
       rigor: 0.78,
       dissent: 'PostgreSQL for scale.',
+      truncated: [],
     },
   ]
 

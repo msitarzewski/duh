@@ -10,11 +10,12 @@ from alembic.config import Config
 
 
 @pytest.fixture
-def alembic_config(tmp_path):
+def alembic_config(tmp_path, monkeypatch):
     """Create an Alembic config pointing to a temp SQLite DB."""
     db_path = tmp_path / "test.db"
     cfg = Config("alembic.ini")
     cfg.set_main_option("sqlalchemy.url", f"sqlite:///{db_path}")
+    monkeypatch.setenv("DUH_DATABASE_URL", f"sqlite:///{db_path}")
     return cfg, db_path
 
 

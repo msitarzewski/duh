@@ -502,11 +502,12 @@ class TestVoteRepository:
 
 
 @pytest.fixture
-def alembic_config(tmp_path):
+def alembic_config(tmp_path, monkeypatch):
     """Alembic config for migration tests."""
     db_path = tmp_path / "test.db"
     cfg = Config("alembic.ini")
     cfg.set_main_option("sqlalchemy.url", f"sqlite:///{db_path}")
+    monkeypatch.setenv("DUH_DATABASE_URL", f"sqlite:///{db_path}")
     return cfg, db_path
 
 

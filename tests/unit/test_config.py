@@ -2,6 +2,11 @@
 
 from __future__ import annotations
 
+import os
+import subprocess
+import sys
+from pathlib import Path
+
 import pytest
 from pydantic import ValidationError
 
@@ -359,3 +364,135 @@ class TestCloudflareEnv:
 
         cfg = load_config()
         assert "cloudflare" not in cfg.providers
+
+
+@pytest.mark.parametrize("collect_only", [True, False])
+def test_collection_and_session_isolation(tmp_path, collect_only):
+    """Verify isolation before collection, setup, execution, and teardown."""
+    project = tmp_path / "project"
+    project.mkdir()
+    repository = Path(__file__).resolve().parents[2]
+    (project / "conftest.py").write_bytes(
+        (repository / "tests/conftest.py").read_bytes()
+    )
+    home = tmp_path / "home"
+    home.mkdir()
+    xdg = home / "config"
+    (xdg / "duh").mkdir(parents=True)
+    decoy = (
+        "[general]\nmax_rounds = 97\n"
+        '[providers.openai]\napi_key = "isolated-config-decoy"\n'
+    )
+    (project / "duh.toml").write_text(decoy)
+    (xdg / "duh/config.toml").write_text(decoy)
+    override = project / "override.toml"
+    override.write_text(decoy)
+    (project / ".env").write_text("OPENAI_API_KEY=isolated-dotenv-decoy\n")
+    keys = [
+        "OPENAI_API_KEY",
+        "ANTHROPIC_API_KEY",
+        "GOOGLE_APPLICATION_CREDENTIALS",
+        "MISTRAL_API_KEY",
+        "PERPLEXITY_API_KEY",
+        "CLOUDFLARE_WORKERS_AI_TOKEN",
+        "STRIPE_SECRET_KEY",
+        "SENTRY_DSN",
+        "DUH_JWT_SECRET",
+        "DUH_MAIL_PASSWORD",
+        "AWS_SECRET_ACCESS_KEY",
+        "AZURE_OPENAI_API_KEY",
+        "GITHUB_TOKEN",
+        "DATABASE_URL",
+        "HTTP_PROXY",
+        "HTTPS_PROXY",
+        "ALL_PROXY",
+    ]
+    probe = r"""
+import os
+import socket
+import pytest
+import dotenv
+from duh.config.loader import load_config
+
+KEYS = __KEYS__
+
+def assert_isolated():
+    assert all(key not in os.environ for key in KEYS)
+    assert os.environ["PYTHON_DOTENV_DISABLED"] == "1"
+    assert os.environ["DUH_DATABASE_URL"] == "sqlite+aiosqlite:///:memory:"
+    assert dotenv.load_dotenv(".env") is False
+    config = load_config()
+    assert config.general.max_rounds == 3
+    assert all(provider.api_key is None for provider in config.providers.values())
+    for name in ("connect", "connect_ex", "send", "sendall"):
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as client:
+            args = (("127.0.0.1", 9),) if name.startswith("connect") else (b"fixture",)
+            with pytest.raises(pytest.fail.Exception):
+                getattr(client, name)(*args)
+    with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as client:
+        with pytest.raises(pytest.fail.Exception):
+            client.sendto(b"fixture", ("127.0.0.1", 9))
+        if hasattr(client, "sendmsg"):
+            with pytest.raises(pytest.fail.Exception):
+                client.sendmsg([b"fixture"], [], 0, ("127.0.0.1", 9))
+    queries = [
+        lambda: socket.getaddrinfo("127.0.0.1", 9, flags=socket.AI_NUMERICHOST),
+        lambda: socket.gethostbyname("127.0.0.1"),
+        lambda: socket.gethostbyname_ex("127.0.0.1"),
+        lambda: socket.gethostbyaddr("127.0.0.1"),
+        lambda: socket.getnameinfo(
+            ("127.0.0.1", 9), socket.NI_NUMERICHOST | socket.NI_NUMERICSERV
+        ),
+    ]
+    for query in queries:
+        with pytest.raises(pytest.fail.Exception):
+            query()
+    left, right = socket.socketpair()
+    try:
+        left.sendall(b"fixture")
+        assert right.recv(7) == b"fixture"
+    finally:
+        left.close()
+        right.close()
+
+assert_isolated()
+
+@pytest.fixture(scope="session", autouse=True)
+def session_probe():
+    assert_isolated()
+    yield
+    assert_isolated()
+
+def test_function_probe():
+    assert_isolated()
+""".replace("__KEYS__", repr(keys))
+    probe += "\n"
+    (project / "test_probe.py").write_text(probe)
+    env = {
+        "PATH": os.environ.get("PATH", ""),
+        "HOME": str(home),
+        "PYTHONPATH": str(repository / "src"),
+        "PYTEST_DISABLE_PLUGIN_AUTOLOAD": "1",
+        "PYTHON_DOTENV_DISABLED": "0",
+        "XDG_CONFIG_HOME": str(xdg),
+        "DUH_CONFIG": str(override),
+        "DUH_DATABASE_URL": "sqlite+aiosqlite:////isolated-decoy-never-open.db",
+        **dict.fromkeys(keys, "isolated-environment-decoy"),
+    }
+    command = [
+        sys.executable,
+        "-m",
+        "pytest",
+        "-p",
+        "pytest_asyncio.plugin",
+        "-o",
+        "asyncio_mode=auto",
+        "-q",
+        "test_probe.py",
+    ]
+    if collect_only:
+        command.append("--collect-only")
+    result = subprocess.run(
+        command, cwd=project, env=env, text=True, capture_output=True, timeout=30
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
